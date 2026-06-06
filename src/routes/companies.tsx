@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Plus, Search, X } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { gtmSupabase, gtmSupabaseInfo } from "@/lib/gtmSupabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +22,22 @@ export const Route = createFileRoute("/companies")({
 
 type SortKey = "total" | "name" | "brand" | "ai" | "shot";
 
+type CompaniesQueryDebug = {
+  query: string;
+  projectRef: string;
+  url: string;
+  status: number;
+  statusText: string;
+  count: number;
+  data: Company[];
+  error: null | {
+    message: string;
+    code?: string;
+    details?: string;
+    hint?: string;
+  };
+};
+
 const SORT_LABEL: Record<SortKey, string> = {
   total: "Total Score",
   name: "Name A-Z",
@@ -39,18 +55,40 @@ const TIER_FILTERS: Array<{ value: "all" | Tier; label: string }> = [
   { value: "excluded", label: "Excluded" },
 ];
 
-async function fetchCompanies(): Promise<Company[]> {
-  const { data, error } = await supabase.from("companies").select("*");
-  if (error) throw error;
-  return data ?? [];
+async function fetchCompanies(): Promise<CompaniesQueryDebug> {
+  const query = 'gtmSupabase.from("companies").select("*", { count: "exact" })';
+  const { data, error, count, status, statusText } = await gtmSupabase
+    .from("companies")
+    .select("*", { count: "exact" });
+
+  return {
+    query,
+    projectRef: gtmSupabaseInfo.projectRef,
+    url: gtmSupabaseInfo.url,
+    status,
+    statusText,
+    count: count ?? data?.length ?? 0,
+    data: data ?? [],
+    error: error
+      ? {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      }
+      : null,
+  };
 }
 
 function CompaniesPage() {
   const qc = useQueryClient();
-  const { data: companies, isLoading, error } = useQuery({
+  const { data: queryDebug, isLoading, error } = useQuery({
     queryKey: ["companies"],
     queryFn: fetchCompanies,
   });
+
+  const companies = queryDebug?.data ?? [];
+  const loadError = queryDebug?.error?.message ?? (error as Error | null)?.message;
 
   const [search, setSearch] = useState("");
   const [tierFilter, setTierFilter] = useState<"all" | Tier>("all");
@@ -63,10 +101,10 @@ function CompaniesPage() {
     mutationFn: async (data: CompanyInsert) => {
       const payload = { ...data, tags: data.tags ?? [] };
       if (editing?.id) {
-        const { error } = await supabase.from("companies").update(payload).eq("id", editing.id);
+        const { error } = await gtmSupabase.from("companies").update(payload).eq("id", editing.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("companies").insert(payload);
+        const { error } = await gtmSupabase.from("companies").insert(payload);
         if (error) throw error;
       }
     },
@@ -79,7 +117,7 @@ function CompaniesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("companies").delete().eq("id", id);
+      const { error } = await gtmSupabase.from("companies").delete().eq("id", id);
       if (error) throw error;
     },
     onMutate: async (id) => {
@@ -96,7 +134,7 @@ function CompaniesPage() {
   });
 
   const filtered = useMemo(() => {
-    const list = companies ?? [];
+    const list = companies;
     const q = search.trim().toLowerCase();
     return list.filter((c) => {
       if (tierFilter !== "all" && c.tier !== tierFilter) return false;
@@ -128,7 +166,7 @@ function CompaniesPage() {
     return map;
   }, [sorted]);
 
-  const total = companies?.length ?? 0;
+  const total = companies.length;
   const hasFilters = search.trim() || tierFilter !== "all";
 
   const openAdd = () => { setEditing(null); setModalOpen(true); };
