@@ -259,36 +259,52 @@ function Editor({ initial, onSaved }: { initial: RoleCriteria | null; onSaved: (
   return (
     <div style={{ marginTop: -8 }}>
       {/* Header */}
-      <div className="grid items-center gap-3 mb-4" style={{ gridTemplateColumns: "1fr auto" }}>
+      <div
+        className="grid items-center gap-3 mb-4 sticky top-0 z-10 py-2"
+        style={{ gridTemplateColumns: "1fr auto", background: "#0A0A0F" }}
+      >
         <div className="flex items-center gap-3 min-w-0">
           <h2 className="text-xl font-semibold" style={{ color: "#F0F0FF", fontFamily: MONO }}>
             Role Criteria
           </h2>
-          <span className="px-2 py-0.5 text-xs"
-            style={{ background: "#111118", border: "1px solid #1E1E2E", color: "#8B8B9E", borderRadius: 3, fontFamily: MONO }}>
+          <span
+            className="px-2 py-0.5 text-xs"
+            style={{ background: "#111118", border: "1px solid #1E1E2E", color: "#8B8B9E", borderRadius: 3, fontFamily: MONO }}
+          >
             v{draft.version || 1}
           </span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-shrink-0">
           {dirty && (
-            <span className="text-xs" style={{ color: "#F59E0B", fontFamily: MONO }}>
+            <span className="text-xs whitespace-nowrap" style={{ color: "#F59E0B", fontFamily: MONO }}>
               Unsaved changes
             </span>
           )}
-          <Button onClick={reset} variant="outline" size="sm" disabled={!dirty}
-            style={{ background: "transparent", border: "1px solid #1E1E2E", color: "#8B8B9E" }}>
+          <Button
+            onClick={reset}
+            variant="outline"
+            size="sm"
+            disabled={!dirty}
+            style={{ background: "transparent", border: "1px solid #1E1E2E", color: "#8B8B9E" }}
+          >
             Reset to Default
           </Button>
-          <Button onClick={save} size="sm" disabled={!dirty || saving || !weightsValid}
+          <Button
+            onClick={save}
+            size="sm"
+            disabled={!dirty || saving || !weightsValid}
             style={{
-              background: !dirty || !weightsValid ? "rgba(0,212,255,0.2)" : "#00D4FF",
-              color: "#0A0A0F",
+              background: !dirty || !weightsValid ? "#1E1E2E" : "#00D4FF",
+              color: !dirty || !weightsValid ? "#8B8B9E" : "#0A0A0F",
               border: "none",
-            }}>
+              fontWeight: 600,
+            }}
+          >
             {saving ? "Saving…" : "Save Changes"}
           </Button>
         </div>
       </div>
+
 
       {/* Section 1: Titles */}
       <div style={CARD}>
