@@ -16,6 +16,7 @@ import {
   Inbox,
   Phone,
   Copy,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -692,6 +693,7 @@ function OutreachPage() {
                   ? companyMap.get(selected.current_company_id) ?? null
                   : null
               }
+              companies={companies}
               activity={activityByTarget.get(selected.id) ?? []}
               onMove={(to) => moveStatus.mutate({ target: selected, to })}
               onLog={(v) => logActivity.mutate({ ...v, target_id: selected.id })}
@@ -824,6 +826,7 @@ function ABTable({ targets, activity }: { targets: Target[]; activity: Activity[
 function TargetPanel({
   target,
   company,
+  companies,
   activity,
   onMove,
   onLog,
@@ -831,6 +834,7 @@ function TargetPanel({
 }: {
   target: Target;
   company: CompanyLite | null;
+  companies: CompanyLite[];
   activity: Activity[];
   onMove: (to: AnyStatus) => void;
   onLog: (v: {
@@ -857,6 +861,54 @@ function TargetPanel({
   const [draft, setDraft] = useState("");
   const [drafting, setDrafting] = useState(false);
   const draftFn = useServerFn(draftOutreachMessage);
+
+  const [editMode, setEditMode] = useState(false);
+  const [editName, setEditName] = useState(target.name);
+  const [editRole, setEditRole] = useState(target.role ?? "");
+  const [editLinkedin, setEditLinkedin] = useState(target.linkedin_url ?? "");
+  const [editCompanyId, setEditCompanyId] = useState<string | null>(target.current_company_id);
+  const [editCompanySearch, setEditCompanySearch] = useState("");
+  const [editCompanyOpen, setEditCompanyOpen] = useState(false);
+  const [editSource, setEditSource] = useState(target.source ?? "");
+
+  const editFilteredCompanies = useMemo(
+    () =>
+      companies
+        .filter((c) => c.name.toLowerCase().includes(editCompanySearch.toLowerCase()))
+        .slice(0, 8),
+    [companies, editCompanySearch],
+  );
+  const editSelectedCompany = editCompanyId
+    ? companies.find((c) => c.id === editCompanyId) ?? null
+    : null;
+
+  const enterEdit = () => {
+    setEditName(target.name);
+    setEditRole(target.role ?? "");
+    setEditLinkedin(target.linkedin_url ?? "");
+    setEditCompanyId(target.current_company_id);
+    setEditCompanySearch("");
+    setEditSource(target.source ?? "");
+    setEditMode(true);
+  };
+
+  const handleSaveEdit = () => {
+    const patch: Partial<Target> = {};
+    if (editName.trim() !== target.name) patch.name = editName.trim();
+    if (editRole.trim() !== (target.role ?? "")) patch.role = editRole.trim() || null;
+    if (editLinkedin.trim() !== (target.linkedin_url ?? ""))
+      patch.linkedin_url = editLinkedin.trim() || null;
+    if (editCompanyId !== target.current_company_id) patch.current_company_id = editCompanyId;
+    if (editSource.trim() !== (target.source ?? "")) patch.source = editSource.trim() || null;
+    if (Object.keys(patch).length > 0) {
+      onPatch(patch);
+    }
+    setEditMode(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditMode(false);
+  };
 
   const buildPrompt = () => {
     const tagStr = (target.tags ?? []).join(", ");
@@ -939,43 +991,160 @@ RULES (non-negotiable):
     <div className="space-y-6 pt-4">
       {/* Header */}
       <div className="space-y-2">
-        <h3 className="text-xl font-semibold" style={{ color: TEXT }}>
-          {target.name}
-        </h3>
-        <div className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>
-          <span>{target.role ?? "—"}</span>
-          {company && (
-            <>
-              <span>·</span>
-              <span style={{ color: TEXT }}>{company.name}</span>
-              <TierBadge tier={company.tier} />
-            </>
+        <div className="flex items-center justify-between">
+          {!editMode ? (
+            <h3 className="text-xl font-semibold" style={{ color: TEXT }}>
+              {target.name}
+            </h3>
+          ) : (
+            <Input
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              className="flex-1 mr-2"
+              style={{ background: CARD, borderColor: BORDER, color: TEXT }}
+            />
           )}
-        </div>
-        <div className="flex items-center gap-2">
-          {target.linkedin_url && (
-            <a
-              href={target.linkedin_url}
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs inline-flex items-center gap-1"
-              style={{ color: PRIMARY }}
+          {!editMode && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={enterEdit}
+              style={{ color: MUTED, height: 26 }}
             >
-              <Linkedin size={12} /> LinkedIn <ExternalLink size={10} />
-            </a>
+              <Pencil size={12} /> Edit
+            </Button>
           )}
-          <span
-            className="text-[10px] font-semibold px-2 py-0.5 rounded"
-            style={{
-              background:
-                target.group_name === "a_cold" ? "rgba(0,212,255,0.15)" : "rgba(124,58,237,0.15)",
-              color: target.group_name === "a_cold" ? PRIMARY : VIOLET,
-              fontFamily: MONO,
-            }}
-          >
-            {target.group_name === "a_cold" ? "A: COLD" : "B: WARM"}
-          </span>
         </div>
+        {!editMode ? (
+          <>
+            <div className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>
+              <span>{target.role ?? "—"}</span>
+              {company && (
+                <>
+                  <span>·</span>
+                  <span style={{ color: TEXT }}>{company.name}</span>
+                  <TierBadge tier={company.tier} />
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {target.linkedin_url && (
+                <a
+                  href={target.linkedin_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs inline-flex items-center gap-1"
+                  style={{ color: PRIMARY }}
+                >
+                  <Linkedin size={12} /> LinkedIn <ExternalLink size={10} />
+                </a>
+              )}
+              <span
+                className="text-[10px] font-semibold px-2 py-0.5 rounded"
+                style={{
+                  background:
+                    target.group_name === "a_cold"
+                      ? "rgba(0,212,255,0.15)"
+                      : "rgba(124,58,237,0.15)",
+                  color: target.group_name === "a_cold" ? PRIMARY : VIOLET,
+                  fontFamily: MONO,
+                }}
+              >
+                {target.group_name === "a_cold" ? "A: COLD" : "B: WARM"}
+              </span>
+            </div>
+          </>
+        ) : (
+          <div className="space-y-2">
+            <Input
+              placeholder="Role / Title"
+              value={editRole}
+              onChange={(e) => setEditRole(e.target.value)}
+              style={{ background: CARD, borderColor: BORDER, color: TEXT }}
+            />
+            <Input
+              placeholder="LinkedIn URL"
+              value={editLinkedin}
+              onChange={(e) => setEditLinkedin(e.target.value)}
+              style={{ background: CARD, borderColor: BORDER, color: TEXT }}
+            />
+            <div className="relative">
+              <Input
+                value={editSelectedCompany ? editSelectedCompany.name : editCompanySearch}
+                onChange={(e) => {
+                  setEditCompanyId(null);
+                  setEditCompanySearch(e.target.value);
+                  setEditCompanyOpen(true);
+                }}
+                onFocus={() => setEditCompanyOpen(true)}
+                placeholder="Search companies (optional)…"
+                style={{ background: CARD, borderColor: BORDER, color: TEXT }}
+              />
+              {editCompanyOpen && editCompanySearch && !editSelectedCompany && (
+                <div
+                  className="absolute z-10 w-full mt-1 max-h-60 overflow-auto"
+                  style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 6 }}
+                >
+                  {editFilteredCompanies.map((c) => (
+                    <button
+                      key={c.id}
+                      className="w-full text-left px-3 py-2 flex items-center justify-between text-sm cursor-pointer"
+                      style={{ color: TEXT }}
+                      onClick={() => {
+                        setEditCompanyId(c.id);
+                        setEditCompanyOpen(false);
+                        setEditCompanySearch("");
+                      }}
+                    >
+                      <span>{c.name}</span>
+                      <TierBadge tier={c.tier} />
+                    </button>
+                  ))}
+                  {editFilteredCompanies.length === 0 && (
+                    <div className="px-3 py-2 text-xs" style={{ color: MUTED }}>
+                      No matches
+                    </div>
+                  )}
+                </div>
+              )}
+              {editSelectedCompany && (
+                <button
+                  onClick={() => {
+                    setEditCompanyId(null);
+                    setEditCompanySearch("");
+                  }}
+                  className="absolute right-2 top-2"
+                  style={{ color: MUTED }}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            <Input
+              placeholder="Source"
+              value={editSource}
+              onChange={(e) => setEditSource(e.target.value)}
+              style={{ background: CARD, borderColor: BORDER, color: TEXT }}
+            />
+            <div className="flex items-center gap-2 pt-1">
+              <Button
+                size="sm"
+                onClick={handleSaveEdit}
+                style={{ background: PRIMARY, color: "#000" }}
+              >
+                Save
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleCancelEdit}
+                style={{ borderColor: BORDER, color: TEXT, background: "transparent" }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Status */}
