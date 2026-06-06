@@ -122,8 +122,10 @@ function CompaniesPage() {
     },
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ["companies"] });
-      const prev = qc.getQueryData<Company[]>(["companies"]);
-      qc.setQueryData<Company[]>(["companies"], (old) => (old ?? []).filter((c) => c.id !== id));
+      const prev = qc.getQueryData<CompaniesQueryDebug>(["companies"]);
+      qc.setQueryData<CompaniesQueryDebug>(["companies"], (old) => old
+        ? { ...old, count: Math.max(0, old.count - 1), data: old.data.filter((c) => c.id !== id) }
+        : old);
       return { prev };
     },
     onError: (e: Error, _id, ctx) => {
@@ -174,6 +176,8 @@ function CompaniesPage() {
 
   return (
     <div className="space-y-5">
+      <CompaniesDebugPanel debug={queryDebug} loading={isLoading} error={loadError} />
+
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -239,9 +243,9 @@ function CompaniesPage() {
       </div>
 
       {/* Body */}
-      {error ? (
+      {loadError ? (
         <div className="p-6 text-sm" style={{ color: "#EF4444", background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 6 }}>
-          Failed to load companies: {(error as Error).message}
+          Failed to load companies: {loadError}
         </div>
       ) : isLoading ? (
         <SkeletonList />
