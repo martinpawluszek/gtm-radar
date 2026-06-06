@@ -195,7 +195,7 @@ function CompaniesPage() {
 
   return (
     <div className="space-y-5">
-      <CompaniesDebugPanel debug={queryDebug} loading={isLoading} error={loadError} />
+
 
       {/* Page header */}
       <div className="flex items-center justify-between">
