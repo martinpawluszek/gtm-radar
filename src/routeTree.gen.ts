@@ -9,8 +9,38 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as RoleCriteriaRouteImport } from './routes/role-criteria'
+import { Route as PostingsRouteImport } from './routes/postings'
+import { Route as OutreachRouteImport } from './routes/outreach'
+import { Route as CompaniesRouteImport } from './routes/companies'
+import { Route as ApplicationsRouteImport } from './routes/applications'
 import { Route as IndexRouteImport } from './routes/index'
 
+const RoleCriteriaRoute = RoleCriteriaRouteImport.update({
+  id: '/role-criteria',
+  path: '/role-criteria',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PostingsRoute = PostingsRouteImport.update({
+  id: '/postings',
+  path: '/postings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OutreachRoute = OutreachRouteImport.update({
+  id: '/outreach',
+  path: '/outreach',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompaniesRoute = CompaniesRouteImport.update({
+  id: '/companies',
+  path: '/companies',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApplicationsRoute = ApplicationsRouteImport.update({
+  id: '/applications',
+  path: '/applications',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -19,28 +49,102 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/applications': typeof ApplicationsRoute
+  '/companies': typeof CompaniesRoute
+  '/outreach': typeof OutreachRoute
+  '/postings': typeof PostingsRoute
+  '/role-criteria': typeof RoleCriteriaRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/applications': typeof ApplicationsRoute
+  '/companies': typeof CompaniesRoute
+  '/outreach': typeof OutreachRoute
+  '/postings': typeof PostingsRoute
+  '/role-criteria': typeof RoleCriteriaRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/applications': typeof ApplicationsRoute
+  '/companies': typeof CompaniesRoute
+  '/outreach': typeof OutreachRoute
+  '/postings': typeof PostingsRoute
+  '/role-criteria': typeof RoleCriteriaRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/applications'
+    | '/companies'
+    | '/outreach'
+    | '/postings'
+    | '/role-criteria'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/applications'
+    | '/companies'
+    | '/outreach'
+    | '/postings'
+    | '/role-criteria'
+  id:
+    | '__root__'
+    | '/'
+    | '/applications'
+    | '/companies'
+    | '/outreach'
+    | '/postings'
+    | '/role-criteria'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApplicationsRoute: typeof ApplicationsRoute
+  CompaniesRoute: typeof CompaniesRoute
+  OutreachRoute: typeof OutreachRoute
+  PostingsRoute: typeof PostingsRoute
+  RoleCriteriaRoute: typeof RoleCriteriaRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/role-criteria': {
+      id: '/role-criteria'
+      path: '/role-criteria'
+      fullPath: '/role-criteria'
+      preLoaderRoute: typeof RoleCriteriaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/postings': {
+      id: '/postings'
+      path: '/postings'
+      fullPath: '/postings'
+      preLoaderRoute: typeof PostingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/outreach': {
+      id: '/outreach'
+      path: '/outreach'
+      fullPath: '/outreach'
+      preLoaderRoute: typeof OutreachRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/companies': {
+      id: '/companies'
+      path: '/companies'
+      fullPath: '/companies'
+      preLoaderRoute: typeof CompaniesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/applications': {
+      id: '/applications'
+      path: '/applications'
+      fullPath: '/applications'
+      preLoaderRoute: typeof ApplicationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -53,7 +157,22 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApplicationsRoute: ApplicationsRoute,
+  CompaniesRoute: CompaniesRoute,
+  OutreachRoute: OutreachRoute,
+  PostingsRoute: PostingsRoute,
+  RoleCriteriaRoute: RoleCriteriaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
