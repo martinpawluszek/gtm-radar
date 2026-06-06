@@ -162,13 +162,17 @@ function CompaniesPage() {
     const q = search.trim().toLowerCase();
     return list.filter((c) => {
       if (tierFilter !== "all" && c.tier !== tierFilter) return false;
+      if (activeTags.length > 0) {
+        const tags = c.tags ?? [];
+        if (!activeTags.every((t) => tags.includes(t))) return false;
+      }
       if (!q) return true;
       return (
         c.name.toLowerCase().includes(q) ||
         (c.notes ?? "").toLowerCase().includes(q)
       );
     });
-  }, [companies, search, tierFilter]);
+  }, [companies, search, tierFilter, activeTags]);
 
   const sorted = useMemo(() => {
     const list = [...filtered];
