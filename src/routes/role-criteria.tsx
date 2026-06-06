@@ -308,32 +308,40 @@ function Editor({ initial, onSaved }: { initial: RoleCriteria | null; onSaved: (
 
       {/* Section 1: Titles */}
       <div style={CARD}>
-        <div className="grid gap-6" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <TitleList
-            title="Target Titles"
-            items={draft.target_titles}
-            onChange={(items) => setDraft({ ...draft, target_titles: items })}
-          />
-          <TitleList
-            title="Excluded Titles"
-            items={draft.excluded_titles}
-            onChange={(items) => setDraft({ ...draft, excluded_titles: items })}
-          />
+        <div className="grid gap-0" style={{ gridTemplateColumns: "1fr 1px 1fr" }}>
+          <div className="pr-6">
+            <TitleList
+              title="Target Titles"
+              items={draft.target_titles}
+              onChange={(items) => setDraft({ ...draft, target_titles: items })}
+            />
+          </div>
+          <div style={{ background: "#1E1E2E", width: 1 }} />
+          <div className="pl-6">
+            <TitleList
+              title="Excluded Titles"
+              items={draft.excluded_titles}
+              onChange={(items) => setDraft({ ...draft, excluded_titles: items })}
+            />
+          </div>
         </div>
       </div>
 
       {/* Section 2: Weights */}
       <div style={CARD}>
         <div className="flex items-baseline justify-between mb-4">
-          <h3 className="text-sm font-semibold uppercase" style={{ color: "#F0F0FF", fontFamily: MONO, letterSpacing: "0.08em" }}>
-            Parameter Weights
-          </h3>
-          <span className="text-xs" style={{ color: "#8B8B9E", fontFamily: MONO }}>Must sum to 1.0</span>
+          <h3 style={SECTION_LABEL}>Parameter Weights</h3>
+          <span className="text-[11px]" style={{ color: "#8B8B9E", fontFamily: MONO }}>Must sum to 100%</span>
         </div>
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
           {PARAMS.map(({ key, label }) => (
             <div key={key} className="flex items-center gap-4">
-              <div style={{ width: 160, color: "#F0F0FF", fontSize: 13 }}>{label}</div>
+              <div style={{ width: 180 }}>
+                <div style={{ color: "#F0F0FF", fontSize: 13 }}>{label}</div>
+                <div style={{ color: "#8B8B9E", fontSize: 11, marginTop: 2 }}>
+                  {PARAM_DESCRIPTIONS[key]}
+                </div>
+              </div>
               <div className="flex-1">
                 <Slider
                   value={[draft.weights[key]]}
@@ -352,23 +360,21 @@ function Editor({ initial, onSaved }: { initial: RoleCriteria | null; onSaved: (
           ))}
         </div>
         <div className="mt-4 pt-3 flex items-center justify-between" style={{ borderTop: "1px solid #1E1E2E" }}>
-          <span className="text-xs" style={{ color: "#8B8B9E", fontFamily: MONO }}>Total</span>
+          <span className="text-[11px]" style={{ color: "#8B8B9E", fontFamily: MONO, letterSpacing: "0.08em", textTransform: "uppercase" }}>Total</span>
           <span className="text-xs font-medium" style={{
             color: weightsValid ? "#10B981" : "#F59E0B",
             fontFamily: MONO,
           }}>
             {weightsValid
-              ? `✓ Valid (${Math.round(weightSum * 100)}%)`
-              : `${Math.round(weightSum * 100)}% — Weights must sum to 100%`}
+              ? `✓ 100%`
+              : `${Math.round(weightSum * 100)}% — must equal 100%`}
           </span>
         </div>
       </div>
 
       {/* Section 3: Rubric */}
       <div style={CARD}>
-        <h3 className="text-sm font-semibold uppercase mb-3" style={{ color: "#F0F0FF", fontFamily: MONO, letterSpacing: "0.08em" }}>
-          Scoring Rubric
-        </h3>
+        <h3 style={{ ...SECTION_LABEL, marginBottom: 12 }}>Scoring Rubric</h3>
         <div className="flex flex-col">
           {PARAMS.map(({ key, label }) => (
             <RubricSection
@@ -384,12 +390,14 @@ function Editor({ initial, onSaved }: { initial: RoleCriteria | null; onSaved: (
       </div>
 
       {/* Section 4: Disqualifiers & Bonuses */}
-      <div style={CARD}>
-        <div className="grid gap-6" style={{ gridTemplateColumns: "1fr 1fr" }}>
+      <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr", marginBottom: 16 }}>
+        <div style={{ background: "#0D0D14", border: "1px solid #1E1E2E", borderRadius: 6, padding: 20 }}>
           <DisqualifierList
             items={draft.disqualifiers}
             onChange={(items) => setDraft({ ...draft, disqualifiers: items })}
           />
+        </div>
+        <div style={{ background: "#0D0D14", border: "1px solid #1E1E2E", borderRadius: 6, padding: 20 }}>
           <BonusList
             items={draft.bonuses}
             onChange={(items) => setDraft({ ...draft, bonuses: items })}
