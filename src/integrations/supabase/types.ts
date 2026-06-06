@@ -14,7 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      companies: {
+        Row: {
+          ai_score: number
+          brand_score: number
+          careers_url: string | null
+          comp_score: number
+          created_at: string
+          excluded_reason: string | null
+          id: string
+          location_score: number
+          name: string
+          notes: string | null
+          shot_score: number
+          tags: string[]
+          tier: Database["public"]["Enums"]["company_tier"]
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          ai_score?: number
+          brand_score?: number
+          careers_url?: string | null
+          comp_score?: number
+          created_at?: string
+          excluded_reason?: string | null
+          id?: string
+          location_score?: number
+          name: string
+          notes?: string | null
+          shot_score?: number
+          tags?: string[]
+          tier?: Database["public"]["Enums"]["company_tier"]
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          ai_score?: number
+          brand_score?: number
+          careers_url?: string | null
+          comp_score?: number
+          created_at?: string
+          excluded_reason?: string | null
+          id?: string
+          location_score?: number
+          name?: string
+          notes?: string | null
+          shot_score?: number
+          tags?: string[]
+          tier?: Database["public"]["Enums"]["company_tier"]
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +76,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      company_tier: "god" | "t1" | "t2" | "t3" | "excluded"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +203,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      company_tier: ["god", "t1", "t2", "t3", "excluded"],
+    },
   },
 } as const
