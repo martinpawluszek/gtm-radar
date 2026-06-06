@@ -248,6 +248,7 @@ function Editor({ initial, onSaved }: { initial: RoleCriteria | null; onSaved: (
       const next = makeDraftFrom(resultRow);
       setDraft(next);
       setBaseline(next);
+      setDirty(false);
       toast.success(`Saved v${resultRow!.version}`);
       onSaved();
     } catch (e) {
