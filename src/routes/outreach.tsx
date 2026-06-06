@@ -862,8 +862,8 @@ function TargetPanel({
     const tagStr = (target.tags ?? []).join(", ");
     const groupContext =
       target.group_name === "a_cold"
-        ? "This is a COLD outreach with no prior engagement. Use direct, honest framing — acknowledge it's a cold message."
-        : "This is a WARM outreach where I have engaged with their content first (likes/comments). Reference that engagement history naturally.";
+        ? "This is a cold outreach. Martin has not interacted with this person before."
+        : "This is a warm outreach. Martin has been engaging with this person's content. Reference the engagement history naturally.";
     const recent = activity
       .slice(0, 3)
       .map(
@@ -873,30 +873,30 @@ function TargetPanel({
           }`,
       )
       .join("\n");
-    return `Draft a LinkedIn outreach message from me (Martin) to this person.
+    return `You are drafting a LinkedIn outreach message for Martin Pawluszek.
 
-PERSON:
-- Name: ${target.name}
-- Role: ${target.role ?? "Unknown"}
-- Company: ${company ? `${company.name} (tier ${company.tier})` : "Unknown"}
-- Tags: ${tagStr || "none"}
+MARTIN'S CONTEXT:
+Martin is a cofounder and CRO who built a B2B SaaS platform from zero to 30+ team and $2M ARR over 5 years, selling to CTOs and Product teams across LatAm and the US. He previously worked at EMnify (Berlin IoT SaaS) as Deputy Director of Sales, and at predict.io (ML company) in BD. He builds his own AI tools internally. He is multilingual (English, Spanish, French, Portuguese, German). He is exploring senior GTM and enterprise sales roles at AI and tech companies.
 
-CONTEXT:
-${groupContext}
+TARGET PERSON:
+Name: ${target.name}
+Role: ${target.role ?? "Unknown"}
+Company: ${company ? `${company.name} (Tier: ${company.tier})` : "Unknown"}
+Company notes: ${tagStr || "none"}
+Recent activity: ${recent || "None"}
+Martin's notes on this person: ${target.notes || "None"}
 
-RECENT ACTIVITY:
-${recent || "None"}
+GROUP CONTEXT: ${groupContext}
 
-HARD RULES:
-- NO em dashes (—). Use commas or periods instead.
-- NO AI-tell phrases: no "I hope this finds you well", no "I came across", no "delve", no "fascinating", no "I'd love to pick your brain".
-- Sound like a real human wrote it. Casual but professional.
-- Under 100 words.
-- Honest and direct.
-- ONE clear ask: a 15-minute call.
-- Do NOT fabricate specific details about the person, their work, or their company that aren't in the data above.
-
-Return ONLY the message text, no preamble.`;
+RULES (non-negotiable):
+- Under 100 words total
+- No em dashes
+- No phrases like "I came across your profile", "I hope this finds you well", "I wanted to reach out", "I noticed that", "resonates with me"
+- Do not fabricate specific details about the person that aren't in the notes
+- Be honest and direct — Martin is exploring roles, not selling a product
+- One clear ask at the end: a 15-minute call
+- Sound like a real human wrote this, not a cover letter
+- Do not mention that this is AI-generated`;
   };
 
   const handleDraft = async () => {
