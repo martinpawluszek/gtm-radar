@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Plus, Search, X } from "lucide-react";
+import { ChevronDown, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { gtmSupabase, gtmSupabaseInfo } from "@/lib/gtmSupabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +22,37 @@ export const Route = createFileRoute("/companies")({
 
 type SortKey = "total" | "name" | "brand" | "ai" | "shot";
 
+type CompaniesQueryDebug = {
+  query: string;
+  projectRef: string;
+  url: string;
+  status: number;
+  statusText: string;
+  count: number;
+  rawData: RawCompany[];
+  data: Company[];
+  error: null | {
+    message: string;
+    code?: string;
+    details?: string;
+    hint?: string;
+  };
+};
+
+type RawCompany = Company & {
+  loc_score?: number | null;
+  total_score?: number | null;
+};
+
+function toCompanyWritePayload(data: CompanyInsert) {
+  const { location_score, ...rest } = data;
+  return {
+    ...rest,
+    tags: data.tags ?? [],
+    loc_score: location_score ?? 0,
+  };
+}
+
 const SORT_LABEL: Record<SortKey, string> = {
   total: "Total Score",
   name: "Name A-Z",
@@ -39,18 +70,46 @@ const TIER_FILTERS: Array<{ value: "all" | Tier; label: string }> = [
   { value: "excluded", label: "Excluded" },
 ];
 
-async function fetchCompanies(): Promise<Company[]> {
-  const { data, error } = await supabase.from("companies").select("*");
-  if (error) throw error;
-  return data ?? [];
+async function fetchCompanies(): Promise<CompaniesQueryDebug> {
+  const query = 'gtmSupabase.from("companies").select("*", { count: "exact" })';
+  const { data, error, count, status, statusText } = await gtmSupabase
+    .from("companies")
+    .select("*", { count: "exact" });
+  const rows = (data ?? []) as RawCompany[];
+  const normalized = rows.map((company) => ({
+    ...company,
+    location_score: company.location_score ?? company.loc_score ?? 0,
+  })) as Company[];
+
+  return {
+    query,
+    projectRef: gtmSupabaseInfo.projectRef,
+    url: gtmSupabaseInfo.url,
+    status,
+    statusText,
+    count: count ?? rows.length,
+    rawData: rows,
+    data: normalized,
+    error: error
+      ? {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      }
+      : null,
+  };
 }
 
 function CompaniesPage() {
   const qc = useQueryClient();
-  const { data: companies, isLoading, error } = useQuery({
+  const { data: queryDebug, isLoading, error } = useQuery({
     queryKey: ["companies"],
     queryFn: fetchCompanies,
   });
+
+  const companies = queryDebug?.data ?? [];
+  const loadError = queryDebug?.error?.message ?? (error as Error | null)?.message;
 
   const [search, setSearch] = useState("");
   const [tierFilter, setTierFilter] = useState<"all" | Tier>("all");
@@ -61,12 +120,12 @@ function CompaniesPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (data: CompanyInsert) => {
-      const payload = { ...data, tags: data.tags ?? [] };
+      const payload = toCompanyWritePayload(data);
       if (editing?.id) {
-        const { error } = await supabase.from("companies").update(payload).eq("id", editing.id);
+        const { error } = await gtmSupabase.from("companies").update(payload as never).eq("id", editing.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("companies").insert(payload);
+        const { error } = await gtmSupabase.from("companies").insert(payload as never);
         if (error) throw error;
       }
     },
@@ -79,13 +138,15 @@ function CompaniesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("companies").delete().eq("id", id);
+      const { error } = await gtmSupabase.from("companies").delete().eq("id", id);
       if (error) throw error;
     },
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ["companies"] });
-      const prev = qc.getQueryData<Company[]>(["companies"]);
-      qc.setQueryData<Company[]>(["companies"], (old) => (old ?? []).filter((c) => c.id !== id));
+      const prev = qc.getQueryData<CompaniesQueryDebug>(["companies"]);
+      qc.setQueryData<CompaniesQueryDebug>(["companies"], (old) => old
+        ? { ...old, count: Math.max(0, old.count - 1), data: old.data.filter((c) => c.id !== id) }
+        : old);
       return { prev };
     },
     onError: (e: Error, _id, ctx) => {
@@ -96,7 +157,7 @@ function CompaniesPage() {
   });
 
   const filtered = useMemo(() => {
-    const list = companies ?? [];
+    const list = companies;
     const q = search.trim().toLowerCase();
     return list.filter((c) => {
       if (tierFilter !== "all" && c.tier !== tierFilter) return false;
@@ -128,14 +189,14 @@ function CompaniesPage() {
     return map;
   }, [sorted]);
 
-  const total = companies?.length ?? 0;
-  const hasFilters = search.trim() || tierFilter !== "all";
-
+  const total = companies.length;
   const openAdd = () => { setEditing(null); setModalOpen(true); };
   const openEdit = (c: Company) => { setEditing(c); setModalOpen(true); };
 
   return (
     <div className="space-y-5">
+      <CompaniesDebugPanel debug={queryDebug} loading={isLoading} error={loadError} />
+
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -201,9 +262,9 @@ function CompaniesPage() {
       </div>
 
       {/* Body */}
-      {error ? (
+      {loadError ? (
         <div className="p-6 text-sm" style={{ color: "#EF4444", background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 6 }}>
-          Failed to load companies: {(error as Error).message}
+          Failed to load companies: {loadError}
         </div>
       ) : isLoading ? (
         <SkeletonList />
@@ -269,6 +330,40 @@ function CompaniesPage() {
         onDelete={(id) => deleteMutation.mutateAsync(id)}
       />
     </div>
+  );
+}
+
+function CompaniesDebugPanel({
+  debug,
+  loading,
+  error,
+}: {
+  debug?: CompaniesQueryDebug;
+  loading: boolean;
+  error?: string | null;
+}) {
+  const rawResult = debug
+    ? { data: debug.rawData, error: debug.error, count: debug.count, status: debug.status, statusText: debug.statusText }
+    : null;
+
+  return (
+    <section
+      className="space-y-3 p-4 text-xs"
+      style={{ background: "#111118", border: "1px solid rgba(0,212,255,0.35)", borderRadius: 6, color: "#F0F0FF", fontFamily: "var(--font-mono)" }}
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <span style={{ color: "#00D4FF" }}>Temporary Companies Query Debug</span>
+        <span style={{ color: "#8B8B9E" }}>Loading: {loading ? "true" : "false"}</span>
+        <span style={{ color: error ? "#EF4444" : "#10B981" }}>Error: {error ?? "none"}</span>
+        <span style={{ color: "#8B8B9E" }}>Rows: {debug?.data.length ?? 0}</span>
+        <span style={{ color: "#8B8B9E" }}>Count: {debug?.count ?? 0}</span>
+      </div>
+      <div style={{ color: "#8B8B9E" }}>Client: {debug?.projectRef ?? gtmSupabaseInfo.projectRef} · {debug?.url ?? gtmSupabaseInfo.url}</div>
+      <div style={{ color: "#8B8B9E" }}>Query: {debug?.query ?? 'gtmSupabase.from("companies").select("*", { count: "exact" })'}</div>
+      <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words p-3" style={{ background: "#0A0A0F", border: "1px solid #1E1E2E", borderRadius: 4, color: "#8B8B9E" }}>
+        {JSON.stringify(rawResult, null, 2)}
+      </pre>
+    </section>
   );
 }
 
