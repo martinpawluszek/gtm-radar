@@ -127,3 +127,9 @@
 .pulse-dot {
   animation: pulse-dot 2s ease-in-out infinite;
 }
+
+/* Company rows — Bloomberg-style dense table rows */
+.company-row:hover { background: #111118; }
+.company-row:hover .company-row-actions { opacity: 1; }
+.company-row-action { border-radius: 3px; transition: color 120ms; }
+.company-row-action:hover { color: #00D4FF !important; }
