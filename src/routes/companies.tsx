@@ -195,7 +195,7 @@ function CompaniesPage() {
 
   return (
     <div className="space-y-5">
-      <CompaniesDebugPanel debug={queryDebug} loading={isLoading} error={loadError} />
+
 
       {/* Page header */}
       <div className="flex items-center justify-between">
@@ -283,33 +283,49 @@ function CompaniesPage() {
           onAction={() => { setSearch(""); setTierFilter("all"); }}
         />
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-0">
           {TIER_ORDER.map((t) => {
             const list = grouped[t];
             if (list.length === 0) return null;
             const meta = TIER_META[t];
             const isCollapsed = !!collapsed[t];
             return (
-              <section key={t}
-                style={{ background: "#111118", border: "1px solid #1E1E2E", borderTop: "1px solid rgba(0,212,255,0.2)", borderRadius: 6 }}>
+              <section key={t}>
                 <button
                   onClick={() => setCollapsed((p) => ({ ...p, [t]: !p[t] }))}
-                  className="w-full flex items-center justify-between px-4 py-2.5"
-                  style={{ borderBottom: isCollapsed ? "none" : "1px solid #1E1E2E" }}
+                  className="w-full flex items-center justify-between"
+                  style={{
+                    height: 36,
+                    paddingLeft: 16,
+                    paddingRight: 16,
+                    background: "#0D0D14",
+                    borderBottom: "1px solid #1E1E2E",
+                  }}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold tracking-widest" style={{ color: meta.color, fontFamily: "var(--font-mono)" }}>
+                    <span
+                      className="font-bold uppercase"
+                      style={{
+                        color: meta.color,
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 11,
+                        letterSpacing: "0.1em",
+                      }}
+                    >
                       {meta.label}
                     </span>
-                    <span className="text-[11px]" style={{ color: "#8B8B9E", fontFamily: "var(--font-mono)" }}>
+                    <span style={{ color: "#8B8B9E", fontFamily: "var(--font-mono)", fontSize: 11 }}>
                       {list.length}
                     </span>
                   </div>
-                  <ChevronDown size={14} style={{
-                    color: "#8B8B9E",
-                    transform: isCollapsed ? "rotate(-90deg)" : "none",
-                    transition: "transform 150ms",
-                  }} />
+                  <ChevronDown
+                    size={14}
+                    style={{
+                      color: "#8B8B9E",
+                      transform: isCollapsed ? "rotate(-90deg)" : "none",
+                      transition: "transform 150ms",
+                    }}
+                  />
                 </button>
                 {!isCollapsed && (
                   <div>
@@ -322,6 +338,7 @@ function CompaniesPage() {
         </div>
       )}
 
+
       <CompanyModal
         open={modalOpen}
         onOpenChange={setModalOpen}
@@ -333,39 +350,6 @@ function CompaniesPage() {
   );
 }
 
-function CompaniesDebugPanel({
-  debug,
-  loading,
-  error,
-}: {
-  debug?: CompaniesQueryDebug;
-  loading: boolean;
-  error?: string | null;
-}) {
-  const rawResult = debug
-    ? { data: debug.rawData, error: debug.error, count: debug.count, status: debug.status, statusText: debug.statusText }
-    : null;
-
-  return (
-    <section
-      className="space-y-3 p-4 text-xs"
-      style={{ background: "#111118", border: "1px solid rgba(0,212,255,0.35)", borderRadius: 6, color: "#F0F0FF", fontFamily: "var(--font-mono)" }}
-    >
-      <div className="flex flex-wrap items-center gap-3">
-        <span style={{ color: "#00D4FF" }}>Temporary Companies Query Debug</span>
-        <span style={{ color: "#8B8B9E" }}>Loading: {loading ? "true" : "false"}</span>
-        <span style={{ color: error ? "#EF4444" : "#10B981" }}>Error: {error ?? "none"}</span>
-        <span style={{ color: "#8B8B9E" }}>Rows: {debug?.data.length ?? 0}</span>
-        <span style={{ color: "#8B8B9E" }}>Count: {debug?.count ?? 0}</span>
-      </div>
-      <div style={{ color: "#8B8B9E" }}>Client: {debug?.projectRef ?? gtmSupabaseInfo.projectRef} · {debug?.url ?? gtmSupabaseInfo.url}</div>
-      <div style={{ color: "#8B8B9E" }}>Query: {debug?.query ?? 'gtmSupabase.from("companies").select("*", { count: "exact" })'}</div>
-      <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words p-3" style={{ background: "#0A0A0F", border: "1px solid #1E1E2E", borderRadius: 4, color: "#8B8B9E" }}>
-        {JSON.stringify(rawResult, null, 2)}
-      </pre>
-    </section>
-  );
-}
 
 function SkeletonList() {
   return (
