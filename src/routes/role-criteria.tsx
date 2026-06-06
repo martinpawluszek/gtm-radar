@@ -282,7 +282,7 @@ function Editor({ initial, onSaved }: { initial: RoleCriteria | null; onSaved: (
       setDraft(next);
       setBaseline(next);
       setDirty(false);
-      toast.success(`Saved v${resultRow!.version}`);
+      toast.success("Changes saved");
       onSaved();
     } catch (e) {
       toast.error((e as Error).message);
