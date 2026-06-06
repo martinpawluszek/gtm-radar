@@ -16,6 +16,7 @@ import {
   Inbox,
   Phone,
   Copy,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -692,6 +693,7 @@ function OutreachPage() {
                   ? companyMap.get(selected.current_company_id) ?? null
                   : null
               }
+              companies={companies}
               activity={activityByTarget.get(selected.id) ?? []}
               onMove={(to) => moveStatus.mutate({ target: selected, to })}
               onLog={(v) => logActivity.mutate({ ...v, target_id: selected.id })}
