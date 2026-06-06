@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Plus, Trash2, X } from "lucide-react";
@@ -185,17 +185,18 @@ function Editor({ initial, onSaved }: { initial: RoleCriteria | null; onSaved: (
   const [draft, setDraft] = useState<RoleCriteria>(() => makeDraftFrom(initial));
   const [baseline, setBaseline] = useState<RoleCriteria>(() => makeDraftFrom(initial));
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
     const next = makeDraftFrom(initial);
     setDraft(next);
     setBaseline(next);
+    setDirty(false);
   }, [initial]);
 
-  const dirty = useMemo(
-    () => JSON.stringify(draft) !== JSON.stringify(baseline),
-    [draft, baseline],
-  );
+  useEffect(() => {
+    setDirty(JSON.stringify(draft) !== JSON.stringify(baseline));
+  }, [draft, baseline]);
 
   const weightSum = sumWeights(draft.weights);
   const weightsValid = Math.abs(weightSum - 1) < 0.001;
@@ -247,6 +248,7 @@ function Editor({ initial, onSaved }: { initial: RoleCriteria | null; onSaved: (
       const next = makeDraftFrom(resultRow);
       setDraft(next);
       setBaseline(next);
+      setDirty(false);
       toast.success(`Saved v${resultRow!.version}`);
       onSaved();
     } catch (e) {
