@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Plus, Search, X } from "lucide-react";
+import { ChevronDown, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { gtmSupabase, gtmSupabaseInfo } from "@/lib/gtmSupabase";
 import { Input } from "@/components/ui/input";
@@ -169,8 +169,6 @@ function CompaniesPage() {
   }, [sorted]);
 
   const total = companies.length;
-  const hasFilters = search.trim() || tierFilter !== "all";
-
   const openAdd = () => { setEditing(null); setModalOpen(true); };
   const openEdit = (c: Company) => { setEditing(c); setModalOpen(true); };
 
