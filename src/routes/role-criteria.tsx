@@ -606,7 +606,7 @@ function BonusList({
   };
   return (
     <div>
-      <h4 className="text-xs font-semibold uppercase mb-2" style={{ color: "#F0F0FF", fontFamily: MONO, letterSpacing: "0.08em" }}>
+      <h4 style={{ ...SECTION_LABEL, marginBottom: 8 }}>
         Bonuses
       </h4>
       <div className="flex flex-col gap-1 mb-3">
