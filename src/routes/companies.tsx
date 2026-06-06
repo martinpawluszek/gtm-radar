@@ -206,7 +206,7 @@ function CompaniesPage() {
     setActiveTags((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
 
   return (
-    <div className="space-y-5 min-w-0">
+    <div className="space-y-4 min-w-0" style={{ marginTop: -8 }}>
       {/* Page header */}
       <div className="grid items-center gap-3" style={{ gridTemplateColumns: "1fr auto" }}>
         <div className="flex items-center gap-3 min-w-0">
