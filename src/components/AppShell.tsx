@@ -31,8 +31,8 @@ function formatDate() {
 export function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const current = NAV.find((n) => (n.to === "/" ? pathname === "/" : pathname.startsWith(n.to)));
-  const isCompanies = pathname.startsWith("/companies");
-  const pageTitle = isCompanies ? "" : current?.label ?? "GTM Intelligence";
+  const hideHeaderTitle = pathname.startsWith("/companies") || pathname.startsWith("/role-criteria");
+  const pageTitle = hideHeaderTitle ? "" : current?.label ?? "GTM Intelligence";
 
   return (
     <div className="min-h-screen flex w-full noise-overlay" style={{ background: "#0A0A0F" }}>
