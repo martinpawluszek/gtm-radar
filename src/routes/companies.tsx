@@ -29,6 +29,7 @@ type CompaniesQueryDebug = {
   status: number;
   statusText: string;
   count: number;
+  rawData: RawCompany[];
   data: Company[];
   error: null | {
     message: string;
@@ -42,6 +43,15 @@ type RawCompany = Company & {
   loc_score?: number | null;
   total_score?: number | null;
 };
+
+function toCompanyWritePayload(data: CompanyInsert) {
+  const { location_score, ...rest } = data;
+  return {
+    ...rest,
+    tags: data.tags ?? [],
+    loc_score: location_score ?? 0,
+  };
+}
 
 const SORT_LABEL: Record<SortKey, string> = {
   total: "Total Score",
@@ -78,6 +88,7 @@ async function fetchCompanies(): Promise<CompaniesQueryDebug> {
     status,
     statusText,
     count: count ?? rows.length,
+    rawData: rows,
     data: normalized,
     error: error
       ? {
@@ -109,12 +120,12 @@ function CompaniesPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (data: CompanyInsert) => {
-      const payload = { ...data, tags: data.tags ?? [] };
+      const payload = toCompanyWritePayload(data);
       if (editing?.id) {
-        const { error } = await gtmSupabase.from("companies").update(payload).eq("id", editing.id);
+        const { error } = await gtmSupabase.from("companies").update(payload as never).eq("id", editing.id);
         if (error) throw error;
       } else {
-        const { error } = await gtmSupabase.from("companies").insert(payload);
+        const { error } = await gtmSupabase.from("companies").insert(payload as never);
         if (error) throw error;
       }
     },
@@ -332,7 +343,7 @@ function CompaniesDebugPanel({
   error?: string | null;
 }) {
   const rawResult = debug
-    ? { data: debug.data, error: debug.error, count: debug.count, status: debug.status, statusText: debug.statusText }
+    ? { data: debug.rawData, error: debug.error, count: debug.count, status: debug.status, statusText: debug.statusText }
     : null;
 
   return (
