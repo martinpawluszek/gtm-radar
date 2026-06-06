@@ -350,39 +350,6 @@ function CompaniesPage() {
   );
 }
 
-function CompaniesDebugPanel({
-  debug,
-  loading,
-  error,
-}: {
-  debug?: CompaniesQueryDebug;
-  loading: boolean;
-  error?: string | null;
-}) {
-  const rawResult = debug
-    ? { data: debug.rawData, error: debug.error, count: debug.count, status: debug.status, statusText: debug.statusText }
-    : null;
-
-  return (
-    <section
-      className="space-y-3 p-4 text-xs"
-      style={{ background: "#111118", border: "1px solid rgba(0,212,255,0.35)", borderRadius: 6, color: "#F0F0FF", fontFamily: "var(--font-mono)" }}
-    >
-      <div className="flex flex-wrap items-center gap-3">
-        <span style={{ color: "#00D4FF" }}>Temporary Companies Query Debug</span>
-        <span style={{ color: "#8B8B9E" }}>Loading: {loading ? "true" : "false"}</span>
-        <span style={{ color: error ? "#EF4444" : "#10B981" }}>Error: {error ?? "none"}</span>
-        <span style={{ color: "#8B8B9E" }}>Rows: {debug?.data.length ?? 0}</span>
-        <span style={{ color: "#8B8B9E" }}>Count: {debug?.count ?? 0}</span>
-      </div>
-      <div style={{ color: "#8B8B9E" }}>Client: {debug?.projectRef ?? gtmSupabaseInfo.projectRef} · {debug?.url ?? gtmSupabaseInfo.url}</div>
-      <div style={{ color: "#8B8B9E" }}>Query: {debug?.query ?? 'gtmSupabase.from("companies").select("*", { count: "exact" })'}</div>
-      <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words p-3" style={{ background: "#0A0A0F", border: "1px solid #1E1E2E", borderRadius: 4, color: "#8B8B9E" }}>
-        {JSON.stringify(rawResult, null, 2)}
-      </pre>
-    </section>
-  );
-}
 
 function SkeletonList() {
   return (
