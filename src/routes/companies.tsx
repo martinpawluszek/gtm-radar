@@ -195,16 +195,21 @@ function CompaniesPage() {
   }, [sorted]);
 
   const total = companies.length;
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of companies) for (const t of c.tags ?? []) if (t) set.add(t);
+    return Array.from(set).sort();
+  }, [companies]);
   const openAdd = () => { setEditing(null); setModalOpen(true); };
   const openEdit = (c: Company) => { setEditing(c); setModalOpen(true); };
+  const toggleTag = (t: string) =>
+    setActiveTags((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
 
   return (
     <div className="space-y-5 min-w-0">
-
-
       {/* Page header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="grid items-center gap-3" style={{ gridTemplateColumns: "1fr auto" }}>
+        <div className="flex items-center gap-3 min-w-0">
           <h2 className="text-xl font-semibold" style={{ color: "#F0F0FF", fontFamily: "var(--font-mono)" }}>
             Companies
           </h2>
