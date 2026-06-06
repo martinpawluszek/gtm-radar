@@ -102,10 +102,7 @@
 }
 
 /* Subtle noise texture overlay */
-@utility noise-overlay {
-  position: relative;
-}
-@utility noise-overlay::after {
+.noise-overlay::after {
   content: "";
   position: fixed;
   inset: 0;
@@ -127,6 +124,6 @@
   0%, 100% { opacity: 1; box-shadow: 0 0 0 0 color-mix(in oklab, #00D4FF 50%, transparent); }
   50% { opacity: 0.6; box-shadow: 0 0 0 6px color-mix(in oklab, #00D4FF 0%, transparent); }
 }
-@utility pulse-dot {
+.pulse-dot {
   animation: pulse-dot 2s ease-in-out infinite;
 }
