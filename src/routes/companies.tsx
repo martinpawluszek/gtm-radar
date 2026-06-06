@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Plus, Search } from "lucide-react";
+import { ChevronDown, Plus, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { gtmSupabase, gtmSupabaseInfo } from "@/lib/gtmSupabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
@@ -206,7 +208,7 @@ function CompaniesPage() {
     setActiveTags((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
 
   return (
-    <div className="space-y-5 min-w-0">
+    <div className="space-y-4 min-w-0" style={{ marginTop: -8 }}>
       {/* Page header */}
       <div className="grid items-center gap-3" style={{ gridTemplateColumns: "1fr auto" }}>
         <div className="flex items-center gap-3 min-w-0">
@@ -273,37 +275,58 @@ function CompaniesPage() {
 
       {/* Tag filter row */}
       {allTags.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap min-w-0">
-          {allTags.map((t) => {
-            const active = activeTags.includes(t);
-            return (
-              <button
-                key={t}
-                onClick={() => toggleTag(t)}
-                className="px-2 py-1 text-xs font-medium transition-colors"
-                style={{
-                  borderRadius: 3,
-                  fontFamily: "var(--font-mono)",
-                  background: active ? "#00D4FF" : "transparent",
-                  color: active ? "#0A0A0F" : "#8B8B9E",
-                  border: `1px solid ${active ? "#00D4FF" : "#1E1E2E"}`,
-                }}
-              >
-                {t}
+        <div className="flex items-center gap-2 flex-wrap min-w-0" style={{ minHeight: 36 }}>
+          <span className="text-xs flex-shrink-0" style={{ color: "#8B8B9E", fontFamily: "var(--font-mono)" }}>
+            Filter by tag
+          </span>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="flex-shrink-0"
+                style={{ background: "#111118", border: "1px solid #1E1E2E", color: "#F0F0FF", height: 28 }}>
+                Tags {activeTags.length > 0 ? `(${activeTags.length})` : ""} <ChevronDown size={12} />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="p-2 w-56"
+              style={{ background: "#111118", border: "1px solid #1E1E2E" }}>
+              <div className="overflow-y-auto flex flex-col gap-1" style={{ maxHeight: 280 }}>
+                {allTags.map((t) => {
+                  const checked = activeTags.includes(t);
+                  return (
+                    <label key={t} className="flex items-center gap-2 px-2 py-1 cursor-pointer text-xs"
+                      style={{ color: "#F0F0FF", borderRadius: 3, fontFamily: "var(--font-mono)" }}>
+                      <Checkbox checked={checked} onCheckedChange={() => toggleTag(t)} />
+                      <span>{t}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </PopoverContent>
+          </Popover>
+          {activeTags.map((t) => (
+            <span key={t}
+              className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium"
+              style={{
+                background: "#00D4FF", color: "#0A0A0F", borderRadius: 3,
+                fontFamily: "var(--font-mono)", height: 22,
+              }}>
+              {t}
+              <button onClick={() => toggleTag(t)} className="inline-flex" aria-label={`Remove ${t}`}>
+                <X size={11} />
               </button>
-            );
-          })}
+            </span>
+          ))}
           {activeTags.length > 0 && (
             <button
               onClick={() => setActiveTags([])}
-              className="ml-auto text-xs underline-offset-2 hover:underline"
+              className="ml-auto text-xs underline-offset-2 hover:underline flex-shrink-0"
               style={{ color: "#00D4FF", fontFamily: "var(--font-mono)" }}
             >
-              Clear filters
+              Clear all
             </button>
           )}
         </div>
       )}
+
 
 
       {/* Body */}
