@@ -254,7 +254,7 @@ function Editor({ initial, onSaved }: { initial: RoleCriteria | null; onSaved: (
         target_titles: draft.target_titles,
         excluded_titles: draft.excluded_titles,
         weights: draft.weights,
-        rubric: draft.rubric,
+        rubric: rubricToDb(draft.rubric),
         disqualifiers: draft.disqualifiers,
         bonuses: draft.bonuses,
         updated_at: new Date().toISOString(),
