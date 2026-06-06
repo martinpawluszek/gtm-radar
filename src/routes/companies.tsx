@@ -194,7 +194,7 @@ function CompaniesPage() {
   const openEdit = (c: Company) => { setEditing(c); setModalOpen(true); };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 min-w-0">
 
 
       {/* Page header */}
@@ -215,8 +215,8 @@ function CompaniesPage() {
       </div>
 
       {/* Filter bar */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="relative flex-1 min-w-0" style={{ maxWidth: 280 }}>
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "#8B8B9E" }} />
           <Input
             value={search}
@@ -226,12 +226,12 @@ function CompaniesPage() {
             style={{ background: "#111118", border: "1px solid #1E1E2E", color: "#F0F0FF" }}
           />
         </div>
-        <div className="flex gap-1">
+        <div className="flex gap-1 flex-shrink-0">
           {TIER_FILTERS.map((f) => {
             const active = tierFilter === f.value;
             return (
               <button key={f.value} onClick={() => setTierFilter(f.value)}
-                className="px-2.5 py-1 text-xs font-medium transition-colors"
+                className="px-2 py-1 text-xs font-medium transition-colors"
                 style={{
                   borderRadius: 3,
                   fontFamily: "var(--font-mono)",
@@ -244,7 +244,7 @@ function CompaniesPage() {
             );
           })}
         </div>
-        <div className="ml-auto">
+        <div className="flex-shrink-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm"

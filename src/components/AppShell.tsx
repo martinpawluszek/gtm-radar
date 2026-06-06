@@ -147,7 +147,7 @@ export function AppShell() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 p-6 relative" style={{ background: "#0A0A0F" }}>
+        <main className="flex-1 p-6 relative min-w-0" style={{ background: "#0A0A0F" }}>
           <Outlet />
         </main>
       </div>

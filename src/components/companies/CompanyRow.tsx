@@ -11,7 +11,7 @@ export function CompanyRow({ company, onEdit }: { company: Company; onEdit: (c: 
     <div
       className="company-row group flex items-center gap-4 transition-colors"
       style={{
-        height: 52,
+        height: 48,
         paddingLeft: 16,
         paddingRight: 16,
         borderBottom: "1px solid #1E1E2E",
