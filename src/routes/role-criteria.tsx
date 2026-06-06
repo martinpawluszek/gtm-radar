@@ -109,6 +109,44 @@ function normalizeBonuses(raw: unknown): Bonus[] {
   });
 }
 
+// DB stores rubric with key "fit"; internal code uses "role_fit".
+function rubricFromDb(raw: unknown): RoleCriteria["rubric"] {
+  const r = (raw ?? {}) as Record<string, Record<string, string>>;
+  const pick = (k: string) => {
+    const src = r[k] ?? {};
+    const out: Record<1 | 2 | 3 | 4 | 5, string> = { 1: "", 2: "", 3: "", 4: "", 5: "" };
+    ([1, 2, 3, 4, 5] as const).forEach((n) => {
+      const v = (src as Record<string, unknown>)[String(n)];
+      out[n] = typeof v === "string" ? v : "";
+    });
+    return out;
+  };
+  const merged: RoleCriteria["rubric"] = {
+    comp: pick("comp"),
+    role_fit: pick("fit") ,
+    seniority: pick("seniority"),
+    location: pick("location"),
+    competition: pick("competition"),
+  };
+  // fill any blanks with defaults so editing works even if DB is partial
+  (Object.keys(merged) as ParamKey[]).forEach((k) => {
+    ([1, 2, 3, 4, 5] as const).forEach((n) => {
+      if (!merged[k][n]) merged[k][n] = DEFAULT_CRITERIA.rubric[k][n];
+    });
+  });
+  return merged;
+}
+
+function rubricToDb(r: RoleCriteria["rubric"]) {
+  return {
+    comp: r.comp,
+    fit: r.role_fit,
+    seniority: r.seniority,
+    location: r.location,
+    competition: r.competition,
+  };
+}
+
 function makeDraftFrom(row: RoleCriteria | null): RoleCriteria {
   if (row) {
     const normalized = {
@@ -116,15 +154,10 @@ function makeDraftFrom(row: RoleCriteria | null): RoleCriteria {
       target_titles: Array.isArray(row.target_titles) ? row.target_titles : [],
       excluded_titles: Array.isArray(row.excluded_titles) ? row.excluded_titles : [],
       weights: { ...DEFAULT_CRITERIA.weights, ...(row.weights ?? {}) },
-      rubric: { ...DEFAULT_CRITERIA.rubric, ...(row.rubric ?? {}) },
+      rubric: rubricFromDb(row.rubric),
       disqualifiers: normalizeDisqualifiers(row.disqualifiers),
       bonuses: normalizeBonuses(row.bonuses),
     };
-    console.log("[role-criteria] raw row:", row);
-    console.log("[role-criteria] normalized:", normalized);
-    if (row.disqualifiers && row.disqualifiers.length && typeof row.disqualifiers[0] !== "string") {
-      console.warn("[role-criteria] SHAPE MISMATCH disqualifiers — expected string[], got:", row.disqualifiers);
-    }
     return normalized;
   }
   return {
