@@ -826,6 +826,7 @@ function ABTable({ targets, activity }: { targets: Target[]; activity: Activity[
 function TargetPanel({
   target,
   company,
+  companies,
   activity,
   onMove,
   onLog,
@@ -833,6 +834,7 @@ function TargetPanel({
 }: {
   target: Target;
   company: CompanyLite | null;
+  companies: CompanyLite[];
   activity: Activity[];
   onMove: (to: AnyStatus) => void;
   onLog: (v: {
