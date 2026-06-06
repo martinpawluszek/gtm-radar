@@ -23,7 +23,7 @@ export const SCORE_DIMS = [
 ] as const;
 
 export const totalScore = (c: Company) =>
-  c.brand_score + c.ai_score + c.shot_score + c.comp_score + c.location_score;
+  (c.brand_score ?? 0) + (c.ai_score ?? 0) + (c.shot_score ?? 0) + (c.comp_score ?? 0) + (c.location_score ?? 0);
 
 export const SCORE_RUBRIC: Record<string, Record<number, string>> = {
   brand_score: {
