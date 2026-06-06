@@ -423,7 +423,7 @@ function TitleList({
   };
   return (
     <div>
-      <h4 className="text-xs font-semibold uppercase mb-2" style={{ color: "#F0F0FF", fontFamily: MONO, letterSpacing: "0.08em" }}>
+      <h4 style={{ ...SECTION_LABEL, marginBottom: 8 }}>
         {title}
       </h4>
       <div className="flex flex-wrap gap-1.5 mb-3 min-h-[28px]">
