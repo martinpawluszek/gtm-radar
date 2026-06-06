@@ -862,6 +862,54 @@ function TargetPanel({
   const [drafting, setDrafting] = useState(false);
   const draftFn = useServerFn(draftOutreachMessage);
 
+  const [editMode, setEditMode] = useState(false);
+  const [editName, setEditName] = useState(target.name);
+  const [editRole, setEditRole] = useState(target.role ?? "");
+  const [editLinkedin, setEditLinkedin] = useState(target.linkedin_url ?? "");
+  const [editCompanyId, setEditCompanyId] = useState<string | null>(target.current_company_id);
+  const [editCompanySearch, setEditCompanySearch] = useState("");
+  const [editCompanyOpen, setEditCompanyOpen] = useState(false);
+  const [editSource, setEditSource] = useState(target.source ?? "");
+
+  const editFilteredCompanies = useMemo(
+    () =>
+      companies
+        .filter((c) => c.name.toLowerCase().includes(editCompanySearch.toLowerCase()))
+        .slice(0, 8),
+    [companies, editCompanySearch],
+  );
+  const editSelectedCompany = editCompanyId
+    ? companies.find((c) => c.id === editCompanyId) ?? null
+    : null;
+
+  const enterEdit = () => {
+    setEditName(target.name);
+    setEditRole(target.role ?? "");
+    setEditLinkedin(target.linkedin_url ?? "");
+    setEditCompanyId(target.current_company_id);
+    setEditCompanySearch("");
+    setEditSource(target.source ?? "");
+    setEditMode(true);
+  };
+
+  const handleSaveEdit = () => {
+    const patch: Partial<Target> = {};
+    if (editName.trim() !== target.name) patch.name = editName.trim();
+    if (editRole.trim() !== (target.role ?? "")) patch.role = editRole.trim() || null;
+    if (editLinkedin.trim() !== (target.linkedin_url ?? ""))
+      patch.linkedin_url = editLinkedin.trim() || null;
+    if (editCompanyId !== target.current_company_id) patch.current_company_id = editCompanyId;
+    if (editSource.trim() !== (target.source ?? "")) patch.source = editSource.trim() || null;
+    if (Object.keys(patch).length > 0) {
+      onPatch(patch);
+    }
+    setEditMode(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditMode(false);
+  };
+
   const buildPrompt = () => {
     const tagStr = (target.tags ?? []).join(", ");
     const groupContext =
