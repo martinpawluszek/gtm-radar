@@ -34,7 +34,8 @@ export function AppShell() {
   const hideHeaderTitle =
     pathname.startsWith("/companies") ||
     pathname.startsWith("/role-criteria") ||
-    pathname.startsWith("/applications");
+    pathname.startsWith("/applications") ||
+    pathname.startsWith("/outreach");
   const pageTitle = hideHeaderTitle ? "" : current?.label ?? "GTM Intelligence";
 
   return (
