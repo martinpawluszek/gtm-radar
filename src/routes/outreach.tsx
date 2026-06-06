@@ -911,11 +911,6 @@ function TargetPanel({
   };
 
   const buildPrompt = () => {
-    const tagStr = (target.tags ?? []).join(", ");
-    const groupContext =
-      target.group_name === "a_cold"
-        ? "This is a cold outreach. Martin has not interacted with this person before."
-        : "This is a warm outreach. Martin has been engaging with this person's content. Reference the engagement history naturally.";
     const recent = activity
       .slice(0, 3)
       .map(
@@ -925,30 +920,46 @@ function TargetPanel({
           }`,
       )
       .join("\n");
-    return `You are drafting a LinkedIn outreach message for Martin Pawluszek.
+    const groupLine =
+      target.group_name === "a_cold"
+        ? "cold outreach, no prior interaction"
+        : "warm, Martin has been engaging with their content — reference this naturally";
+    return `You are writing a LinkedIn message for Martin Pawluszek. 
 
-MARTIN'S CONTEXT:
-Martin is a cofounder and CRO who built a B2B SaaS platform from zero to 30+ team and $2M ARR over 5 years, selling to CTOs and Product teams across LatAm and the US. He previously worked at EMnify (Berlin IoT SaaS) as Deputy Director of Sales, and at predict.io (ML company) in BD. He builds his own AI tools internally. He is multilingual (English, Spanish, French, Portuguese, German). He is exploring senior GTM and enterprise sales roles at AI and tech companies.
+Before you write anything, read this: the messages you have been writing are too long, too structured, and sound like cover letters. They list credentials. They follow a formula. Real outreach does not do this. A good outreach message sounds like something a confident person typed in 90 seconds because they had one specific reason to reach out.
+
+WHAT MARTIN DOES NOT WANT:
+- Any version of: "My background: [list of things]"
+- Any version of: "I cofounded / I grew / I built [resume summary]"
+- Opening with "I"
+- The phrase "what's next"
+- The phrase "actively looking"
+- The phrase "caught my attention"
+- The phrase "would love to"
+- Listing multiple credentials in sequence
+- A structured message with a hook, then background, then ask
+- Anything that sounds like it was drafted carefully
+
+WHAT MARTIN WANTS:
+- One specific hook based on something real in the notes. If notes mention a post they made, use that. If notes mention a hiring signal, reference it briefly. If notes are sparse, skip the hook and be direct about who he is in one sentence.
+- Maximum one sentence of Martin's background. Pick the single most relevant thing to this specific person. Not two things. One.
+- A low-pressure ask for 15 minutes. That is the only goal of this message.
+- Tone: like a peer reaching out to another peer. Not a candidate messaging a gatekeeper. Not a vendor pitching. A person.
+
+MARTIN'S BACKGROUND (do not recite this — use it only to pick one relevant detail):
+Cofounder and CRO. Built a B2B SaaS platform from zero to $2M ARR in five years, selling to CTOs across LatAm and the US. Before that: Deputy Director of Sales at EMnify (Berlin IoT SaaS), BD at predict.io (ML company, Berlin). Builds AI tools internally. Multilingual. Now looking at senior GTM and enterprise sales roles at AI and tech companies. Berlin-based.
 
 TARGET PERSON:
 Name: ${target.name}
-Role: ${target.role ?? "Unknown"}
-Company: ${company ? `${company.name} (Tier: ${company.tier})` : "Unknown"}
-Company notes: ${tagStr || "none"}
-Recent activity: ${recent || "None"}
+Role: ${target.role ?? "Unknown"} at ${company ? company.name : "Unknown"} (Tier: ${company ? company.tier : "Unknown"})
 Martin's notes on this person: ${target.notes || "None"}
+Recent activity: ${recent || "None"}
 
-GROUP CONTEXT: ${groupContext}
+GROUP: ${groupLine}
 
-RULES (non-negotiable):
-- Under 100 words total
-- No em dashes
-- No phrases like "I came across your profile", "I hope this finds you well", "I wanted to reach out", "I noticed that", "resonates with me"
-- Do not fabricate specific details about the person that aren't in the notes
-- Be honest and direct — Martin is exploring roles, not selling a product
-- One clear ask at the end: a 15-minute call
-- Sound like a real human wrote this, not a cover letter
-- Do not mention that this is AI-generated`;
+LENGTH: 50 to 75 words. Hard limit. If you go over, cut. Do not pad to reach 50 either.
+
+OUTPUT: Only the message. No "Here's a draft", no word count, no dashes, no subject line. Just the message text.`;
   };
 
   const handleDraft = async () => {
