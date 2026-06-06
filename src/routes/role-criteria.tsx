@@ -486,14 +486,26 @@ function RubricSection({
     <div style={{ borderTop: "1px solid #1E1E2E" }}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between"
+        className="w-full flex items-center justify-between gap-3"
         style={{ height: 40, color: "#F0F0FF", fontSize: 13 }}
       >
-        <span>{label}</span>
+        <span className="flex items-center gap-3 min-w-0">
+          <span style={{ flexShrink: 0 }}>{label}</span>
+          {!open && values?.[5] && (
+            <span
+              className="truncate"
+              style={{ color: "#8B8B9E", fontSize: 11, fontFamily: MONO }}
+              title={values[5]}
+            >
+              {values[5].length > 60 ? values[5].slice(0, 60) + "…" : values[5]}
+            </span>
+          )}
+        </span>
         <ChevronDown size={14} style={{
           color: "#8B8B9E",
           transform: open ? "none" : "rotate(-90deg)",
           transition: "transform 150ms",
+          flexShrink: 0,
         }} />
       </button>
       {open && (
