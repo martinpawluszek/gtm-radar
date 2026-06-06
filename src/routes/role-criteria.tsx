@@ -18,6 +18,24 @@ import {
   sumWeights,
 } from "@/lib/roleCriteria";
 
+const PARAM_DESCRIPTIONS: Record<ParamKey, string> = {
+  comp: "OTE ceiling for this role type",
+  role_fit: "How well JD maps to Martin's background",
+  seniority: "Level match",
+  location: "City or remote policy",
+  competition: "Estimated applicant pool difficulty",
+};
+
+const SECTION_LABEL: React.CSSProperties = {
+  fontSize: 11,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  color: "#8B8B9E",
+  fontFamily: "var(--font-mono)",
+  fontWeight: 600,
+};
+
+
 export const Route = createFileRoute("/role-criteria")({
   head: () => ({ meta: [{ title: "Role Criteria — GTM Intelligence" }] }),
   component: RoleCriteriaPage,
