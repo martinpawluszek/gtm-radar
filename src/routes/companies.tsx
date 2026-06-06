@@ -271,6 +271,41 @@ function CompaniesPage() {
         </div>
       </div>
 
+      {/* Tag filter row */}
+      {allTags.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          {allTags.map((t) => {
+            const active = activeTags.includes(t);
+            return (
+              <button
+                key={t}
+                onClick={() => toggleTag(t)}
+                className="px-2 py-1 text-xs font-medium transition-colors"
+                style={{
+                  borderRadius: 3,
+                  fontFamily: "var(--font-mono)",
+                  background: active ? "#00D4FF" : "transparent",
+                  color: active ? "#0A0A0F" : "#8B8B9E",
+                  border: `1px solid ${active ? "#00D4FF" : "#1E1E2E"}`,
+                }}
+              >
+                {t}
+              </button>
+            );
+          })}
+          {activeTags.length > 0 && (
+            <button
+              onClick={() => setActiveTags([])}
+              className="ml-auto text-xs underline-offset-2 hover:underline"
+              style={{ color: "#00D4FF", fontFamily: "var(--font-mono)" }}
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      )}
+
+
       {/* Body */}
       {loadError ? (
         <div className="p-6 text-sm" style={{ color: "#EF4444", background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 6 }}>
