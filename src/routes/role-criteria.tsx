@@ -38,34 +38,76 @@ type LoadResult =
   | { kind: "missing-table"; message: string };
 
 async function loadCriteria(): Promise<LoadResult> {
-  const { data, error } = await gtmSupabase
-    .from("role_criteria" as never)
-    .select("*")
-    .eq("is_active", true)
-    .order("version", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) {
-    const msg = error.message || "";
-    if (/role_criteria|does not exist|schema cache/i.test(msg)) {
-      return { kind: "missing-table", message: msg };
+  try {
+    console.log("[role-criteria] querying role_criteria where is_active=true");
+    const { data, error } = await gtmSupabase
+      .from("role_criteria" as never)
+      .select("*")
+      .eq("is_active", true)
+      .order("version", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    console.log("[role-criteria] raw response:", { data, error });
+    if (error) {
+      const msg = error.message || "";
+      if (/role_criteria|does not exist|schema cache/i.test(msg)) {
+        return { kind: "missing-table", message: msg };
+      }
+      throw new Error(msg);
     }
-    throw new Error(msg);
+    return { kind: "ok", row: (data as RoleCriteria | null) ?? null };
+  } catch (e) {
+    console.error("[role-criteria] load failed:", e);
+    throw e;
   }
-  return { kind: "ok", row: (data as RoleCriteria | null) ?? null };
+}
+
+function normalizeDisqualifiers(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object") {
+        const o = item as Record<string, unknown>;
+        if (typeof o.rule === "string") return o.rule;
+        if (typeof o.name === "string") return o.name;
+        if (typeof o.text === "string") return o.text;
+        return JSON.stringify(o);
+      }
+      return String(item);
+    })
+    .filter(Boolean);
+}
+
+function normalizeBonuses(raw: unknown): Bonus[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((b, i) => {
+    const o = (b ?? {}) as Record<string, unknown>;
+    return {
+      id: typeof o.id === "string" ? o.id : `bonus-${i}-${Math.random().toString(36).slice(2, 8)}`,
+      name: typeof o.name === "string" ? o.name : typeof o.label === "string" ? (o.label as string) : "",
+      value: typeof o.value === "number" ? o.value : Number(o.value) || 0,
+    };
+  });
 }
 
 function makeDraftFrom(row: RoleCriteria | null): RoleCriteria {
   if (row) {
-    return {
+    const normalized = {
       ...row,
-      target_titles: row.target_titles ?? [],
-      excluded_titles: row.excluded_titles ?? [],
+      target_titles: Array.isArray(row.target_titles) ? row.target_titles : [],
+      excluded_titles: Array.isArray(row.excluded_titles) ? row.excluded_titles : [],
       weights: { ...DEFAULT_CRITERIA.weights, ...(row.weights ?? {}) },
       rubric: { ...DEFAULT_CRITERIA.rubric, ...(row.rubric ?? {}) },
-      disqualifiers: row.disqualifiers ?? [],
-      bonuses: row.bonuses ?? [],
+      disqualifiers: normalizeDisqualifiers(row.disqualifiers),
+      bonuses: normalizeBonuses(row.bonuses),
     };
+    console.log("[role-criteria] raw row:", row);
+    console.log("[role-criteria] normalized:", normalized);
+    if (row.disqualifiers && row.disqualifiers.length && typeof row.disqualifiers[0] !== "string") {
+      console.warn("[role-criteria] SHAPE MISMATCH disqualifiers — expected string[], got:", row.disqualifiers);
+    }
+    return normalized;
   }
   return {
     id: "",
