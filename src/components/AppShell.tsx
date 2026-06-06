@@ -31,7 +31,10 @@ function formatDate() {
 export function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const current = NAV.find((n) => (n.to === "/" ? pathname === "/" : pathname.startsWith(n.to)));
-  const hideHeaderTitle = pathname.startsWith("/companies") || pathname.startsWith("/role-criteria");
+  const hideHeaderTitle =
+    pathname.startsWith("/companies") ||
+    pathname.startsWith("/role-criteria") ||
+    pathname.startsWith("/applications");
   const pageTitle = hideHeaderTitle ? "" : current?.label ?? "GTM Intelligence";
 
   return (
