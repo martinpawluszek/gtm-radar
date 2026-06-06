@@ -38,6 +38,11 @@ type CompaniesQueryDebug = {
   };
 };
 
+type RawCompany = Company & {
+  loc_score?: number | null;
+  total_score?: number | null;
+};
+
 const SORT_LABEL: Record<SortKey, string> = {
   total: "Total Score",
   name: "Name A-Z",
@@ -60,6 +65,11 @@ async function fetchCompanies(): Promise<CompaniesQueryDebug> {
   const { data, error, count, status, statusText } = await gtmSupabase
     .from("companies")
     .select("*", { count: "exact" });
+  const rows = (data ?? []) as RawCompany[];
+  const normalized = rows.map((company) => ({
+    ...company,
+    location_score: company.location_score ?? company.loc_score ?? 0,
+  })) as Company[];
 
   return {
     query,
@@ -67,8 +77,8 @@ async function fetchCompanies(): Promise<CompaniesQueryDebug> {
     url: gtmSupabaseInfo.url,
     status,
     statusText,
-    count: count ?? data?.length ?? 0,
-    data: data ?? [],
+    count: count ?? rows.length,
+    data: normalized,
     error: error
       ? {
         message: error.message,
