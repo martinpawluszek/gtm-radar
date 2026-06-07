@@ -73,7 +73,7 @@ type CompanyLite = {
   ai_score: number;
   shot_score: number;
   comp_score: number;
-  location_score: number;
+  loc_score: number;
   notes: string | null;
 };
 
