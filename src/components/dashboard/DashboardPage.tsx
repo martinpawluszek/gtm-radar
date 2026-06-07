@@ -329,6 +329,53 @@ export function DashboardPage() {
     return now - t > D7 && now - t <= 2 * D7;
   };
 
+  // Stage advancement: applications only (net forward progress).
+  const APP_RANK: Record<string, number> = {
+    applied: 0,
+    screening: 1,
+    interview_1: 2,
+    interview_2: 3,
+    final: 4,
+    offer: 5,
+  };
+  const TERMINAL = new Set(["rejected", "ghosted"]);
+  function appAdvancementInWindow(inWindow: (iso: string | null) => boolean): number {
+    const byApp = new Map<string, HistoryRow[]>();
+    for (const h of history) {
+      const arr = byApp.get(h.application_id) ?? [];
+      arr.push(h);
+      byApp.set(h.application_id, arr);
+    }
+    let count = 0;
+    for (const a of apps) {
+      const rows = (byApp.get(a.id) ?? []).slice().sort(
+        (x, y) => new Date(x.changed_at).getTime() - new Date(y.changed_at).getTime(),
+      );
+      // Build sequence of (status, time) the app ever held: start with applied at applied_at, then each to_status at changed_at; include current status.
+      const seq: { status: string; t: string | null }[] = [];
+      if (a.applied_at) seq.push({ status: "applied", t: a.applied_at });
+      for (const r of rows) seq.push({ status: r.to_status, t: r.changed_at });
+      if (!seq.length || seq[seq.length - 1].status !== a.status) {
+        seq.push({ status: a.status, t: a.last_status_change ?? a.applied_at });
+      }
+      let maxRank = -Infinity;
+      let firstReachedAt: string | null = null;
+      for (const s of seq) {
+        if (TERMINAL.has(s.status)) continue;
+        const r = APP_RANK[s.status];
+        if (r == null) continue;
+        if (r > maxRank) {
+          maxRank = r;
+          firstReachedAt = s.t;
+        }
+      }
+      if (maxRank > 0 && inWindow(firstReachedAt)) count++;
+    }
+    return count;
+  }
+  const inLast7Win = (iso: string | null) => inLast7(iso);
+  const inPrev7Win = (iso: string | null) => inPrev7(iso);
+
   const wk = {
     postingsCurr: postings.filter((p) => inLast7(p.created_at)).length,
     postingsPrev: postings.filter((p) => inPrev7(p.created_at)).length,
@@ -336,8 +383,8 @@ export function DashboardPage() {
     appsPrev: apps.filter((a) => inPrev7(a.applied_at)).length,
     outreachCurr: activity.filter((a) => inLast7(a.occurred_at)).length,
     outreachPrev: activity.filter((a) => inPrev7(a.occurred_at)).length,
-    stagesCurr: history.filter((h) => inLast7(h.changed_at)).length,
-    stagesPrev: history.filter((h) => inPrev7(h.changed_at)).length,
+    stagesCurr: appAdvancementInWindow(inLast7Win),
+    stagesPrev: appAdvancementInWindow(inPrev7Win),
   };
 
   // ---------- Section 4a: Application Funnel ----------
