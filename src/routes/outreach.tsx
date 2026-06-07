@@ -42,19 +42,27 @@ export const Route = createFileRoute("/outreach")({
 
 // ---------- Types ----------
 type Group = "a_cold" | "b_warm";
-type StatusA = "to_message" | "message_sent" | "responded" | "call_scheduled" | "no_response";
-type StatusB =
-  | "to_engage"
+type ActiveStatus =
+  | "invite_sent"
+  | "invite_accepted"
   | "engaging"
   | "ready_to_message"
   | "message_sent"
-  | "responded"
-  | "call_scheduled"
-  | "no_response";
-type AnyStatus = StatusA | StatusB;
+  | "active_conversation"
+  | "call_scheduled";
+type TerminalStatus =
+  | "invite_ignored"
+  | "no_response"
+  | "asked_to_stop"
+  | "recommended_us"
+  | "do_not_contact"
+  | "dismissed"
+  | "suggested";
+type AnyStatus = ActiveStatus | TerminalStatus;
 type ActivityType =
   | "engagement_like"
   | "engagement_comment"
+  | "invite_sent"
   | "message_sent"
   | "response_received"
   | "call_scheduled";
@@ -72,6 +80,15 @@ type Target = {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  ai_rationale?: string | null;
+  ai_recommended_group?: Group | null;
+  ai_suggested_angle?: string | null;
+  hiring_decision_proximity?: number | null;
+  warmth_potential?: number | null;
+  suggested_at?: string | null;
+  invite_sent_at?: string | null;
+  invite_accepted_at?: string | null;
+  dismissed_reason?: string | null;
 };
 
 type Activity = {
@@ -86,37 +103,51 @@ type Activity = {
 type CompanyLite = { id: string; name: string; tier: Tier };
 
 // ---------- Constants ----------
-const A_PIPELINE: StatusA[] = [
-  "to_message",
+const A_PIPELINE: ActiveStatus[] = [
+  "invite_sent",
+  "invite_accepted",
   "message_sent",
-  "responded",
+  "active_conversation",
   "call_scheduled",
-  "no_response",
 ];
-const B_PIPELINE: StatusB[] = [
-  "to_engage",
+const B_PIPELINE: ActiveStatus[] = [
+  "invite_sent",
+  "invite_accepted",
   "engaging",
   "ready_to_message",
   "message_sent",
-  "responded",
+  "active_conversation",
   "call_scheduled",
+];
+const TERMINAL_STATES: TerminalStatus[] = [
+  "invite_ignored",
   "no_response",
+  "asked_to_stop",
+  "recommended_us",
+  "do_not_contact",
 ];
 
 const STATUS_LABEL: Record<AnyStatus, string> = {
-  to_message: "To Message",
-  to_engage: "To Engage",
+  suggested: "Suggested",
+  invite_sent: "Invite Sent",
+  invite_accepted: "Invite Accepted",
   engaging: "Engaging",
   ready_to_message: "Ready to Message",
   message_sent: "Message Sent",
-  responded: "Responded",
+  active_conversation: "Active Conversation",
   call_scheduled: "Call Scheduled",
+  invite_ignored: "Invite Ignored",
   no_response: "No Response",
+  asked_to_stop: "Asked to Stop",
+  recommended_us: "Recommended Us",
+  do_not_contact: "Do Not Contact",
+  dismissed: "Dismissed",
 };
 
 const ACTIVITY_LABEL: Record<ActivityType, string> = {
   engagement_like: "Liked post",
   engagement_comment: "Commented",
+  invite_sent: "Invite sent",
   message_sent: "Message sent",
   response_received: "Response received",
   call_scheduled: "Call scheduled",
@@ -125,6 +156,7 @@ const ACTIVITY_LABEL: Record<ActivityType, string> = {
 const ACTIVITY_ICON: Record<ActivityType, typeof ThumbsUp> = {
   engagement_like: ThumbsUp,
   engagement_comment: MessageSquare,
+  invite_sent: Send,
   message_sent: Send,
   response_received: Inbox,
   call_scheduled: Phone,
@@ -137,6 +169,7 @@ const BORDER = "#1E1E2E";
 const PRIMARY = "#00D4FF";
 const VIOLET = "#7C3AED";
 const SUCCESS = "#10B981";
+const SUCCESS_BRIGHT = "#34D399";
 const WARNING = "#F59E0B";
 const DANGER = "#EF4444";
 const TEXT = "#F0F0FF";
@@ -144,21 +177,38 @@ const MUTED = "#8B8B9E";
 
 function statusColor(s: AnyStatus): string {
   switch (s) {
-    case "to_message":
-    case "to_engage":
-    case "ready_to_message":
+    case "suggested":
       return MUTED;
+    case "invite_sent":
+      return MUTED;
+    case "invite_accepted":
+      return PRIMARY;
     case "engaging":
-      return VIOLET;
     case "message_sent":
-      return WARNING;
-    case "responded":
+    case "ready_to_message":
+      return VIOLET;
+    case "active_conversation":
       return SUCCESS;
     case "call_scheduled":
-      return PRIMARY;
+      return SUCCESS_BRIGHT;
+    case "invite_ignored":
     case "no_response":
+    case "asked_to_stop":
+    case "dismissed":
+      return MUTED;
+    case "recommended_us":
+      return SUCCESS;
+    case "do_not_contact":
       return DANGER;
   }
+}
+
+function validNextStatuses(group: Group, current: AnyStatus): AnyStatus[] {
+  const pipe = group === "a_cold" ? A_PIPELINE : B_PIPELINE;
+  const idx = pipe.indexOf(current as ActiveStatus);
+  const forward: AnyStatus[] = idx >= 0 ? pipe.slice(idx + 1) : [...pipe];
+  // Terminal states always available (no backwards moves)
+  return [...forward, ...TERMINAL_STATES];
 }
 
 function daysSince(iso: string | null): number | null {
@@ -210,6 +260,46 @@ async function fetchCompaniesLite(): Promise<CompanyLite[]> {
 // ---------- Page ----------
 function OutreachPage() {
   const qc = useQueryClient();
+
+  // Auto-invite-ignored: runs once per session before first render of data.
+  // Rolls any invite_sent older than 21 days into invite_ignored and logs activity.
+  const [autoRan, setAutoRan] = useState(false);
+  useEffect(() => {
+    if (autoRan) return;
+    setAutoRan(true);
+    (async () => {
+      try {
+        const cutoff = new Date(Date.now() - 21 * 86400000).toISOString();
+        const { data: stale } = await gtmSupabase
+          .from("outreach_targets" as never)
+          .select("id")
+          .eq("status", "invite_sent")
+          .lt("invite_sent_at", cutoff);
+        const rows = (stale ?? []) as { id: string }[];
+        if (rows.length === 0) return;
+        const now = new Date().toISOString();
+        for (const r of rows) {
+          await gtmSupabase
+            .from("outreach_targets" as never)
+            .update({ status: "invite_ignored", updated_at: now } as never)
+            .eq("id", r.id);
+          await gtmSupabase
+            .from("outreach_activity" as never)
+            .insert({
+              target_id: r.id,
+              activity_type: "invite_sent",
+              content: "Auto-moved to invite_ignored after 21 days without acceptance",
+              occurred_at: now,
+            } as never);
+        }
+        qc.invalidateQueries({ queryKey: ["outreach_targets"] });
+        qc.invalidateQueries({ queryKey: ["outreach_activity"] });
+      } catch {
+        // best-effort
+      }
+    })();
+  }, [autoRan, qc]);
+
   const { data: targets = [], isLoading } = useQuery({
     queryKey: ["outreach_targets"],
     queryFn: fetchTargets,
@@ -239,10 +329,12 @@ function OutreachPage() {
     return m;
   }, [activity]);
 
-  const [tab, setTab] = useState<Group>("a_cold");
+  type Tab = "suggested" | "a_cold" | "b_warm";
+  const [tab, setTab] = useState<Tab>("a_cold");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [abOpen, setAbOpen] = useState(false);
+  const [archivedOpen, setArchivedOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<AnyStatus | "all">("all");
   const [search, setSearch] = useState("");
 
@@ -264,24 +356,45 @@ function OutreachPage() {
     const aCold = targets.filter((t) => t.group_name === "a_cold").length;
     const bWarm = targets.filter((t) => t.group_name === "b_warm").length;
     const responded = targets.filter(
-      (t) => t.status === "responded" || t.status === "call_scheduled",
+      (t) => t.status === "active_conversation" || t.status === "call_scheduled",
     ).length;
     const calls = targets.filter((t) => t.status === "call_scheduled").length;
     const responseRate = total > 0 ? Math.round((responded / total) * 100) : 0;
     return { total, aCold, bWarm, responseRate, calls };
   }, [targets]);
 
+  const suggestedTargets = useMemo(
+    () => targets.filter((t) => t.status === "suggested"),
+    [targets],
+  );
+
+  const dismissedTargets = useMemo(
+    () => targets.filter((t) => t.status === "dismissed"),
+    [targets],
+  );
+  const dncTargets = useMemo(
+    () => targets.filter((t) => t.status === "do_not_contact"),
+    [targets],
+  );
+
   // ---------- Active group rows ----------
   const groupTargets = useMemo(
-    () => targets.filter((t) => t.group_name === tab),
+    () =>
+      tab === "suggested"
+        ? []
+        : targets.filter((t) => t.group_name === tab && t.status !== "suggested"),
     [targets, tab],
   );
-  const pipeline = tab === "a_cold" ? A_PIPELINE : B_PIPELINE;
+  const pipeline = tab === "b_warm" ? B_PIPELINE : A_PIPELINE;
 
   const stageCounts = useMemo(() => {
-    const m = new Map<AnyStatus, number>();
+    const m = new Map<ActiveStatus, number>();
     pipeline.forEach((s) => m.set(s, 0));
-    groupTargets.forEach((t) => m.set(t.status, (m.get(t.status) ?? 0) + 1));
+    groupTargets.forEach((t) => {
+      if ((pipeline as readonly string[]).includes(t.status)) {
+        m.set(t.status as ActiveStatus, (m.get(t.status as ActiveStatus) ?? 0) + 1);
+      }
+    });
     return m;
   }, [groupTargets, pipeline]);
 
@@ -303,27 +416,29 @@ function OutreachPage() {
       to: AnyStatus;
     }) => {
       const now = new Date().toISOString();
+      const patch: Record<string, unknown> = { status: to, updated_at: now };
+      if (to === "invite_sent" && !target.invite_sent_at) patch.invite_sent_at = now;
+      if (to === "invite_accepted") patch.invite_accepted_at = now;
       const { error } = await gtmSupabase
         .from("outreach_targets" as never)
-        .update({ status: to, updated_at: now } as never)
+        .update(patch as never)
         .eq("id", target.id);
       if (error) throw error;
-      // Map status transition to activity_type when applicable
       const map: Partial<Record<AnyStatus, ActivityType>> = {
+        invite_sent: "invite_sent",
         message_sent: "message_sent",
-        responded: "response_received",
+        active_conversation: "response_received",
         call_scheduled: "call_scheduled",
       };
       const at = map[to];
       if (at) {
-        const { error: e2 } = await gtmSupabase
+        await gtmSupabase
           .from("outreach_activity" as never)
           .insert({
             target_id: target.id,
             activity_type: at,
             occurred_at: now,
           } as never);
-        if (e2) throw e2;
       }
     },
     onSuccess: (_d, vars) => {
@@ -372,6 +487,12 @@ function OutreachPage() {
     );
   }
 
+  const TABS: Array<{ key: Tab; label: string; badge?: number }> = [
+    { key: "suggested", label: "Suggested", badge: suggestedTargets.length },
+    { key: "a_cold", label: "Group A: Cold" },
+    { key: "b_warm", label: "Group B: Warm" },
+  ];
+
   return (
     <div className="space-y-4 min-w-0" style={{ marginTop: -8 }}>
       {/* Header */}
@@ -406,94 +527,290 @@ function OutreachPage() {
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b" style={{ borderColor: BORDER }}>
-        {(["a_cold", "b_warm"] as Group[]).map((g) => {
-          const active = tab === g;
+        {TABS.map((t) => {
+          const active = tab === t.key;
           return (
             <button
-              key={g}
+              key={t.key}
               onClick={() => {
-                setTab(g);
+                setTab(t.key);
                 setStatusFilter("all");
               }}
-              className="px-4 py-2 text-sm font-medium transition-colors cursor-pointer"
+              className="px-4 py-2 text-sm font-medium transition-colors cursor-pointer inline-flex items-center gap-2"
               style={{
                 color: active ? PRIMARY : MUTED,
                 borderBottom: `2px solid ${active ? PRIMARY : "transparent"}`,
                 marginBottom: -1,
               }}
             >
-              {g === "a_cold" ? "Group A: Cold" : "Group B: Warm"}
+              {t.label}
+              {typeof t.badge === "number" && (
+                <span
+                  className="inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 text-[10px] font-semibold rounded"
+                  style={{
+                    background: active ? "rgba(0,212,255,0.18)" : "rgba(255,255,255,0.06)",
+                    color: active ? PRIMARY : MUTED,
+                    fontFamily: MONO,
+                  }}
+                >
+                  {t.badge}
+                </span>
+              )}
             </button>
           );
         })}
       </div>
 
-      {/* Pipeline header */}
-      <div
-        className="flex items-center gap-6 px-4 py-3"
-        style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 6 }}
-      >
-        {pipeline.map((s) => (
-          <div key={s} className="flex items-center gap-2">
-            <span
-              className="text-[10px] font-semibold tracking-wider uppercase"
-              style={{ color: MUTED }}
-            >
-              {STATUS_LABEL[s]}
-            </span>
-            <span
-              className="inline-flex items-center justify-center min-w-[24px] h-5 px-1.5 text-xs font-semibold rounded"
-              style={{
-                background: "rgba(0,212,255,0.12)",
-                color: PRIMARY,
-                fontFamily: MONO,
-              }}
-            >
-              {stageCounts.get(s) ?? 0}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* Filters */}
-      <div className="flex items-center gap-3">
-        <div className="relative">
-          <Search
-            size={14}
-            style={{ position: "absolute", left: 10, top: 11, color: MUTED }}
-          />
-          <Input
-            placeholder="Search by name…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-8 w-64"
-            style={{ background: CARD, borderColor: BORDER, color: TEXT }}
-          />
-        </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              style={{ background: CARD, borderColor: BORDER, color: TEXT }}
-            >
-              Status: {statusFilter === "all" ? "All" : STATUS_LABEL[statusFilter]}
-              <ChevronDown size={14} />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            style={{ background: CARD, borderColor: BORDER, color: TEXT }}
+      {tab === "suggested" ? (
+        <SuggestedTab
+          targets={suggestedTargets}
+          companies={companyMap}
+          onUpdate={(id, patch) => updateTarget.mutate({ id, patch })}
+        />
+      ) : (
+        <>
+          {/* Pipeline header */}
+          <div
+            className="flex items-center gap-6 px-4 py-3 flex-wrap"
+            style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 6 }}
           >
-            <DropdownMenuItem onClick={() => setStatusFilter("all")}>All</DropdownMenuItem>
             {pipeline.map((s) => (
-              <DropdownMenuItem key={s} onClick={() => setStatusFilter(s)}>
-                {STATUS_LABEL[s]}
-              </DropdownMenuItem>
+              <div key={s} className="flex items-center gap-2">
+                <span
+                  className="text-[10px] font-semibold tracking-wider uppercase"
+                  style={{ color: MUTED }}
+                >
+                  {STATUS_LABEL[s]}
+                </span>
+                <span
+                  className="inline-flex items-center justify-center min-w-[24px] h-5 px-1.5 text-xs font-semibold rounded"
+                  style={{
+                    background: "rgba(0,212,255,0.12)",
+                    color: PRIMARY,
+                    fontFamily: MONO,
+                  }}
+                >
+                  {stageCounts.get(s) ?? 0}
+                </span>
+              </div>
             ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+          </div>
 
-      {/* Table */}
+          {/* Filters */}
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search
+                size={14}
+                style={{ position: "absolute", left: 10, top: 11, color: MUTED }}
+              />
+              <Input
+                placeholder="Search by name…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8 w-64"
+                style={{ background: CARD, borderColor: BORDER, color: TEXT }}
+              />
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  style={{ background: CARD, borderColor: BORDER, color: TEXT }}
+                >
+                  Status: {statusFilter === "all" ? "All" : STATUS_LABEL[statusFilter]}
+                  <ChevronDown size={14} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                style={{ background: CARD, borderColor: BORDER, color: TEXT }}
+              >
+                <DropdownMenuItem onClick={() => setStatusFilter("all")}>All</DropdownMenuItem>
+                {pipeline.map((s) => (
+                  <DropdownMenuItem key={s} onClick={() => setStatusFilter(s)}>
+                    {STATUS_LABEL[s]}
+                  </DropdownMenuItem>
+                ))}
+                {TERMINAL_STATES.map((s) => (
+                  <DropdownMenuItem key={s} onClick={() => setStatusFilter(s)}>
+                    {STATUS_LABEL[s]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {/* Table */}
+          <div
+            style={{
+              background: CARD,
+              border: `1px solid ${BORDER}`,
+              borderRadius: 6,
+              overflow: "hidden",
+            }}
+          >
+            {filteredRows.length === 0 ? (
+              <div className="py-16 text-center text-sm" style={{ color: MUTED }}>
+                {groupTargets.length === 0
+                  ? tab === "a_cold"
+                    ? "No cold outreach targets yet. Add a target to start the A/B test."
+                    : "No warm outreach targets yet. Add a target to start building rapport."
+                  : "No targets match these filters."}
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr
+                    className="text-left"
+                    style={{
+                      color: MUTED,
+                      fontSize: 11,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    <th className="px-4 py-2 font-medium">Name</th>
+                    <th className="px-4 py-2 font-medium">Company</th>
+                    <th className="px-4 py-2 font-medium">Role</th>
+                    <th className="px-4 py-2 font-medium">Status</th>
+                    <th className="px-4 py-2 font-medium">Last activity</th>
+                    <th className="px-4 py-2 font-medium">Tags</th>
+                    <th className="px-4 py-2 font-medium text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRows.map((t) => {
+                    const acts = activityByTarget.get(t.id) ?? [];
+                    const last = acts[0]?.occurred_at ?? null;
+                    const days = daysSince(last);
+                    const dayColor =
+                      days === null ? MUTED : days > 14 ? DANGER : days > 7 ? WARNING : TEXT;
+                    const co = t.current_company_id ? companyMap.get(t.current_company_id) : null;
+                    const engagementCount =
+                      t.status === "engaging"
+                        ? acts.filter(
+                            (a) =>
+                              a.activity_type === "engagement_like" ||
+                              a.activity_type === "engagement_comment",
+                          ).length
+                        : 0;
+                    return (
+                      <tr
+                        key={t.id}
+                        onClick={() => setSelectedId(t.id)}
+                        className="cursor-pointer transition-colors"
+                        style={{ borderTop: `1px solid ${BORDER}` }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.background = "rgba(255,255,255,0.02)")
+                        }
+                        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span style={{ color: TEXT, fontWeight: 500 }}>{t.name}</span>
+                            {t.linkedin_url && (
+                              <a
+                                href={t.linkedin_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                style={{ color: MUTED }}
+                              >
+                                <Linkedin size={13} />
+                              </a>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3" style={{ color: TEXT }}>
+                          {co ? (
+                            <div className="flex items-center gap-2">
+                              <span>{co.name}</span>
+                              <TierBadge tier={co.tier} />
+                            </div>
+                          ) : (
+                            <span style={{ color: MUTED }}>—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3" style={{ color: MUTED }}>
+                          {t.role ?? "—"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <StatusPill status={t.status} />
+                            {engagementCount > 0 && (
+                              <span
+                                className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
+                                style={{
+                                  background: "rgba(124,58,237,0.15)",
+                                  color: VIOLET,
+                                  fontFamily: MONO,
+                                }}
+                              >
+                                {engagementCount} eng
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td
+                          className="px-4 py-3"
+                          style={{ color: dayColor, fontFamily: MONO, fontSize: 12 }}
+                        >
+                          {days === null ? "—" : `${days}d`}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-1">
+                            {(t.tags ?? []).slice(0, 3).map((tag) => (
+                              <span
+                                key={tag}
+                                className="text-[10px] px-1.5 py-0.5 rounded"
+                                style={{ background: "rgba(255,255,255,0.05)", color: MUTED }}
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedId(t.id);
+                              }}
+                              style={{
+                                borderColor: "rgba(0,212,255,0.4)",
+                                color: PRIMARY,
+                                background: "transparent",
+                                height: 26,
+                              }}
+                            >
+                              Draft
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedId(t.id);
+                              }}
+                              style={{ color: MUTED, height: 26 }}
+                            >
+                              Log
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Archived section */}
       <div
         style={{
           background: CARD,
@@ -502,163 +819,37 @@ function OutreachPage() {
           overflow: "hidden",
         }}
       >
-        {filteredRows.length === 0 ? (
-          <div className="py-16 text-center text-sm" style={{ color: MUTED }}>
-            {groupTargets.length === 0
-              ? tab === "a_cold"
-                ? "No cold outreach targets yet. Add a target to start the A/B test."
-                : "No warm outreach targets yet. Add a target to start building rapport."
-              : "No targets match these filters."}
+        <button
+          onClick={() => setArchivedOpen((v) => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 cursor-pointer"
+          style={{ color: TEXT }}
+        >
+          <span className="text-sm font-semibold inline-flex items-center gap-2">
+            Archived
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
+              style={{ background: "rgba(255,255,255,0.06)", color: MUTED, fontFamily: MONO }}
+            >
+              {dismissedTargets.length + dncTargets.length}
+            </span>
+          </span>
+          {archivedOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        </button>
+        {archivedOpen && (
+          <div style={{ borderTop: `1px solid ${BORDER}` }}>
+            <ArchivedList
+              title="Dismissed"
+              rows={dismissedTargets}
+              companyMap={companyMap}
+              onSelect={setSelectedId}
+            />
+            <ArchivedList
+              title="Do Not Contact"
+              rows={dncTargets}
+              companyMap={companyMap}
+              onSelect={setSelectedId}
+            />
           </div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr
-                className="text-left"
-                style={{
-                  color: MUTED,
-                  fontSize: 11,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                }}
-              >
-                <th className="px-4 py-2 font-medium">Name</th>
-                <th className="px-4 py-2 font-medium">Company</th>
-                <th className="px-4 py-2 font-medium">Role</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 font-medium">Last activity</th>
-                <th className="px-4 py-2 font-medium">Tags</th>
-                <th className="px-4 py-2 font-medium text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRows.map((t) => {
-                const acts = activityByTarget.get(t.id) ?? [];
-                const last = acts[0]?.occurred_at ?? null;
-                const days = daysSince(last);
-                const dayColor =
-                  days === null ? MUTED : days > 14 ? DANGER : days > 7 ? WARNING : TEXT;
-                const co = t.current_company_id ? companyMap.get(t.current_company_id) : null;
-                const engagementCount =
-                  t.status === "engaging"
-                    ? acts.filter(
-                        (a) =>
-                          a.activity_type === "engagement_like" ||
-                          a.activity_type === "engagement_comment",
-                      ).length
-                    : 0;
-                return (
-                  <tr
-                    key={t.id}
-                    onClick={() => setSelectedId(t.id)}
-                    className="cursor-pointer transition-colors"
-                    style={{ borderTop: `1px solid ${BORDER}` }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.background = "rgba(255,255,255,0.02)")
-                    }
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span style={{ color: TEXT, fontWeight: 500 }}>{t.name}</span>
-                        {t.linkedin_url && (
-                          <a
-                            href={t.linkedin_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            style={{ color: MUTED }}
-                          >
-                            <Linkedin size={13} />
-                          </a>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3" style={{ color: TEXT }}>
-                      {co ? (
-                        <div className="flex items-center gap-2">
-                          <span>{co.name}</span>
-                          <TierBadge tier={co.tier} />
-                        </div>
-                      ) : (
-                        <span style={{ color: MUTED }}>—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3" style={{ color: MUTED }}>
-                      {t.role ?? "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <StatusPill status={t.status} />
-                        {engagementCount > 0 && (
-                          <span
-                            className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
-                            style={{
-                              background: "rgba(124,58,237,0.15)",
-                              color: VIOLET,
-                              fontFamily: MONO,
-                            }}
-                          >
-                            {engagementCount} eng
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td
-                      className="px-4 py-3"
-                      style={{ color: dayColor, fontFamily: MONO, fontSize: 12 }}
-                    >
-                      {days === null ? "—" : `${days}d`}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {(t.tags ?? []).slice(0, 3).map((tag) => (
-                          <span
-                            key={tag}
-                            className="text-[10px] px-1.5 py-0.5 rounded"
-                            style={{ background: "rgba(255,255,255,0.05)", color: MUTED }}
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedId(t.id);
-                          }}
-                          style={{
-                            borderColor: "rgba(0,212,255,0.4)",
-                            color: PRIMARY,
-                            background: "transparent",
-                            height: 26,
-                          }}
-                        >
-                          Draft
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedId(t.id);
-                          }}
-                          style={{ color: MUTED, height: 26 }}
-                        >
-                          Log
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
         )}
       </div>
 
@@ -724,6 +915,7 @@ function OutreachPage() {
   );
 }
 
+
 // ---------- Small components ----------
 function Stat({
   label,
@@ -779,27 +971,56 @@ function ABTable({ targets, activity }: { targets: Target[]; activity: Activity[
   const calc = (group: Group) => {
     const ts = targets.filter((t) => t.group_name === group);
     const ids = new Set(ts.map((t) => t.id));
+    const invitesSent = ts.filter(
+      (t) =>
+        t.status === "invite_sent" ||
+        t.status === "invite_accepted" ||
+        t.status === "engaging" ||
+        t.status === "ready_to_message" ||
+        t.status === "message_sent" ||
+        t.status === "active_conversation" ||
+        t.status === "call_scheduled" ||
+        t.status === "invite_ignored" ||
+        t.status === "no_response" ||
+        t.status === "asked_to_stop" ||
+        t.status === "recommended_us",
+    ).length;
+    const invitesAccepted = ts.filter(
+      (t) =>
+        t.status === "invite_accepted" ||
+        t.status === "engaging" ||
+        t.status === "ready_to_message" ||
+        t.status === "message_sent" ||
+        t.status === "active_conversation" ||
+        t.status === "call_scheduled",
+    ).length;
     const messages = activity.filter(
       (a) => ids.has(a.target_id) && a.activity_type === "message_sent",
     ).length;
     const responded = ts.filter(
-      (t) => t.status === "responded" || t.status === "call_scheduled",
+      (t) => t.status === "active_conversation" || t.status === "call_scheduled",
     ).length;
     const calls = ts.filter((t) => t.status === "call_scheduled").length;
+    const acceptRate =
+      invitesSent > 0 ? Math.round((invitesAccepted / invitesSent) * 100) : 0;
     const rr = ts.length > 0 ? Math.round((responded / ts.length) * 100) : 0;
     const cr = messages > 0 ? Math.round((calls / messages) * 100) : 0;
-    return { total: ts.length, messages, responded, calls, rr, cr };
+    return { total: ts.length, invitesSent, invitesAccepted, messages, responded, calls, acceptRate, rr, cr };
   };
   const a = calc("a_cold");
   const b = calc("b_warm");
   const rows: Array<[string, number | string, number | string]> = [
     ["Total targets", a.total, b.total],
+    ["Invites sent", a.invitesSent, b.invitesSent],
+    ["Invites accepted", a.invitesAccepted, b.invitesAccepted],
+    ["Accept rate", `${a.acceptRate}%`, `${b.acceptRate}%`],
     ["Messages sent", a.messages, b.messages],
-    ["Responses received", a.responded, b.responded],
+    ["Active conversations", a.responded, b.responded],
     ["Response rate", `${a.rr}%`, `${b.rr}%`],
     ["Calls scheduled", a.calls, b.calls],
     ["Call conversion rate", `${a.cr}%`, `${b.cr}%`],
   ];
+
   return (
     <table className="w-full text-sm" style={{ borderTop: `1px solid ${BORDER}` }}>
       <thead>
@@ -855,9 +1076,8 @@ function TargetPanel({
   }) => void;
   onPatch: (patch: Partial<Target>) => void;
 }) {
-  const pipeline = target.group_name === "a_cold" ? A_PIPELINE : B_PIPELINE;
-  const currentIdx = pipeline.indexOf(target.status as never);
-  const validNext = currentIdx >= 0 ? pipeline.slice(currentIdx + 1) : pipeline;
+  const validNext = validNextStatuses(target.group_name, target.status);
+
 
   const [logOpen, setLogOpen] = useState(false);
   const [logType, setLogType] = useState<ActivityType>("engagement_like");
@@ -1186,11 +1406,27 @@ OUTPUT: Only the message. No "Here's a draft", no word count, no dashes, no subj
             <DropdownMenuContent
               style={{ background: CARD, borderColor: BORDER, color: TEXT }}
             >
-              {validNext.map((s) => (
-                <DropdownMenuItem key={s} onClick={() => onMove(s)}>
-                  {STATUS_LABEL[s]}
-                </DropdownMenuItem>
-              ))}
+              {validNext.map((s) => {
+                const isTerminal = (TERMINAL_STATES as readonly string[]).includes(s);
+                return (
+                  <DropdownMenuItem
+                    key={s}
+                    onClick={() => {
+                      if (isTerminal) {
+                        const ok = window.confirm(
+                          `Move to ${STATUS_LABEL[s]}? This cannot be undone.`,
+                        );
+                        if (!ok) return;
+                      }
+                      onMove(s);
+                    }}
+                    style={isTerminal ? { color: MUTED } : undefined}
+                  >
+                    {STATUS_LABEL[s]}
+                  </DropdownMenuItem>
+                );
+              })}
+
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -1498,7 +1734,7 @@ function AddTargetModal({
         current_company_id: companyId,
         role: role.trim() || null,
         group_name: group,
-        status: group === "a_cold" ? "to_message" : "to_engage",
+        status: "suggested",
         source: source.trim() || null,
         notes: notes.trim() || null,
         tags,
@@ -1712,3 +1948,311 @@ function Label({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+
+// ---------- Suggested tab ----------
+function SuggestedTab({
+  targets,
+  companies,
+  onUpdate,
+}: {
+  targets: Target[];
+  companies: Map<string, CompanyLite>;
+  onUpdate: (id: string, patch: Partial<Target>) => void;
+}) {
+  const sorted = useMemo(() => {
+    const arr = [...targets];
+    arr.sort((a, b) => {
+      const ap = a.hiring_decision_proximity ?? -1;
+      const bp = b.hiring_decision_proximity ?? -1;
+      if (bp !== ap) return bp - ap;
+      const aw = a.warmth_potential ?? -1;
+      const bw = b.warmth_potential ?? -1;
+      if (bw !== aw) return bw - aw;
+      const at = a.suggested_at ? new Date(a.suggested_at).getTime() : -Infinity;
+      const bt = b.suggested_at ? new Date(b.suggested_at).getTime() : -Infinity;
+      return bt - at;
+    });
+    return arr;
+  }, [targets]);
+
+  if (sorted.length === 0) {
+    return (
+      <div
+        className="py-16 text-center text-sm"
+        style={{
+          background: CARD,
+          border: `1px solid ${BORDER}`,
+          borderRadius: 6,
+          color: MUTED,
+        }}
+      >
+        No suggestions yet. The Talent Scout agent will surface candidates here in V2.
+      </div>
+    );
+  }
+  return (
+    <div
+      style={{
+        background: CARD,
+        border: `1px solid ${BORDER}`,
+        borderRadius: 6,
+        overflow: "hidden",
+      }}
+    >
+      <ul>
+        {sorted.map((t) => (
+          <SuggestedRow
+            key={t.id}
+            target={t}
+            company={t.current_company_id ? companies.get(t.current_company_id) ?? null : null}
+            onUpdate={(patch) => onUpdate(t.id, patch)}
+          />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function SuggestedRow({
+  target,
+  company,
+  onUpdate,
+}: {
+  target: Target;
+  company: CompanyLite | null;
+  onUpdate: (patch: Partial<Target>) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [dismissOpen, setDismissOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const rationale = target.ai_rationale ?? "";
+  const preview = rationale.slice(0, 80);
+  const truncated = rationale.length > 80;
+  const recGroup: Group = target.ai_recommended_group ?? "a_cold";
+  const source = target.source ?? "manual";
+
+  const logFeedback = async (feedback_type: string) => {
+    try {
+      await gtmSupabase
+        .from("outreach_feedback_log" as never)
+        .insert({ target_id: target.id, feedback_type } as never);
+    } catch {
+      // best-effort; RLS may block
+    }
+  };
+
+  const handleSendInvite = () => {
+    const now = new Date().toISOString();
+    if (target.linkedin_url) window.open(target.linkedin_url, "_blank");
+    onUpdate({
+      status: "invite_sent",
+      invite_sent_at: now,
+      group_name: target.ai_recommended_group ?? target.group_name ?? "a_cold",
+    });
+  };
+
+  const handleDismissSave = async () => {
+    await logFeedback("dismissed");
+    onUpdate({ status: "dismissed", dismissed_reason: reason.trim() || null });
+    setDismissOpen(false);
+    setReason("");
+  };
+
+  const handleDnc = async () => {
+    const ok = window.confirm("Mark as Do Not Contact? This cannot be undone.");
+    if (!ok) return;
+    await logFeedback("do_not_contact");
+    onUpdate({ status: "do_not_contact" });
+  };
+
+  return (
+    <li className="p-4" style={{ borderTop: `1px solid ${BORDER}` }}>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span style={{ color: TEXT, fontWeight: 600 }}>{target.name}</span>
+            {target.linkedin_url && (
+              <a
+                href={target.linkedin_url}
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: MUTED }}
+              >
+                <Linkedin size={13} />
+              </a>
+            )}
+            <span style={{ color: MUTED, fontSize: 13 }}>·</span>
+            <span style={{ color: TEXT, fontSize: 13 }}>{target.role ?? "—"}</span>
+            {company && (
+              <>
+                <span style={{ color: MUTED, fontSize: 13 }}>·</span>
+                <span style={{ color: TEXT, fontSize: 13 }}>{company.name}</span>
+                <TierBadge tier={company.tier} />
+              </>
+            )}
+            <span
+              className="text-[10px] font-semibold px-2 py-0.5 rounded"
+              style={{
+                background: recGroup === "a_cold" ? "rgba(0,212,255,0.15)" : "rgba(124,58,237,0.15)",
+                color: recGroup === "a_cold" ? PRIMARY : VIOLET,
+                fontFamily: MONO,
+              }}
+            >
+              {recGroup === "a_cold" ? "COLD" : "WARM"}
+            </span>
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded"
+              style={{ background: "rgba(255,255,255,0.05)", color: MUTED, fontFamily: MONO }}
+            >
+              {source}
+            </span>
+          </div>
+          {rationale && (
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              className="block text-left mt-2"
+              style={{ color: MUTED, fontSize: 12 }}
+            >
+              {expanded ? rationale : preview + (truncated ? "…" : "")}
+            </button>
+          )}
+          {target.ai_suggested_angle && (
+            <div
+              className="mt-1 italic"
+              style={{ color: MUTED, fontSize: 12 }}
+            >
+              Angle: {target.ai_suggested_angle}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            size="sm"
+            onClick={handleSendInvite}
+            style={{ background: PRIMARY, color: "#000", height: 28 }}
+          >
+            <Send size={12} /> Send Invite
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setDismissOpen((v) => !v)}
+            style={{ borderColor: BORDER, color: MUTED, background: "transparent", height: 28 }}
+          >
+            Dismiss
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleDnc}
+            style={{
+              borderColor: "rgba(239,68,68,0.4)",
+              color: DANGER,
+              background: "transparent",
+              height: 28,
+            }}
+          >
+            Do Not Contact
+          </Button>
+        </div>
+      </div>
+      {dismissOpen && (
+        <div
+          className="mt-3 p-3 flex items-center gap-2"
+          style={{ background: BG, border: `1px solid ${BORDER}`, borderRadius: 6 }}
+        >
+          <Input
+            placeholder="Reason (optional)"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className="flex-1"
+            style={{ background: CARD, borderColor: BORDER, color: TEXT }}
+          />
+          <Button size="sm" onClick={handleDismissSave} style={{ background: PRIMARY, color: "#000" }}>
+            Save
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setDismissOpen(false)}
+            style={{ color: MUTED }}
+          >
+            Cancel
+          </Button>
+        </div>
+      )}
+    </li>
+  );
+}
+
+// ---------- Archived list ----------
+function ArchivedList({
+  title,
+  rows,
+  companyMap,
+  onSelect,
+}: {
+  title: string;
+  rows: Target[];
+  companyMap: Map<string, CompanyLite>;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div style={{ borderTop: `1px solid ${BORDER}` }}>
+      <div
+        className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wider"
+        style={{ color: MUTED, background: "rgba(255,255,255,0.02)" }}
+      >
+        {title} <span style={{ fontFamily: MONO }}>({rows.length})</span>
+      </div>
+      {rows.length === 0 ? (
+        <div className="px-4 py-3 text-xs" style={{ color: MUTED }}>
+          None.
+        </div>
+      ) : (
+        <table className="w-full text-sm">
+          <tbody>
+            {rows.map((t) => {
+              const co = t.current_company_id ? companyMap.get(t.current_company_id) : null;
+              return (
+                <tr
+                  key={t.id}
+                  onClick={() => onSelect(t.id)}
+                  className="cursor-pointer"
+                  style={{ borderTop: `1px solid ${BORDER}` }}
+                >
+                  <td className="px-4 py-2" style={{ color: TEXT }}>
+                    {t.name}
+                  </td>
+                  <td className="px-4 py-2" style={{ color: MUTED }}>
+                    {t.role ?? "—"}
+                  </td>
+                  <td className="px-4 py-2" style={{ color: TEXT }}>
+                    {co ? (
+                      <div className="flex items-center gap-2">
+                        <span>{co.name}</span>
+                        <TierBadge tier={co.tier} />
+                      </div>
+                    ) : (
+                      <span style={{ color: MUTED }}>—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2" style={{ color: MUTED, fontSize: 12 }}>
+                    {t.dismissed_reason ?? ""}
+                  </td>
+                  <td
+                    className="px-4 py-2 text-right"
+                    style={{ color: MUTED, fontFamily: MONO, fontSize: 12 }}
+                  >
+                    {fmtDate(t.updated_at)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
