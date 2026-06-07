@@ -1678,7 +1678,9 @@ function LocationAutocomplete({
               type="button"
               onMouseDown={(e) => {
                 e.preventDefault();
-                onChange(loc);
+                const parts = value.split(",");
+                parts[parts.length - 1] = parts.length > 1 ? ` ${loc}` : loc;
+                onChange(parts.join(","));
                 setOpen(false);
               }}
               className="w-full text-left px-2 py-1.5"
