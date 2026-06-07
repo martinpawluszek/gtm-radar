@@ -1628,13 +1628,17 @@ function LocationAutocomplete({
   const [open, setOpen] = useState(false);
   const [focused, setFocused] = useState(false);
 
-  const q = value.trim().toLowerCase();
+  // Match against the last comma-separated segment so "San Francisco, ny" suggests New York
+  const segments = value.split(",");
+  const lastSeg = (segments[segments.length - 1] ?? "").trim().toLowerCase();
   const matches = useMemo(() => {
-    const base = q
-      ? locations.filter((l) => l.toLowerCase().includes(q) && l.toLowerCase() !== q)
+    const base = lastSeg
+      ? locations.filter(
+          (l) => l.toLowerCase().includes(lastSeg) && l.toLowerCase() !== lastSeg,
+        )
       : locations;
     return base.slice(0, 8);
-  }, [locations, q]);
+  }, [locations, lastSeg]);
 
   const showDropdown = open && focused && matches.length > 0;
 
