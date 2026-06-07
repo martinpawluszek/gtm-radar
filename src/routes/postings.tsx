@@ -429,12 +429,12 @@ function PostingsPage() {
       <Sheet open={!!selected} onOpenChange={(o) => !o && setSelectedId(null)}>
         <SheetContent
           side="right"
-          className="p-0 overflow-y-auto"
+          className="p-0"
           style={{
             background: "#0A0A0F",
             border: "none",
             borderLeft: "1px solid #1E1E2E",
-            width: 480,
+            width: "max(480px, 40vw)",
             maxWidth: "100vw",
           }}
         >
