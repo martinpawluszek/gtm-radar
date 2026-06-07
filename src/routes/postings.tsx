@@ -900,7 +900,7 @@ function DetailPanel({
   });
 
   return (
-    <div className="flex flex-col" style={{ minHeight: "100vh" }}>
+    <div className="flex flex-col overflow-y-auto" style={{ height: "100vh" }}>
       {/* Header */}
       <div
         className="flex items-start justify-between px-5 pt-5 pb-4"
