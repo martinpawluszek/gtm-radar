@@ -1144,9 +1144,20 @@ function DetailPanel({
             Override AI scoring {overridesOpen ? "↑" : "↓"}
           </button>
           {overridesOpen && (
-            <div className="flex flex-col gap-2">
+            <div
+              className="flex flex-col gap-2 p-3"
+              style={{
+                background: "#0D0D14",
+                border: "1px solid #1E1E2E",
+                borderRadius: 6,
+              }}
+            >
               {PARAM_KEYS.map((k) => (
-                <div key={k} className="grid items-center gap-2" style={{ gridTemplateColumns: "80px 60px 1fr" }}>
+                <div
+                  key={k}
+                  className="grid items-center gap-2"
+                  style={{ gridTemplateColumns: "96px 64px minmax(0,1fr)" }}
+                >
                   <span style={{ color: "#8B8B9E", fontSize: 11, fontFamily: MONO }}>
                     {PARAM_LABEL[k]}
                   </span>
@@ -1159,7 +1170,7 @@ function DetailPanel({
                     onChange={(e) =>
                       setOverrides((o) => ({
                         ...o,
-                        [k]: { ...o[k], score: e.target.value },
+                        [k]: { score: e.target.value, reason: o[k]?.reason ?? "" },
                       }))
                     }
                     style={{
@@ -1171,12 +1182,12 @@ function DetailPanel({
                     }}
                   />
                   <Input
-                    placeholder="Why did you change this?"
+                    placeholder="Why did you change this score?"
                     value={overrides[k]?.reason ?? ""}
                     onChange={(e) =>
                       setOverrides((o) => ({
                         ...o,
-                        [k]: { ...o[k], reason: e.target.value },
+                        [k]: { score: o[k]?.score ?? "", reason: e.target.value },
                       }))
                     }
                     style={{
