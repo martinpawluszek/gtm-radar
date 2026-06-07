@@ -1948,3 +1948,311 @@ function Label({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+
+// ---------- Suggested tab ----------
+function SuggestedTab({
+  targets,
+  companies,
+  onUpdate,
+}: {
+  targets: Target[];
+  companies: Map<string, CompanyLite>;
+  onUpdate: (id: string, patch: Partial<Target>) => void;
+}) {
+  const sorted = useMemo(() => {
+    const arr = [...targets];
+    arr.sort((a, b) => {
+      const ap = a.hiring_decision_proximity ?? -1;
+      const bp = b.hiring_decision_proximity ?? -1;
+      if (bp !== ap) return bp - ap;
+      const aw = a.warmth_potential ?? -1;
+      const bw = b.warmth_potential ?? -1;
+      if (bw !== aw) return bw - aw;
+      const at = a.suggested_at ? new Date(a.suggested_at).getTime() : -Infinity;
+      const bt = b.suggested_at ? new Date(b.suggested_at).getTime() : -Infinity;
+      return bt - at;
+    });
+    return arr;
+  }, [targets]);
+
+  if (sorted.length === 0) {
+    return (
+      <div
+        className="py-16 text-center text-sm"
+        style={{
+          background: CARD,
+          border: `1px solid ${BORDER}`,
+          borderRadius: 6,
+          color: MUTED,
+        }}
+      >
+        No suggestions yet. The Talent Scout agent will surface candidates here in V2.
+      </div>
+    );
+  }
+  return (
+    <div
+      style={{
+        background: CARD,
+        border: `1px solid ${BORDER}`,
+        borderRadius: 6,
+        overflow: "hidden",
+      }}
+    >
+      <ul>
+        {sorted.map((t) => (
+          <SuggestedRow
+            key={t.id}
+            target={t}
+            company={t.current_company_id ? companies.get(t.current_company_id) ?? null : null}
+            onUpdate={(patch) => onUpdate(t.id, patch)}
+          />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function SuggestedRow({
+  target,
+  company,
+  onUpdate,
+}: {
+  target: Target;
+  company: CompanyLite | null;
+  onUpdate: (patch: Partial<Target>) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [dismissOpen, setDismissOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const rationale = target.ai_rationale ?? "";
+  const preview = rationale.slice(0, 80);
+  const truncated = rationale.length > 80;
+  const recGroup: Group = target.ai_recommended_group ?? "a_cold";
+  const source = target.source ?? "manual";
+
+  const logFeedback = async (feedback_type: string) => {
+    try {
+      await gtmSupabase
+        .from("outreach_feedback_log" as never)
+        .insert({ target_id: target.id, feedback_type } as never);
+    } catch {
+      // best-effort; RLS may block
+    }
+  };
+
+  const handleSendInvite = () => {
+    const now = new Date().toISOString();
+    if (target.linkedin_url) window.open(target.linkedin_url, "_blank");
+    onUpdate({
+      status: "invite_sent",
+      invite_sent_at: now,
+      group_name: target.ai_recommended_group ?? target.group_name ?? "a_cold",
+    });
+  };
+
+  const handleDismissSave = async () => {
+    await logFeedback("dismissed");
+    onUpdate({ status: "dismissed", dismissed_reason: reason.trim() || null });
+    setDismissOpen(false);
+    setReason("");
+  };
+
+  const handleDnc = async () => {
+    const ok = window.confirm("Mark as Do Not Contact? This cannot be undone.");
+    if (!ok) return;
+    await logFeedback("do_not_contact");
+    onUpdate({ status: "do_not_contact" });
+  };
+
+  return (
+    <li className="p-4" style={{ borderTop: `1px solid ${BORDER}` }}>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span style={{ color: TEXT, fontWeight: 600 }}>{target.name}</span>
+            {target.linkedin_url && (
+              <a
+                href={target.linkedin_url}
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: MUTED }}
+              >
+                <Linkedin size={13} />
+              </a>
+            )}
+            <span style={{ color: MUTED, fontSize: 13 }}>·</span>
+            <span style={{ color: TEXT, fontSize: 13 }}>{target.role ?? "—"}</span>
+            {company && (
+              <>
+                <span style={{ color: MUTED, fontSize: 13 }}>·</span>
+                <span style={{ color: TEXT, fontSize: 13 }}>{company.name}</span>
+                <TierBadge tier={company.tier} />
+              </>
+            )}
+            <span
+              className="text-[10px] font-semibold px-2 py-0.5 rounded"
+              style={{
+                background: recGroup === "a_cold" ? "rgba(0,212,255,0.15)" : "rgba(124,58,237,0.15)",
+                color: recGroup === "a_cold" ? PRIMARY : VIOLET,
+                fontFamily: MONO,
+              }}
+            >
+              {recGroup === "a_cold" ? "COLD" : "WARM"}
+            </span>
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded"
+              style={{ background: "rgba(255,255,255,0.05)", color: MUTED, fontFamily: MONO }}
+            >
+              {source}
+            </span>
+          </div>
+          {rationale && (
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              className="block text-left mt-2"
+              style={{ color: MUTED, fontSize: 12 }}
+            >
+              {expanded ? rationale : preview + (truncated ? "…" : "")}
+            </button>
+          )}
+          {target.ai_suggested_angle && (
+            <div
+              className="mt-1 italic"
+              style={{ color: MUTED, fontSize: 12 }}
+            >
+              Angle: {target.ai_suggested_angle}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            size="sm"
+            onClick={handleSendInvite}
+            style={{ background: PRIMARY, color: "#000", height: 28 }}
+          >
+            <Send size={12} /> Send Invite
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setDismissOpen((v) => !v)}
+            style={{ borderColor: BORDER, color: MUTED, background: "transparent", height: 28 }}
+          >
+            Dismiss
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleDnc}
+            style={{
+              borderColor: "rgba(239,68,68,0.4)",
+              color: DANGER,
+              background: "transparent",
+              height: 28,
+            }}
+          >
+            Do Not Contact
+          </Button>
+        </div>
+      </div>
+      {dismissOpen && (
+        <div
+          className="mt-3 p-3 flex items-center gap-2"
+          style={{ background: BG, border: `1px solid ${BORDER}`, borderRadius: 6 }}
+        >
+          <Input
+            placeholder="Reason (optional)"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className="flex-1"
+            style={{ background: CARD, borderColor: BORDER, color: TEXT }}
+          />
+          <Button size="sm" onClick={handleDismissSave} style={{ background: PRIMARY, color: "#000" }}>
+            Save
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setDismissOpen(false)}
+            style={{ color: MUTED }}
+          >
+            Cancel
+          </Button>
+        </div>
+      )}
+    </li>
+  );
+}
+
+// ---------- Archived list ----------
+function ArchivedList({
+  title,
+  rows,
+  companyMap,
+  onSelect,
+}: {
+  title: string;
+  rows: Target[];
+  companyMap: Map<string, CompanyLite>;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div style={{ borderTop: `1px solid ${BORDER}` }}>
+      <div
+        className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wider"
+        style={{ color: MUTED, background: "rgba(255,255,255,0.02)" }}
+      >
+        {title} <span style={{ fontFamily: MONO }}>({rows.length})</span>
+      </div>
+      {rows.length === 0 ? (
+        <div className="px-4 py-3 text-xs" style={{ color: MUTED }}>
+          None.
+        </div>
+      ) : (
+        <table className="w-full text-sm">
+          <tbody>
+            {rows.map((t) => {
+              const co = t.current_company_id ? companyMap.get(t.current_company_id) : null;
+              return (
+                <tr
+                  key={t.id}
+                  onClick={() => onSelect(t.id)}
+                  className="cursor-pointer"
+                  style={{ borderTop: `1px solid ${BORDER}` }}
+                >
+                  <td className="px-4 py-2" style={{ color: TEXT }}>
+                    {t.name}
+                  </td>
+                  <td className="px-4 py-2" style={{ color: MUTED }}>
+                    {t.role ?? "—"}
+                  </td>
+                  <td className="px-4 py-2" style={{ color: TEXT }}>
+                    {co ? (
+                      <div className="flex items-center gap-2">
+                        <span>{co.name}</span>
+                        <TierBadge tier={co.tier} />
+                      </div>
+                    ) : (
+                      <span style={{ color: MUTED }}>—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2" style={{ color: MUTED, fontSize: 12 }}>
+                    {t.dismissed_reason ?? ""}
+                  </td>
+                  <td
+                    className="px-4 py-2 text-right"
+                    style={{ color: MUTED, fontFamily: MONO, fontSize: 12 }}
+                  >
+                    {fmtDate(t.updated_at)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
