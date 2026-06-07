@@ -196,6 +196,16 @@ function TierBadge({ tier }: { tier: Tier }) {
 }
 
 function Trend({ curr, prev }: { curr: number; prev: number }) {
+  if (prev === 0 && curr === 0) {
+    return (
+      <span style={{ color: MUTED, fontFamily: MONO, fontSize: 11 }}>—</span>
+    );
+  }
+  if (prev === 0 && curr > 0) {
+    return (
+      <span style={{ color: SUCCESS, fontFamily: MONO, fontSize: 11 }}>New</span>
+    );
+  }
   if (curr === prev) {
     return (
       <span style={{ color: MUTED, fontFamily: MONO, fontSize: 11, display: "inline-flex", gap: 3, alignItems: "center" }}>
@@ -204,7 +214,7 @@ function Trend({ curr, prev }: { curr: number; prev: number }) {
     );
   }
   const up = curr > prev;
-  const change = prev === 0 ? 100 : Math.round(((curr - prev) / prev) * 100);
+  const change = Math.round(((curr - prev) / prev) * 100);
   return (
     <span
       style={{
@@ -319,6 +329,53 @@ export function DashboardPage() {
     return now - t > D7 && now - t <= 2 * D7;
   };
 
+  // Stage advancement: applications only (net forward progress).
+  const APP_RANK: Record<string, number> = {
+    applied: 0,
+    screening: 1,
+    interview_1: 2,
+    interview_2: 3,
+    final: 4,
+    offer: 5,
+  };
+  const TERMINAL = new Set(["rejected", "ghosted"]);
+  function appAdvancementInWindow(inWindow: (iso: string | null) => boolean): number {
+    const byApp = new Map<string, HistoryRow[]>();
+    for (const h of history) {
+      const arr = byApp.get(h.application_id) ?? [];
+      arr.push(h);
+      byApp.set(h.application_id, arr);
+    }
+    let count = 0;
+    for (const a of apps) {
+      const rows = (byApp.get(a.id) ?? []).slice().sort(
+        (x, y) => new Date(x.changed_at).getTime() - new Date(y.changed_at).getTime(),
+      );
+      // Build sequence of (status, time) the app ever held: start with applied at applied_at, then each to_status at changed_at; include current status.
+      const seq: { status: string; t: string | null }[] = [];
+      if (a.applied_at) seq.push({ status: "applied", t: a.applied_at });
+      for (const r of rows) seq.push({ status: r.to_status, t: r.changed_at });
+      if (!seq.length || seq[seq.length - 1].status !== a.status) {
+        seq.push({ status: a.status, t: a.last_status_change ?? a.applied_at });
+      }
+      let maxRank = -Infinity;
+      let firstReachedAt: string | null = null;
+      for (const s of seq) {
+        if (TERMINAL.has(s.status)) continue;
+        const r = APP_RANK[s.status];
+        if (r == null) continue;
+        if (r > maxRank) {
+          maxRank = r;
+          firstReachedAt = s.t;
+        }
+      }
+      if (maxRank > 0 && inWindow(firstReachedAt)) count++;
+    }
+    return count;
+  }
+  const inLast7Win = (iso: string | null) => inLast7(iso);
+  const inPrev7Win = (iso: string | null) => inPrev7(iso);
+
   const wk = {
     postingsCurr: postings.filter((p) => inLast7(p.created_at)).length,
     postingsPrev: postings.filter((p) => inPrev7(p.created_at)).length,
@@ -326,8 +383,8 @@ export function DashboardPage() {
     appsPrev: apps.filter((a) => inPrev7(a.applied_at)).length,
     outreachCurr: activity.filter((a) => inLast7(a.occurred_at)).length,
     outreachPrev: activity.filter((a) => inPrev7(a.occurred_at)).length,
-    stagesCurr: history.filter((h) => inLast7(h.changed_at)).length,
-    stagesPrev: history.filter((h) => inPrev7(h.changed_at)).length,
+    stagesCurr: appAdvancementInWindow(inLast7Win),
+    stagesPrev: appAdvancementInWindow(inPrev7Win),
   };
 
   // ---------- Section 4a: Application Funnel ----------
@@ -649,7 +706,7 @@ export function DashboardPage() {
         <StatCard label="Postings Added" curr={wk.postingsCurr} prev={wk.postingsPrev} />
         <StatCard label="Applications Submitted" curr={wk.appsCurr} prev={wk.appsPrev} />
         <StatCard label="Outreach Activity" curr={wk.outreachCurr} prev={wk.outreachPrev} />
-        <StatCard label="Stage Advancements" curr={wk.stagesCurr} prev={wk.stagesPrev} />
+        <StatCard label="Stage Advancements" curr={wk.stagesCurr} prev={wk.stagesPrev} note="(applications only)" />
       </div>
 
       {/* SECTION 4 */}
@@ -751,16 +808,22 @@ export function DashboardPage() {
               parameter to see this come to life.
             </div>
           ) : (
-            <div className="space-y-3">
-              <CalRow label="Total feedback given" value={String(aiStats.total)} />
-              <CalRow label="Override rate" value={`${aiStats.overrideRate}%`} />
-              <CalRow
-                label="Average score gap"
-                value={aiStats.avgGap > 0 ? `+${aiStats.avgGap}` : `${aiStats.avgGap}`}
-                color={aiStats.avgGap > 0 ? SUCCESS : aiStats.avgGap < 0 ? DANGER : TEXT}
-              />
-              <CalRow label="Most overridden parameter" value={aiStats.mostOverridden} />
-            </div>
+            (() => {
+              const orRate = aiStats.overrideRate;
+              const orColor = orRate < 30 ? SUCCESS : orRate <= 50 ? WARNING : DANGER;
+              const gap = aiStats.avgGap;
+              const gapColor = gap > 0 ? SUCCESS : gap < 0 ? DANGER : TEXT;
+              const gapArrow = gap > 0 ? "↑" : gap < 0 ? "↓" : "→";
+              const gapVal = gap === 0 ? "0" : `${gapArrow} ${gap > 0 ? "+" : ""}${gap}`;
+              return (
+                <div className="grid gap-2" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                  <CalCell label="Total feedback" value={String(aiStats.total)} />
+                  <CalCell label="Override rate" value={`${orRate}%`} color={orColor} />
+                  <CalCell label="Avg score gap" value={gapVal} color={gapColor} />
+                  <CalCell label="Most overridden" valuePill={aiStats.mostOverridden} />
+                </div>
+              );
+            })()
           )}
         </Card>
 
@@ -939,14 +1002,19 @@ function AttentionRow({
   );
 }
 
-function StatCard({ label, curr, prev }: { label: string; curr: number; prev: number }) {
+function StatCard({ label, curr, prev, note }: { label: string; curr: number; prev: number; note?: string }) {
   return (
     <Card>
       <SectionTitle>{label}</SectionTitle>
       <div style={{ color: TEXT, fontFamily: MONO, fontSize: 26, fontWeight: 600 }}>{curr}</div>
+      {note && (
+        <div style={{ color: MUTED, fontSize: 10, fontFamily: MONO, marginTop: 2 }}>{note}</div>
+      )}
       <div className="flex items-center gap-2 mt-1">
         <Trend curr={curr} prev={prev} />
-        <span style={{ color: MUTED, fontSize: 11, fontFamily: MONO }}>vs last week: {prev}</span>
+        {!(prev === 0 && curr === 0) && (
+          <span style={{ color: MUTED, fontSize: 11, fontFamily: MONO }}>vs last week: {prev}</span>
+        )}
       </div>
     </Card>
   );
@@ -1020,6 +1088,69 @@ function AbRow({ label, v }: { label: string; v: number | string }) {
     >
       <span style={{ color: MUTED, fontSize: 11 }}>{label}</span>
       <span style={{ color: TEXT, fontFamily: MONO, fontSize: 12 }}>{v}</span>
+    </div>
+  );
+}
+
+function CalCell({
+  label,
+  value,
+  valuePill,
+  color,
+}: {
+  label: string;
+  value?: string;
+  valuePill?: string;
+  color?: string;
+}) {
+  return (
+    <div
+      style={{
+        background: "#0D0D14",
+        border: `1px solid ${BORDER}`,
+        borderRadius: 4,
+        padding: "10px 12px",
+      }}
+    >
+      <div
+        className="uppercase"
+        style={{
+          color: MUTED,
+          fontSize: 10,
+          fontFamily: MONO,
+          letterSpacing: "0.06em",
+          marginBottom: 6,
+        }}
+      >
+        {label}
+      </div>
+      {valuePill ? (
+        <span
+          style={{
+            display: "inline-block",
+            padding: "3px 8px",
+            border: `1px solid ${BORDER}`,
+            background: BG,
+            color: TEXT,
+            fontFamily: MONO,
+            fontSize: 12,
+            borderRadius: 999,
+          }}
+        >
+          {valuePill}
+        </span>
+      ) : (
+        <div
+          style={{
+            color: color ?? TEXT,
+            fontFamily: MONO,
+            fontSize: 20,
+            fontWeight: 600,
+          }}
+        >
+          {value}
+        </div>
+      )}
     </div>
   );
 }
