@@ -1092,6 +1092,69 @@ function AbRow({ label, v }: { label: string; v: number | string }) {
   );
 }
 
+function CalCell({
+  label,
+  value,
+  valuePill,
+  color,
+}: {
+  label: string;
+  value?: string;
+  valuePill?: string;
+  color?: string;
+}) {
+  return (
+    <div
+      style={{
+        background: "#0D0D14",
+        border: `1px solid ${BORDER}`,
+        borderRadius: 4,
+        padding: "10px 12px",
+      }}
+    >
+      <div
+        className="uppercase"
+        style={{
+          color: MUTED,
+          fontSize: 10,
+          fontFamily: MONO,
+          letterSpacing: "0.06em",
+          marginBottom: 6,
+        }}
+      >
+        {label}
+      </div>
+      {valuePill ? (
+        <span
+          style={{
+            display: "inline-block",
+            padding: "3px 8px",
+            border: `1px solid ${BORDER}`,
+            background: BG,
+            color: TEXT,
+            fontFamily: MONO,
+            fontSize: 12,
+            borderRadius: 999,
+          }}
+        >
+          {valuePill}
+        </span>
+      ) : (
+        <div
+          style={{
+            color: color ?? TEXT,
+            fontFamily: MONO,
+            fontSize: 20,
+            fontWeight: 600,
+          }}
+        >
+          {value}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CalRow({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div
