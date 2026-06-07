@@ -1530,12 +1530,7 @@ function AddPostingModal({
             />
           </Field>
           <Field label="Location">
-            <Input
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g. Berlin / Remote EU"
-              style={{ background: "#111118", border: "1px solid #1E1E2E", color: "#F0F0FF" }}
-            />
+            <LocationAutocomplete value={location} onChange={setLocation} />
           </Field>
           <Field label="JD URL (optional)">
             <Input
