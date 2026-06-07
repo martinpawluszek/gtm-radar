@@ -453,7 +453,10 @@ function PostingsPage() {
         open={addOpen}
         onOpenChange={setAddOpen}
         companies={companies}
-        onAdded={() => qc.invalidateQueries({ queryKey: ["postings"] })}
+        onAdded={() => {
+          qc.invalidateQueries({ queryKey: ["postings"] });
+          qc.invalidateQueries({ queryKey: ["job-posting-locations"] });
+        }}
       />
     </div>
   );
