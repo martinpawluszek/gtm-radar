@@ -151,10 +151,32 @@ async function fetchDistinctLocations(): Promise<string[]> {
   if (error) throw error;
   const seen = new Set<string>();
   for (const row of (data ?? []) as { location: string | null }[]) {
-    const v = (row.location ?? "").trim();
-    if (v) seen.add(v);
+    const raw = row.location ?? "";
+    // Split comma-separated stored values so each city is its own suggestion
+    for (const part of raw.split(",")) {
+      const v = part.trim();
+      if (v) seen.add(v);
+    }
   }
   return Array.from(seen).sort((a, b) => a.localeCompare(b));
+}
+
+function toTitleCase(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
+
+function normalizeLocationInput(s: string): string {
+  // Preserve comma separation, title-case each segment, drop empties
+  return s
+    .split(",")
+    .map((p) => toTitleCase(p))
+    .filter(Boolean)
+    .join(", ");
 }
 
 async function fetchActiveCriteria(): Promise<RoleCriteria | null> {
@@ -434,7 +456,7 @@ function PostingsPage() {
             background: "#0A0A0F",
             border: "none",
             borderLeft: "1px solid #1E1E2E",
-            width: "max(480px, 40vw)",
+            width: "max(560px, 40vw)",
             maxWidth: "100vw",
           }}
         >
@@ -1122,9 +1144,20 @@ function DetailPanel({
             Override AI scoring {overridesOpen ? "↑" : "↓"}
           </button>
           {overridesOpen && (
-            <div className="flex flex-col gap-2">
+            <div
+              className="flex flex-col gap-2 p-3"
+              style={{
+                background: "#0D0D14",
+                border: "1px solid #1E1E2E",
+                borderRadius: 6,
+              }}
+            >
               {PARAM_KEYS.map((k) => (
-                <div key={k} className="grid items-center gap-2" style={{ gridTemplateColumns: "80px 60px 1fr" }}>
+                <div
+                  key={k}
+                  className="grid items-center gap-2"
+                  style={{ gridTemplateColumns: "96px 64px minmax(0,1fr)" }}
+                >
                   <span style={{ color: "#8B8B9E", fontSize: 11, fontFamily: MONO }}>
                     {PARAM_LABEL[k]}
                   </span>
@@ -1137,7 +1170,7 @@ function DetailPanel({
                     onChange={(e) =>
                       setOverrides((o) => ({
                         ...o,
-                        [k]: { ...o[k], score: e.target.value },
+                        [k]: { score: e.target.value, reason: o[k]?.reason ?? "" },
                       }))
                     }
                     style={{
@@ -1149,12 +1182,12 @@ function DetailPanel({
                     }}
                   />
                   <Input
-                    placeholder="Why did you change this?"
+                    placeholder="Why did you change this score?"
                     value={overrides[k]?.reason ?? ""}
                     onChange={(e) =>
                       setOverrides((o) => ({
                         ...o,
-                        [k]: { ...o[k], reason: e.target.value },
+                        [k]: { score: o[k]?.score ?? "", reason: e.target.value },
                       }))
                     }
                     style={{
@@ -1368,7 +1401,7 @@ function AddPostingModal({
         .insert({
           company_id: companyId,
           title: title.trim(),
-          location: location.trim(),
+          location: normalizeLocationInput(location),
           jd_url: jdUrl.trim() || null,
           jd_full: jdFull,
           source: "manual",
@@ -1385,7 +1418,7 @@ function AddPostingModal({
       const criteria = await fetchActiveCriteria();
       if (!criteria) throw new Error("No active role_criteria row found");
       const system = buildSystemPrompt(criteria, company);
-      const user = buildUserPrompt(title.trim(), location.trim(), jdFull);
+      const user = buildUserPrompt(title.trim(), normalizeLocationInput(location), jdFull);
 
       const res = await score({ data: { system, user } });
       const parsed = extractJson(res.text) as {
@@ -1606,13 +1639,17 @@ function LocationAutocomplete({
   const [open, setOpen] = useState(false);
   const [focused, setFocused] = useState(false);
 
-  const q = value.trim().toLowerCase();
+  // Match against the last comma-separated segment so "San Francisco, ny" suggests New York
+  const segments = value.split(",");
+  const lastSeg = (segments[segments.length - 1] ?? "").trim().toLowerCase();
   const matches = useMemo(() => {
-    const base = q
-      ? locations.filter((l) => l.toLowerCase().includes(q) && l.toLowerCase() !== q)
+    const base = lastSeg
+      ? locations.filter(
+          (l) => l.toLowerCase().includes(lastSeg) && l.toLowerCase() !== lastSeg,
+        )
       : locations;
     return base.slice(0, 8);
-  }, [locations, q]);
+  }, [locations, lastSeg]);
 
   const showDropdown = open && focused && matches.length > 0;
 
@@ -1652,7 +1689,9 @@ function LocationAutocomplete({
               type="button"
               onMouseDown={(e) => {
                 e.preventDefault();
-                onChange(loc);
+                const parts = value.split(",");
+                parts[parts.length - 1] = parts.length > 1 ? ` ${loc}` : loc;
+                onChange(parts.join(","));
                 setOpen(false);
               }}
               className="w-full text-left px-2 py-1.5"
