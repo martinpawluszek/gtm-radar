@@ -1390,7 +1390,7 @@ function AddPostingModal({
         .insert({
           company_id: companyId,
           title: title.trim(),
-          location: location.trim(),
+          location: normalizeLocationInput(location),
           jd_url: jdUrl.trim() || null,
           jd_full: jdFull,
           source: "manual",
