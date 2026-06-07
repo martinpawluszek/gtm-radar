@@ -151,10 +151,32 @@ async function fetchDistinctLocations(): Promise<string[]> {
   if (error) throw error;
   const seen = new Set<string>();
   for (const row of (data ?? []) as { location: string | null }[]) {
-    const v = (row.location ?? "").trim();
-    if (v) seen.add(v);
+    const raw = row.location ?? "";
+    // Split comma-separated stored values so each city is its own suggestion
+    for (const part of raw.split(",")) {
+      const v = part.trim();
+      if (v) seen.add(v);
+    }
   }
   return Array.from(seen).sort((a, b) => a.localeCompare(b));
+}
+
+function toTitleCase(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
+
+function normalizeLocationInput(s: string): string {
+  // Preserve comma separation, title-case each segment, drop empties
+  return s
+    .split(",")
+    .map((p) => toTitleCase(p))
+    .filter(Boolean)
+    .join(", ");
 }
 
 async function fetchActiveCriteria(): Promise<RoleCriteria | null> {
