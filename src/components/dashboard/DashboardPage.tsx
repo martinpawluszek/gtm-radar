@@ -978,7 +978,7 @@ function AbColumn({
 }: {
   title: string;
   color: string;
-  stats: ReturnType<typeof Object> extends never ? never : any;
+  stats: AbStats;
   highlight: boolean;
 }) {
   return (
