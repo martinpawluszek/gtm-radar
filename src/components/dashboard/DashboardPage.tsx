@@ -706,7 +706,7 @@ export function DashboardPage() {
         <StatCard label="Postings Added" curr={wk.postingsCurr} prev={wk.postingsPrev} />
         <StatCard label="Applications Submitted" curr={wk.appsCurr} prev={wk.appsPrev} />
         <StatCard label="Outreach Activity" curr={wk.outreachCurr} prev={wk.outreachPrev} />
-        <StatCard label="Stage Advancements" curr={wk.stagesCurr} prev={wk.stagesPrev} />
+        <StatCard label="Stage Advancements" curr={wk.stagesCurr} prev={wk.stagesPrev} note="(applications only)" />
       </div>
 
       {/* SECTION 4 */}
