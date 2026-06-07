@@ -5,6 +5,7 @@ import { useServerFn as useSF } from "@tanstack/react-start";
 import { ChevronDown, Plus, X, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { gtmSupabase } from "@/lib/gtmSupabase";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -132,12 +133,27 @@ async function fetchPostings(): Promise<Posting[]> {
 }
 
 async function fetchCompanies(): Promise<CompanyLite[]> {
-  const { data, error } = await gtmSupabase
+  const { data, error } = await supabase
     .from("companies")
     .select("id,name,tier,brand_score,ai_score,shot_score,comp_score,location_score,notes")
     .order("name");
   if (error) throw error;
   return (data ?? []) as unknown as CompanyLite[];
+}
+
+async function fetchDistinctLocations(): Promise<string[]> {
+  const { data, error } = await gtmSupabase
+    .from("job_postings" as never)
+    .select("location")
+    .not("location", "is", null)
+    .order("location");
+  if (error) throw error;
+  const seen = new Set<string>();
+  for (const row of (data ?? []) as { location: string | null }[]) {
+    const v = (row.location ?? "").trim();
+    if (v) seen.add(v);
+  }
+  return Array.from(seen).sort((a, b) => a.localeCompare(b));
 }
 
 async function fetchActiveCriteria(): Promise<RoleCriteria | null> {
@@ -437,7 +453,10 @@ function PostingsPage() {
         open={addOpen}
         onOpenChange={setAddOpen}
         companies={companies}
-        onAdded={() => qc.invalidateQueries({ queryKey: ["postings"] })}
+        onAdded={() => {
+          qc.invalidateQueries({ queryKey: ["postings"] });
+          qc.invalidateQueries({ queryKey: ["job-posting-locations"] });
+        }}
       />
     </div>
   );
@@ -1514,12 +1533,7 @@ function AddPostingModal({
             />
           </Field>
           <Field label="Location">
-            <Input
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g. Berlin / Remote EU"
-              style={{ background: "#111118", border: "1px solid #1E1E2E", color: "#F0F0FF" }}
-            />
+            <LocationAutocomplete value={location} onChange={setLocation} />
           </Field>
           <Field label="JD URL (optional)">
             <Input
@@ -1573,6 +1587,85 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div className="flex flex-col gap-1.5">
       <label style={{ color: "#8B8B9E", fontSize: 11, fontFamily: MONO }}>{label}</label>
       {children}
+    </div>
+  );
+}
+
+function LocationAutocomplete({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const { data: locations = [] } = useQuery({
+    queryKey: ["job-posting-locations"],
+    queryFn: fetchDistinctLocations,
+  });
+  const [open, setOpen] = useState(false);
+  const [focused, setFocused] = useState(false);
+
+  const q = value.trim().toLowerCase();
+  const matches = useMemo(() => {
+    const base = q
+      ? locations.filter((l) => l.toLowerCase().includes(q) && l.toLowerCase() !== q)
+      : locations;
+    return base.slice(0, 8);
+  }, [locations, q]);
+
+  const showDropdown = open && focused && matches.length > 0;
+
+  return (
+    <div className="relative">
+      <Input
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => {
+          setFocused(true);
+          setOpen(true);
+        }}
+        onBlur={() => {
+          // delay to allow click on suggestion
+          setTimeout(() => setFocused(false), 120);
+        }}
+        placeholder="e.g. Berlin / Remote EU"
+        style={{ background: "#111118", border: "1px solid #1E1E2E", color: "#F0F0FF" }}
+      />
+      {showDropdown && (
+        <div
+          className="absolute left-0 right-0 mt-1 z-10 p-1"
+          style={{
+            background: "#111118",
+            border: "1px solid #1E1E2E",
+            borderRadius: 6,
+            maxHeight: 220,
+            overflowY: "auto",
+          }}
+        >
+          {matches.map((loc) => (
+            <button
+              key={loc}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onChange(loc);
+                setOpen(false);
+              }}
+              className="w-full text-left px-2 py-1.5"
+              style={{ color: "#F0F0FF", fontSize: 13, borderRadius: 3 }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "rgba(0,212,255,0.08)")
+              }
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
+              {loc}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
