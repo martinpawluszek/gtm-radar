@@ -42,19 +42,27 @@ export const Route = createFileRoute("/outreach")({
 
 // ---------- Types ----------
 type Group = "a_cold" | "b_warm";
-type StatusA = "to_message" | "message_sent" | "responded" | "call_scheduled" | "no_response";
-type StatusB =
-  | "to_engage"
+type ActiveStatus =
+  | "invite_sent"
+  | "invite_accepted"
   | "engaging"
   | "ready_to_message"
   | "message_sent"
-  | "responded"
-  | "call_scheduled"
-  | "no_response";
-type AnyStatus = StatusA | StatusB;
+  | "active_conversation"
+  | "call_scheduled";
+type TerminalStatus =
+  | "invite_ignored"
+  | "no_response"
+  | "asked_to_stop"
+  | "recommended_us"
+  | "do_not_contact"
+  | "dismissed"
+  | "suggested";
+type AnyStatus = ActiveStatus | TerminalStatus;
 type ActivityType =
   | "engagement_like"
   | "engagement_comment"
+  | "invite_sent"
   | "message_sent"
   | "response_received"
   | "call_scheduled";
@@ -72,6 +80,15 @@ type Target = {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  ai_rationale?: string | null;
+  ai_recommended_group?: Group | null;
+  ai_suggested_angle?: string | null;
+  hiring_decision_proximity?: number | null;
+  warmth_potential?: number | null;
+  suggested_at?: string | null;
+  invite_sent_at?: string | null;
+  invite_accepted_at?: string | null;
+  dismissed_reason?: string | null;
 };
 
 type Activity = {
@@ -86,37 +103,51 @@ type Activity = {
 type CompanyLite = { id: string; name: string; tier: Tier };
 
 // ---------- Constants ----------
-const A_PIPELINE: StatusA[] = [
-  "to_message",
+const A_PIPELINE: ActiveStatus[] = [
+  "invite_sent",
+  "invite_accepted",
   "message_sent",
-  "responded",
+  "active_conversation",
   "call_scheduled",
-  "no_response",
 ];
-const B_PIPELINE: StatusB[] = [
-  "to_engage",
+const B_PIPELINE: ActiveStatus[] = [
+  "invite_sent",
+  "invite_accepted",
   "engaging",
   "ready_to_message",
   "message_sent",
-  "responded",
+  "active_conversation",
   "call_scheduled",
+];
+const TERMINAL_STATES: TerminalStatus[] = [
+  "invite_ignored",
   "no_response",
+  "asked_to_stop",
+  "recommended_us",
+  "do_not_contact",
 ];
 
 const STATUS_LABEL: Record<AnyStatus, string> = {
-  to_message: "To Message",
-  to_engage: "To Engage",
+  suggested: "Suggested",
+  invite_sent: "Invite Sent",
+  invite_accepted: "Invite Accepted",
   engaging: "Engaging",
   ready_to_message: "Ready to Message",
   message_sent: "Message Sent",
-  responded: "Responded",
+  active_conversation: "Active Conversation",
   call_scheduled: "Call Scheduled",
+  invite_ignored: "Invite Ignored",
   no_response: "No Response",
+  asked_to_stop: "Asked to Stop",
+  recommended_us: "Recommended Us",
+  do_not_contact: "Do Not Contact",
+  dismissed: "Dismissed",
 };
 
 const ACTIVITY_LABEL: Record<ActivityType, string> = {
   engagement_like: "Liked post",
   engagement_comment: "Commented",
+  invite_sent: "Invite sent",
   message_sent: "Message sent",
   response_received: "Response received",
   call_scheduled: "Call scheduled",
@@ -125,6 +156,7 @@ const ACTIVITY_LABEL: Record<ActivityType, string> = {
 const ACTIVITY_ICON: Record<ActivityType, typeof ThumbsUp> = {
   engagement_like: ThumbsUp,
   engagement_comment: MessageSquare,
+  invite_sent: Send,
   message_sent: Send,
   response_received: Inbox,
   call_scheduled: Phone,
@@ -137,6 +169,7 @@ const BORDER = "#1E1E2E";
 const PRIMARY = "#00D4FF";
 const VIOLET = "#7C3AED";
 const SUCCESS = "#10B981";
+const SUCCESS_BRIGHT = "#34D399";
 const WARNING = "#F59E0B";
 const DANGER = "#EF4444";
 const TEXT = "#F0F0FF";
@@ -144,21 +177,38 @@ const MUTED = "#8B8B9E";
 
 function statusColor(s: AnyStatus): string {
   switch (s) {
-    case "to_message":
-    case "to_engage":
-    case "ready_to_message":
+    case "suggested":
       return MUTED;
+    case "invite_sent":
+      return MUTED;
+    case "invite_accepted":
+      return PRIMARY;
     case "engaging":
-      return VIOLET;
     case "message_sent":
-      return WARNING;
-    case "responded":
+    case "ready_to_message":
+      return VIOLET;
+    case "active_conversation":
       return SUCCESS;
     case "call_scheduled":
-      return PRIMARY;
+      return SUCCESS_BRIGHT;
+    case "invite_ignored":
     case "no_response":
+    case "asked_to_stop":
+    case "dismissed":
+      return MUTED;
+    case "recommended_us":
+      return SUCCESS;
+    case "do_not_contact":
       return DANGER;
   }
+}
+
+function validNextStatuses(group: Group, current: AnyStatus): AnyStatus[] {
+  const pipe = group === "a_cold" ? A_PIPELINE : B_PIPELINE;
+  const idx = pipe.indexOf(current as ActiveStatus);
+  const forward: AnyStatus[] = idx >= 0 ? pipe.slice(idx + 1) : [...pipe];
+  // Terminal states always available (no backwards moves)
+  return [...forward, ...TERMINAL_STATES];
 }
 
 function daysSince(iso: string | null): number | null {
