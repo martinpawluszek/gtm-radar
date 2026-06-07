@@ -456,7 +456,7 @@ function PostingsPage() {
             background: "#0A0A0F",
             border: "none",
             borderLeft: "1px solid #1E1E2E",
-            width: "max(480px, 40vw)",
+            width: "max(560px, 40vw)",
             maxWidth: "100vw",
           }}
         >
