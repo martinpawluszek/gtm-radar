@@ -971,27 +971,56 @@ function ABTable({ targets, activity }: { targets: Target[]; activity: Activity[
   const calc = (group: Group) => {
     const ts = targets.filter((t) => t.group_name === group);
     const ids = new Set(ts.map((t) => t.id));
+    const invitesSent = ts.filter(
+      (t) =>
+        t.status === "invite_sent" ||
+        t.status === "invite_accepted" ||
+        t.status === "engaging" ||
+        t.status === "ready_to_message" ||
+        t.status === "message_sent" ||
+        t.status === "active_conversation" ||
+        t.status === "call_scheduled" ||
+        t.status === "invite_ignored" ||
+        t.status === "no_response" ||
+        t.status === "asked_to_stop" ||
+        t.status === "recommended_us",
+    ).length;
+    const invitesAccepted = ts.filter(
+      (t) =>
+        t.status === "invite_accepted" ||
+        t.status === "engaging" ||
+        t.status === "ready_to_message" ||
+        t.status === "message_sent" ||
+        t.status === "active_conversation" ||
+        t.status === "call_scheduled",
+    ).length;
     const messages = activity.filter(
       (a) => ids.has(a.target_id) && a.activity_type === "message_sent",
     ).length;
     const responded = ts.filter(
-      (t) => t.status === "responded" || t.status === "call_scheduled",
+      (t) => t.status === "active_conversation" || t.status === "call_scheduled",
     ).length;
     const calls = ts.filter((t) => t.status === "call_scheduled").length;
+    const acceptRate =
+      invitesSent > 0 ? Math.round((invitesAccepted / invitesSent) * 100) : 0;
     const rr = ts.length > 0 ? Math.round((responded / ts.length) * 100) : 0;
     const cr = messages > 0 ? Math.round((calls / messages) * 100) : 0;
-    return { total: ts.length, messages, responded, calls, rr, cr };
+    return { total: ts.length, invitesSent, invitesAccepted, messages, responded, calls, acceptRate, rr, cr };
   };
   const a = calc("a_cold");
   const b = calc("b_warm");
   const rows: Array<[string, number | string, number | string]> = [
     ["Total targets", a.total, b.total],
+    ["Invites sent", a.invitesSent, b.invitesSent],
+    ["Invites accepted", a.invitesAccepted, b.invitesAccepted],
+    ["Accept rate", `${a.acceptRate}%`, `${b.acceptRate}%`],
     ["Messages sent", a.messages, b.messages],
-    ["Responses received", a.responded, b.responded],
+    ["Active conversations", a.responded, b.responded],
     ["Response rate", `${a.rr}%`, `${b.rr}%`],
     ["Calls scheduled", a.calls, b.calls],
     ["Call conversion rate", `${a.cr}%`, `${b.cr}%`],
   ];
+
   return (
     <table className="w-full text-sm" style={{ borderTop: `1px solid ${BORDER}` }}>
       <thead>
