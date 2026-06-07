@@ -73,7 +73,7 @@ type CompanyLite = {
   ai_score: number;
   shot_score: number;
   comp_score: number;
-  location_score: number;
+  loc_score: number;
   notes: string | null;
 };
 
@@ -134,7 +134,7 @@ async function fetchPostings(): Promise<Posting[]> {
 async function fetchCompanies(): Promise<CompanyLite[]> {
   const res = await gtmSupabase
     .from("companies")
-    .select("id,name,tier,brand_score,ai_score,shot_score,comp_score,location_score,notes")
+    .select("id,name,tier,brand_score,ai_score,shot_score,comp_score,loc_score,notes")
     .order("name", { ascending: true });
   // eslint-disable-next-line no-console
   console.log("[postings] fetchCompanies response", res);
@@ -193,7 +193,7 @@ function buildSystemPrompt(criteria: RoleCriteria, company: CompanyLite | null):
       : "(none)";
 
   const companyContext = company
-    ? `Name: ${company.name}\nTier: ${company.tier}\nBrand: ${company.brand_score}/5, AI: ${company.ai_score}/5, Shot: ${company.shot_score}/5, Comp: ${company.comp_score}/5, Location: ${company.location_score}/5\nNotes: ${company.notes ?? "(none)"}`
+    ? `Name: ${company.name}\nTier: ${company.tier}\nBrand: ${company.brand_score}/5, AI: ${company.ai_score}/5, Shot: ${company.shot_score}/5, Comp: ${company.comp_score}/5, Location: ${company.loc_score}/5\nNotes: ${company.notes ?? "(none)"}`
     : "Company not matched in database.";
 
   return `You are scoring a job posting for Martin Pawluszek, a senior GTM and enterprise sales professional targeting roles at top AI and tech companies.
@@ -1359,7 +1359,7 @@ function AddPostingModal({
           (company.ai_score ?? 0) +
           (company.shot_score ?? 0) +
           (company.comp_score ?? 0) +
-          (company.location_score ?? 0)
+          (company.loc_score ?? 0)
         : null;
 
       const now = new Date().toISOString();
