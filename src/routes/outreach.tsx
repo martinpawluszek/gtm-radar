@@ -246,6 +246,16 @@ function OutreachPage() {
   const [statusFilter, setStatusFilter] = useState<AnyStatus | "all">("all");
   const [search, setSearch] = useState("");
 
+  useEffect(() => {
+    try {
+      const id = sessionStorage.getItem("dashboard:open:outreach");
+      if (id) {
+        sessionStorage.removeItem("dashboard:open:outreach");
+        setSelectedId(id);
+      }
+    } catch {}
+  }, []);
+
   const selected = targets.find((t) => t.id === selectedId) ?? null;
 
   // ---------- Stats ----------
