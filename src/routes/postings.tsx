@@ -5,7 +5,6 @@ import { useServerFn as useSF } from "@tanstack/react-start";
 import { ChevronDown, Plus, X, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { gtmSupabase } from "@/lib/gtmSupabase";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
