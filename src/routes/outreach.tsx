@@ -1076,9 +1076,8 @@ function TargetPanel({
   }) => void;
   onPatch: (patch: Partial<Target>) => void;
 }) {
-  const pipeline = target.group_name === "a_cold" ? A_PIPELINE : B_PIPELINE;
-  const currentIdx = pipeline.indexOf(target.status as never);
-  const validNext = currentIdx >= 0 ? pipeline.slice(currentIdx + 1) : pipeline;
+  const validNext = validNextStatuses(target.group_name, target.status);
+
 
   const [logOpen, setLogOpen] = useState(false);
   const [logType, setLogType] = useState<ActivityType>("engagement_like");
