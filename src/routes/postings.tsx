@@ -1667,7 +1667,7 @@ function LocationAutocomplete({
   );
 }
 
-
+function Spinner() {
   return (
     <span
       style={{
