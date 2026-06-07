@@ -133,12 +133,14 @@ async function fetchPostings(): Promise<Posting[]> {
 }
 
 async function fetchCompanies(): Promise<CompanyLite[]> {
-  const { data, error } = await supabase
+  const res = await gtmSupabase
     .from("companies")
     .select("id,name,tier,brand_score,ai_score,shot_score,comp_score,location_score,notes")
-    .order("name");
-  if (error) throw error;
-  return (data ?? []) as unknown as CompanyLite[];
+    .order("name", { ascending: true });
+  // eslint-disable-next-line no-console
+  console.log("[postings] fetchCompanies response", res);
+  if (res.error) throw res.error;
+  return (res.data ?? []) as unknown as CompanyLite[];
 }
 
 async function fetchDistinctLocations(): Promise<string[]> {
