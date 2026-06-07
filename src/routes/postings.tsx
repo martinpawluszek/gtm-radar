@@ -306,6 +306,16 @@ function PostingsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
+  useEffect(() => {
+    try {
+      const id = sessionStorage.getItem("dashboard:open:postings");
+      if (id) {
+        sessionStorage.removeItem("dashboard:open:postings");
+        setSelectedId(id);
+      }
+    } catch {}
+  }, []);
+
   const selected = postings.find((p) => p.id === selectedId) ?? null;
 
   const filtered = useMemo(() => {
