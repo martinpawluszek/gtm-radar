@@ -1406,11 +1406,27 @@ OUTPUT: Only the message. No "Here's a draft", no word count, no dashes, no subj
             <DropdownMenuContent
               style={{ background: CARD, borderColor: BORDER, color: TEXT }}
             >
-              {validNext.map((s) => (
-                <DropdownMenuItem key={s} onClick={() => onMove(s)}>
-                  {STATUS_LABEL[s]}
-                </DropdownMenuItem>
-              ))}
+              {validNext.map((s) => {
+                const isTerminal = (TERMINAL_STATES as readonly string[]).includes(s);
+                return (
+                  <DropdownMenuItem
+                    key={s}
+                    onClick={() => {
+                      if (isTerminal) {
+                        const ok = window.confirm(
+                          `Move to ${STATUS_LABEL[s]}? This cannot be undone.`,
+                        );
+                        if (!ok) return;
+                      }
+                      onMove(s);
+                    }}
+                    style={isTerminal ? { color: MUTED } : undefined}
+                  >
+                    {STATUS_LABEL[s]}
+                  </DropdownMenuItem>
+                );
+              })}
+
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
