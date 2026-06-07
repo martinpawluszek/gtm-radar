@@ -1,11 +1,21 @@
-import { useEffect, useMemo } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useMemo } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Minus, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { gtmSupabase } from "@/lib/gtmSupabase";
 import { TIER_META, type Tier } from "@/lib/companies";
 import { Button } from "@/components/ui/button";
+
+type AbStats = {
+  invitesSent: number;
+  invitesAccepted: number;
+  acceptRate: number;
+  messagesSent: number;
+  activeConv: number;
+  callsSched: number;
+  positive: number;
+};
 
 const MONO = "var(--font-mono)";
 const BG = "#0A0A0F";
