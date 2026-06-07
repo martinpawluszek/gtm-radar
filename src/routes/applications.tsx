@@ -141,7 +141,7 @@ async function autoGhostStale(apps: Application[]): Promise<Application[]> {
   const ids = stale.map((a) => a.id);
   const { error: upErr } = await gtmSupabase
     .from("applications" as never)
-    .update({ status: "ghosted", last_status_change: now })
+    .update({ status: "ghosted", last_status_change: now } as never)
     .in("id", ids);
   if (upErr) {
     console.error("[auto-ghost] update failed", upErr);
@@ -156,7 +156,7 @@ async function autoGhostStale(apps: Application[]): Promise<Application[]> {
         to_status: "ghosted",
         changed_at: now,
         note: "Auto-ghosted after 21 days without response",
-      })),
+      })) as never,
     );
   if (hErr) console.error("[auto-ghost] history insert failed", hErr);
   const staleSet = new Set(ids);
