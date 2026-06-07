@@ -124,13 +124,55 @@ function todayISO(): string {
 }
 
 // ---------- Data ----------
+async function autoGhostStale(apps: Application[]): Promise<Application[]> {
+  const cutoff = Date.now() - 21 * 24 * 60 * 60 * 1000;
+  const stale = apps.filter((a) => {
+    if (a.status !== "applied") return false;
+    if (!a.applied_at) return false;
+    const appliedMs = new Date(a.applied_at).getTime();
+    if (isNaN(appliedMs) || appliedMs > cutoff) return false;
+    const lastChange = a.last_status_change ? new Date(a.last_status_change).getTime() : appliedMs;
+    // status has not changed since applied_at (allow small clock skew)
+    if (lastChange - appliedMs > 1000) return false;
+    return true;
+  });
+  if (stale.length === 0) return apps;
+  const now = new Date().toISOString();
+  const ids = stale.map((a) => a.id);
+  const { error: upErr } = await gtmSupabase
+    .from("applications" as never)
+    .update({ status: "ghosted", last_status_change: now })
+    .in("id", ids);
+  if (upErr) {
+    console.error("[auto-ghost] update failed", upErr);
+    return apps;
+  }
+  const { error: hErr } = await gtmSupabase
+    .from("application_status_history" as never)
+    .insert(
+      stale.map((a) => ({
+        application_id: a.id,
+        from_status: "applied",
+        to_status: "ghosted",
+        changed_at: now,
+        note: "Auto-ghosted after 21 days without response",
+      })),
+    );
+  if (hErr) console.error("[auto-ghost] history insert failed", hErr);
+  const staleSet = new Set(ids);
+  return apps.map((a) =>
+    staleSet.has(a.id) ? { ...a, status: "ghosted" as Status, last_status_change: now } : a,
+  );
+}
+
 async function fetchApplications(): Promise<Application[]> {
   const { data, error } = await gtmSupabase
     .from("applications" as never)
     .select("*")
     .order("last_status_change", { ascending: false });
   if (error) throw error;
-  return (data ?? []) as unknown as Application[];
+  const apps = (data ?? []) as unknown as Application[];
+  return await autoGhostStale(apps);
 }
 
 async function fetchCompaniesLite(): Promise<CompanyLite[]> {
