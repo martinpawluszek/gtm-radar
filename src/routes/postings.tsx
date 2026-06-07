@@ -133,12 +133,27 @@ async function fetchPostings(): Promise<Posting[]> {
 }
 
 async function fetchCompanies(): Promise<CompanyLite[]> {
-  const { data, error } = await gtmSupabase
+  const { data, error } = await supabase
     .from("companies")
     .select("id,name,tier,brand_score,ai_score,shot_score,comp_score,location_score,notes")
     .order("name");
   if (error) throw error;
   return (data ?? []) as unknown as CompanyLite[];
+}
+
+async function fetchDistinctLocations(): Promise<string[]> {
+  const { data, error } = await gtmSupabase
+    .from("job_postings" as never)
+    .select("location")
+    .not("location", "is", null)
+    .order("location");
+  if (error) throw error;
+  const seen = new Set<string>();
+  for (const row of (data ?? []) as { location: string | null }[]) {
+    const v = (row.location ?? "").trim();
+    if (v) seen.add(v);
+  }
+  return Array.from(seen).sort((a, b) => a.localeCompare(b));
 }
 
 async function fetchActiveCriteria(): Promise<RoleCriteria | null> {
