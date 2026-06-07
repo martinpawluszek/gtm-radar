@@ -1407,7 +1407,7 @@ function AddPostingModal({
       const criteria = await fetchActiveCriteria();
       if (!criteria) throw new Error("No active role_criteria row found");
       const system = buildSystemPrompt(criteria, company);
-      const user = buildUserPrompt(title.trim(), location.trim(), jdFull);
+      const user = buildUserPrompt(title.trim(), normalizeLocationInput(location), jdFull);
 
       const res = await score({ data: { system, user } });
       const parsed = extractJson(res.text) as {
