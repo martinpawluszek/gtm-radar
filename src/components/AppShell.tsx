@@ -32,6 +32,7 @@ export function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const current = NAV.find((n) => (n.to === "/" ? pathname === "/" : pathname.startsWith(n.to)));
   const hideHeaderTitle =
+    pathname === "/" ||
     pathname.startsWith("/companies") ||
     pathname.startsWith("/role-criteria") ||
     pathname.startsWith("/applications") ||

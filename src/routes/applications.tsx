@@ -226,6 +226,16 @@ function ApplicationsPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [rejectedExpanded, setRejectedExpanded] = useState(false);
 
+  useEffect(() => {
+    try {
+      const id = sessionStorage.getItem("dashboard:open:applications");
+      if (id) {
+        sessionStorage.removeItem("dashboard:open:applications");
+        setSelectedId(id);
+      }
+    } catch {}
+  }, []);
+
   const selected = apps.find((a) => a.id === selectedId) ?? null;
 
   // ---------- Stats ----------

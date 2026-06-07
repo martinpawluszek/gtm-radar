@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -245,6 +245,16 @@ function OutreachPage() {
   const [abOpen, setAbOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<AnyStatus | "all">("all");
   const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    try {
+      const id = sessionStorage.getItem("dashboard:open:outreach");
+      if (id) {
+        sessionStorage.removeItem("dashboard:open:outreach");
+        setSelectedId(id);
+      }
+    } catch {}
+  }, []);
 
   const selected = targets.find((t) => t.id === selectedId) ?? null;
 

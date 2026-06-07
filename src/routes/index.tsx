@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { PagePlaceholder } from "@/components/PagePlaceholder";
+import { DashboardPage } from "@/components/dashboard/DashboardPage";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [{ title: "Dashboard — GTM Intelligence" }] }),
-  component: () => <PagePlaceholder title="Dashboard" />,
+  component: DashboardPage,
 });
