@@ -808,16 +808,22 @@ export function DashboardPage() {
               parameter to see this come to life.
             </div>
           ) : (
-            <div className="space-y-3">
-              <CalRow label="Total feedback given" value={String(aiStats.total)} />
-              <CalRow label="Override rate" value={`${aiStats.overrideRate}%`} />
-              <CalRow
-                label="Average score gap"
-                value={aiStats.avgGap > 0 ? `+${aiStats.avgGap}` : `${aiStats.avgGap}`}
-                color={aiStats.avgGap > 0 ? SUCCESS : aiStats.avgGap < 0 ? DANGER : TEXT}
-              />
-              <CalRow label="Most overridden parameter" value={aiStats.mostOverridden} />
-            </div>
+            (() => {
+              const orRate = aiStats.overrideRate;
+              const orColor = orRate < 30 ? SUCCESS : orRate <= 50 ? WARNING : DANGER;
+              const gap = aiStats.avgGap;
+              const gapColor = gap > 0 ? SUCCESS : gap < 0 ? DANGER : TEXT;
+              const gapArrow = gap > 0 ? "↑" : gap < 0 ? "↓" : "→";
+              const gapVal = gap === 0 ? "0" : `${gapArrow} ${gap > 0 ? "+" : ""}${gap}`;
+              return (
+                <div className="grid gap-2" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                  <CalCell label="Total feedback" value={String(aiStats.total)} />
+                  <CalCell label="Override rate" value={`${orRate}%`} color={orColor} />
+                  <CalCell label="Avg score gap" value={gapVal} color={gapColor} />
+                  <CalCell label="Most overridden" valuePill={aiStats.mostOverridden} />
+                </div>
+              );
+            })()
           )}
         </Card>
 
