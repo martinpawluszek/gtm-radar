@@ -196,6 +196,16 @@ function TierBadge({ tier }: { tier: Tier }) {
 }
 
 function Trend({ curr, prev }: { curr: number; prev: number }) {
+  if (prev === 0 && curr === 0) {
+    return (
+      <span style={{ color: MUTED, fontFamily: MONO, fontSize: 11 }}>—</span>
+    );
+  }
+  if (prev === 0 && curr > 0) {
+    return (
+      <span style={{ color: SUCCESS, fontFamily: MONO, fontSize: 11 }}>New</span>
+    );
+  }
   if (curr === prev) {
     return (
       <span style={{ color: MUTED, fontFamily: MONO, fontSize: 11, display: "inline-flex", gap: 3, alignItems: "center" }}>
@@ -204,7 +214,7 @@ function Trend({ curr, prev }: { curr: number; prev: number }) {
     );
   }
   const up = curr > prev;
-  const change = prev === 0 ? 100 : Math.round(((curr - prev) / prev) * 100);
+  const change = Math.round(((curr - prev) / prev) * 100);
   return (
     <span
       style={{
