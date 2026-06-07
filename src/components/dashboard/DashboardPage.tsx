@@ -996,14 +996,19 @@ function AttentionRow({
   );
 }
 
-function StatCard({ label, curr, prev }: { label: string; curr: number; prev: number }) {
+function StatCard({ label, curr, prev, note }: { label: string; curr: number; prev: number; note?: string }) {
   return (
     <Card>
       <SectionTitle>{label}</SectionTitle>
       <div style={{ color: TEXT, fontFamily: MONO, fontSize: 26, fontWeight: 600 }}>{curr}</div>
+      {note && (
+        <div style={{ color: MUTED, fontSize: 10, fontFamily: MONO, marginTop: 2 }}>{note}</div>
+      )}
       <div className="flex items-center gap-2 mt-1">
         <Trend curr={curr} prev={prev} />
-        <span style={{ color: MUTED, fontSize: 11, fontFamily: MONO }}>vs last week: {prev}</span>
+        {!(prev === 0 && curr === 0) && (
+          <span style={{ color: MUTED, fontSize: 11, fontFamily: MONO }}>vs last week: {prev}</span>
+        )}
       </div>
     </Card>
   );
