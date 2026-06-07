@@ -1734,7 +1734,7 @@ function AddTargetModal({
         current_company_id: companyId,
         role: role.trim() || null,
         group_name: group,
-        status: group === "a_cold" ? "to_message" : "to_engage",
+        status: "suggested",
         source: source.trim() || null,
         notes: notes.trim() || null,
         tags,
