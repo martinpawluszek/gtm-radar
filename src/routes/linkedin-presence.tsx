@@ -821,33 +821,49 @@ function DetailModal({
     <Modal title={title} onClose={onClose}>
       <div className="flex flex-col gap-3 text-sm" style={{ color: "#F0F0FF" }}>
         <div className="flex items-center gap-2 text-[11px]" style={{ fontFamily: MONO }}>
-          <Tag color="#00D4FF">{item.item_type}</Tag>
-          {item.category && <Tag color="#8B8B9E">{item.category}</Tag>}
-          <Tag color={statusColor(item.status)}>{item.status}</Tag>
+          <Tag color="#00D4FF">{TYPE_LABEL[item.item_type]}</Tag>
+          {item.category && <Tag color="#8B8B9E">{CATEGORY_LABEL[item.category]}</Tag>}
+          <Tag color={statusColor(item.status)}>{STATUS_LABEL[item.status]}</Tag>
         </div>
 
-        <Field label="raw_input">
-          <pre className="whitespace-pre-wrap font-sans text-sm" style={{ color: "#F0F0FF" }}>{item.raw_input}</pre>
-        </Field>
-        {item.improved_title && <Field label="improved_title"><div>{item.improved_title}</div></Field>}
-        {item.angle && <Field label="angle"><div>{item.angle}</div></Field>}
-        {item.final_text && (
-          <Field label="final_text">
-            <pre className="whitespace-pre-wrap font-sans text-sm" style={{ color: "#F0F0FF" }}>{item.final_text}</pre>
-          </Field>
+        {item.item_type === "reply_opportunity" ? (
+          <>
+            <Field label="LinkedIn post text">
+              <pre className="whitespace-pre-wrap font-sans text-sm" style={{ color: "#F0F0FF" }}>{item.raw_input}</pre>
+            </Field>
+            {item.source_url && (
+              <Field label="Post URL">
+                <a href={item.source_url} target="_blank" rel="noreferrer" style={{ color: "#00D4FF" }}>{item.source_url}</a>
+              </Field>
+            )}
+            {item.target_person && <Field label="Person"><div>{item.target_person}</div></Field>}
+            {item.target_company && <Field label="Company"><div>{item.target_company}</div></Field>}
+            {item.final_text && (
+              <Field label="Final comment text">
+                <pre className="whitespace-pre-wrap font-sans text-sm" style={{ color: "#F0F0FF" }}>{item.final_text}</pre>
+              </Field>
+            )}
+          </>
+        ) : (
+          <>
+            <Field label="Rough idea">
+              <pre className="whitespace-pre-wrap font-sans text-sm" style={{ color: "#F0F0FF" }}>{item.raw_input}</pre>
+            </Field>
+            {item.improved_title && <Field label="Better title"><div>{item.improved_title}</div></Field>}
+            {item.angle && <Field label="Angle"><div>{item.angle}</div></Field>}
+            {item.final_text && (
+              <Field label="Final post text">
+                <pre className="whitespace-pre-wrap font-sans text-sm" style={{ color: "#F0F0FF" }}>{item.final_text}</pre>
+              </Field>
+            )}
+          </>
         )}
-        {item.source_url && (
-          <Field label="source_url">
-            <a href={item.source_url} target="_blank" rel="noreferrer" style={{ color: "#00D4FF" }}>{item.source_url}</a>
-          </Field>
-        )}
-        {item.target_person && <Field label="target_person"><div>{item.target_person}</div></Field>}
-        {item.target_company && <Field label="target_company"><div>{item.target_company}</div></Field>}
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label="created_at"><div style={{ color: "#8B8B9E" }}>{new Date(item.created_at).toLocaleString()}</div></Field>
-          {item.posted_at && <Field label="posted_at"><div style={{ color: "#8B8B9E" }}>{new Date(item.posted_at).toLocaleString()}</div></Field>}
+          <Field label="Created"><div style={{ color: "#8B8B9E" }}>{new Date(item.created_at).toLocaleString()}</div></Field>
+          {item.posted_at && <Field label="Posted"><div style={{ color: "#8B8B9E" }}>{new Date(item.posted_at).toLocaleString()}</div></Field>}
         </div>
+
 
         <div className="flex flex-wrap gap-2 pt-2 border-t" style={{ borderColor: "#1E1E2E" }}>
           <Action onClick={() => setEditing(true)} disabled={busy}>Edit</Action>
