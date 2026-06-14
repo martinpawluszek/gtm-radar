@@ -199,12 +199,13 @@ Add a practical operator example
 Each comment should be under 45 words.`;
 }
 
-async function copyText(text: string, label: string) {
+async function copyText(text: string, successMessage = "Prompt copied.") {
   try {
     await navigator.clipboard.writeText(text);
-    toast.success(`${label} copied`);
-  } catch {
-    toast.error("Copy failed");
+    toast.success(successMessage);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Copy failed";
+    toast.error(msg);
   }
 }
 
