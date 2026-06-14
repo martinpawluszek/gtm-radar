@@ -23,6 +23,7 @@ const MONO = "var(--font-mono)";
 // ---------- Types ----------
 type PostingStatus = "new" | "saved" | "dismissed" | "applied";
 type TierFilter = "all" | Tier;
+type CompanyFilter = "all" | string;
 
 type ParamKey = "comp" | "fit" | "seniority" | "location" | "competition";
 const PARAM_KEYS: ParamKey[] = ["comp", "fit", "seniority", "location", "competition"];
