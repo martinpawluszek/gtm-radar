@@ -570,9 +570,10 @@ function TargetTitleList({
       </div>
     </div>
   );
+}
 
+function RemovableTag({ label, secondary, onRemove }: { label: string; secondary?: string; onRemove: () => void }) {
 
-function RemovableTag({ label, onRemove }: { label: string; onRemove: () => void }) {
   const [hover, setHover] = useState(false);
   return (
     <span
