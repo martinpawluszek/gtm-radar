@@ -357,9 +357,10 @@ function PostingsPage() {
         const c = p.company_id ? companyMap.get(p.company_id) : null;
         if (!c || c.tier !== tierFilter) return false;
       }
+      if (companyFilter !== "all" && p.company_id !== companyFilter) return false;
       return true;
     });
-  }, [postings, statusFilter, tierFilter, companyMap]);
+  }, [postings, statusFilter, tierFilter, companyMap, companyFilter]);
 
   // Pagination calculations
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -408,7 +409,10 @@ function PostingsPage() {
             <FilterPill
               key={s}
               active={statusFilter === s}
-              onClick={() => setStatusFilter(s)}
+              onClick={() => {
+                setStatusFilter(s);
+                setCompanyFilter("all");
+              }}
               label={s === "all" ? "All" : STATUS_META[s].label}
             />
           ))}
@@ -465,6 +469,90 @@ function PostingsPage() {
                   }}
                 >
                   {t === "all" ? "All Tiers" : TIER_META[t].label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="relative">
+          <button
+            onClick={() => setCompanyOpen((v) => !v)}
+            className="flex items-center gap-2 px-3"
+            style={{
+              height: 28,
+              background: "#0A0A0F",
+              border: "1px solid #1E1E2E",
+              borderRadius: 4,
+              color: "#F0F0FF",
+              fontSize: 12,
+              fontFamily: MONO,
+            }}
+          >
+            {companyFilter === "all"
+              ? "All Companies"
+              : companiesWithPostings.find((c) => c.id === companyFilter)?.name ?? "All Companies"}
+            <ChevronDown size={12} />
+          </button>
+          {companyOpen && (
+            <div
+              className="absolute left-0 mt-1 z-10 p-1"
+              style={{
+                background: "#111118",
+                border: "1px solid #1E1E2E",
+                borderRadius: 6,
+                minWidth: 180,
+                maxHeight: 300,
+                overflowY: "auto",
+              }}
+            >
+              <button
+                key="all"
+                onClick={() => {
+                  setCompanyFilter("all");
+                  setCompanyOpen(false);
+                }}
+                className="w-full text-left px-2 py-1.5"
+                style={{
+                  color: "#F0F0FF",
+                  fontSize: 12,
+                  fontFamily: MONO,
+                  borderRadius: 3,
+                  background: companyFilter === "all" ? "rgba(0,212,255,0.1)" : "transparent",
+                }}
+                onMouseEnter={(e) => {
+                  if (companyFilter !== "all")
+                    e.currentTarget.style.background = "rgba(0,212,255,0.06)";
+                }}
+                onMouseLeave={(e) => {
+                  if (companyFilter !== "all") e.currentTarget.style.background = "transparent";
+                }}
+              >
+                All Companies
+              </button>
+              {companiesWithPostings.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => {
+                    setCompanyFilter(c.id);
+                    setCompanyOpen(false);
+                  }}
+                  className="w-full text-left px-2 py-1.5"
+                  style={{
+                    color: "#F0F0FF",
+                    fontSize: 12,
+                    fontFamily: MONO,
+                    borderRadius: 3,
+                    background: companyFilter === c.id ? "rgba(0,212,255,0.1)" : "transparent",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (companyFilter !== c.id)
+                      e.currentTarget.style.background = "rgba(0,212,255,0.06)";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (companyFilter !== c.id) e.currentTarget.style.background = "transparent";
+                  }}
+                >
+                  {c.name}
                 </button>
               ))}
             </div>
