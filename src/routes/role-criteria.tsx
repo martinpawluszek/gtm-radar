@@ -14,9 +14,11 @@ import {
   ParamKey,
   ROLE_CRITERIA_SQL,
   RoleCriteria,
+  TargetTitle,
   Weights,
   sumWeights,
 } from "@/lib/roleCriteria";
+
 
 const PARAM_DESCRIPTIONS: Record<ParamKey, string> = {
   comp: "OTE ceiling for this role type",
