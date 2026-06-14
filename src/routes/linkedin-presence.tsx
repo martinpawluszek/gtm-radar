@@ -1049,7 +1049,7 @@ function ReplyForm({
   const [saving, setSaving] = useState(false);
 
   async function save() {
-    if (!raw_input.trim()) { toast.error("raw_input is required"); return; }
+    if (!raw_input.trim()) { toast.error("LinkedIn post text is required"); return; }
     setSaving(true);
     const payload: Record<string, unknown> = {
       item_type: "reply_opportunity",
@@ -1071,11 +1071,38 @@ function ReplyForm({
   }
 
   return (
-    <FormShell onClose={onClose} onSave={save} saving={saving} saveLabel={initial ? "Save" : "Save reply"}>
-      <TextAreaField label="raw_input * (post text you want to reply to)" value={raw_input} onChange={setRaw} rows={5} />
-      <TextField label="source_url" value={source_url} onChange={setUrl} />
-      <TextField label="target_person" value={target_person} onChange={setPerson} />
-      <TextField label="target_company" value={target_company} onChange={setCompany} />
+    <FormShell
+      onClose={onClose}
+      onSave={save}
+      saving={saving}
+      saveLabel={initial ? "Save" : "Save reply"}
+      subtitle={initial ? undefined : "Paste a LinkedIn post you may want to answer. The app will give you a clean prompt to generate a sharp comment outside the app."}
+    >
+      <TextAreaField
+        label="LinkedIn post text *"
+        value={raw_input}
+        onChange={setRaw}
+        rows={5}
+        placeholder="Paste the post text here. It can be rough. You do not need to clean it."
+      />
+      <TextField
+        label="Post URL"
+        value={source_url}
+        onChange={setUrl}
+        placeholder="Optional. Paste the LinkedIn post URL."
+      />
+      <TextField
+        label="Person"
+        value={target_person}
+        onChange={setPerson}
+        placeholder="Optional. Who posted it?"
+      />
+      <TextField
+        label="Company"
+        value={target_company}
+        onChange={setCompany}
+        placeholder="Optional. Their company."
+      />
     </FormShell>
   );
 }
