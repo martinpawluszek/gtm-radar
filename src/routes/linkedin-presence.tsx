@@ -1058,6 +1058,8 @@ function ConfirmDialog({
           padding: 20,
           width: "100%",
           maxWidth: 380,
+          maxHeight: "85vh",
+          overflowY: "auto",
         }}
       >
         <div className="text-sm font-semibold mb-4" style={{ color: "#F0F0FF", fontFamily: MONO }}>{title}</div>
