@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { gtmSupabase } from "@/lib/gtmSupabase";
@@ -52,6 +52,16 @@ type DraftRule = {
   reason: string;
   notes: string;
   is_active: boolean;
+  // UI-only: true when user manually overrode an auto-derived value
+  _advancedDirty: {
+    rule_type?: boolean;
+    scope?: boolean;
+    remote_scope?: boolean;
+    region?: boolean;
+    match_mode?: boolean;
+    priority?: boolean;
+    reason?: boolean;
+  };
 };
 
 const EMPTY_DRAFT: DraftRule = {
@@ -63,20 +73,232 @@ const EMPTY_DRAFT: DraftRule = {
   city: "",
   region: "",
   remote_scope: null,
-  match_mode: "contains",
+  match_mode: "equals",
   priority: 100,
   reason: "",
   notes: "",
   is_active: true,
+  _advancedDirty: {},
 };
 
+// ---------- Country list ----------
+const COUNTRIES: string[] = [
+  "Australia",
+  "Belgium",
+  "Brazil",
+  "Canada",
+  "Colombia",
+  "Denmark",
+  "France",
+  "Germany",
+  "India",
+  "Ireland",
+  "Israel",
+  "Italy",
+  "Japan",
+  "Mexico",
+  "Morocco",
+  "Netherlands",
+  "New Zealand",
+  "Poland",
+  "Saudi Arabia",
+  "Serbia",
+  "Singapore",
+  "South Korea",
+  "Spain",
+  "Sweden",
+  "Switzerland",
+  "Turkey",
+  "United Arab Emirates",
+  "United Kingdom",
+  "United States",
+];
+
+// Aliases → canonical
+const COUNTRY_ALIASES: Record<string, string> = {
+  usa: "United States",
+  us: "United States",
+  "u.s.": "United States",
+  "u.s.a.": "United States",
+  america: "United States",
+  "united states of america": "United States",
+  uk: "United Kingdom",
+  "u.k.": "United Kingdom",
+  britain: "United Kingdom",
+  "great britain": "United Kingdom",
+  england: "United Kingdom",
+  uae: "United Arab Emirates",
+  "u.a.e.": "United Arab Emirates",
+  turkiye: "Turkey",
+  türkiye: "Turkey",
+  holland: "Netherlands",
+  "the netherlands": "Netherlands",
+  korea: "South Korea",
+  "republic of korea": "South Korea",
+  nz: "New Zealand",
+};
+
+function normalizeCountry(raw: string): string | null {
+  const t = raw.trim();
+  if (!t) return null;
+  const lower = t.toLowerCase();
+  if (COUNTRY_ALIASES[lower]) return COUNTRY_ALIASES[lower];
+  const found = COUNTRIES.find((c) => c.toLowerCase() === lower);
+  return found ?? null;
+}
+
+const COUNTRY_REGION: Record<string, string> = {
+  Germany: "Europe",
+  France: "Europe",
+  Spain: "Europe",
+  Netherlands: "Europe",
+  Poland: "Europe",
+  Ireland: "Europe",
+  Sweden: "Europe",
+  Switzerland: "Europe",
+  Denmark: "Europe",
+  Belgium: "Europe",
+  Italy: "Europe",
+  Serbia: "Europe",
+  "United Kingdom": "Europe",
+  "United States": "North America",
+  Canada: "North America",
+  Mexico: "North America",
+  Colombia: "LATAM",
+  Brazil: "LATAM",
+  India: "APAC",
+  Japan: "APAC",
+  "South Korea": "APAC",
+  Singapore: "APAC",
+  Australia: "Oceania",
+  "New Zealand": "Oceania",
+  "Saudi Arabia": "Middle East",
+  "United Arab Emirates": "Middle East",
+  Israel: "Middle East",
+  Morocco: "Africa",
+};
+
+// ---------- Derivation ----------
+function ruleTypeFromScore(score: number | null): RuleType {
+  if (score === 1) return "hard";
+  if (score === 2 || score === 3) return "maybe";
+  return "accept"; // 4, 5, or null default
+}
+
+function scoreMeaning(score: number | null): string {
+  switch (score) {
+    case 1: return "Reject";
+    case 2: return "Weak";
+    case 3: return "Possible";
+    case 4: return "Good";
+    case 5: return "Ideal";
+    default: return "—";
+  }
+}
+
+function scoreLabel(score: number): string {
+  switch (score) {
+    case 1: return "1 — Reject / hard no";
+    case 2: return "2 — Very low fit";
+    case 3: return "3 — Possible, but friction";
+    case 4: return "4 — Good fit";
+    case 5: return "5 — Ideal fit";
+    default: return String(score);
+  }
+}
+
+function suggestedReason(score: number | null): string {
+  switch (score) {
+    case 1: return "Hard-no location";
+    case 2: return "Low location fit";
+    case 3: return "Location friction";
+    case 4: return "Strong location fit";
+    case 5: return "Best location fit";
+    default: return "";
+  }
+}
+
+function deriveRemoteScope(pattern: string): RemoteScope | null {
+  const p = pattern.toLowerCase();
+  if (/\b(worldwide|anywhere)\b/.test(p)) return "anywhere";
+  if (/\bremote\s*(eu|europe)\b/.test(p) || /\b(eu|europe)\s*remote\b/.test(p)) return "europe";
+  if (/\bremote\s*us\b/.test(p) || /\bus\s*remote\b/.test(p) || /united states,\s*remote/.test(p))
+    return "us";
+  if (/\bremote\b/.test(p)) return "unknown";
+  return null;
+}
+
+function deriveRegionFromPattern(pattern: string): string | null {
+  const p = pattern.toLowerCase();
+  if (/\bemea\b/.test(p)) return "EMEA";
+  if (/\bapac\b/.test(p)) return "APAC";
+  if (/\blatam\b/.test(p)) return "LATAM";
+  if (/\beurope\b/.test(p)) return "Europe";
+  return null;
+}
+
+function deriveScope(d: DraftRule): Scope {
+  const p = d.pattern.toLowerCase();
+  if (/\b(remote|worldwide|anywhere)\b/.test(p)) {
+    if (/\b(emea|apac|latam|europe)\b/.test(p)) return "region";
+    return "remote";
+  }
+  if (/\b(emea|apac|latam)\b/.test(p)) return "region";
+  if (d.city.trim()) return "city";
+  if (d.country.trim()) return "country";
+  return "raw_pattern";
+}
+
+function derivePriorityFromScope(s: Scope): number {
+  switch (s) {
+    case "remote": return 5;
+    case "city": return 10;
+    case "region": return 20;
+    case "country": return 30;
+    case "raw_pattern":
+    default: return 100;
+  }
+}
+
+// Parse "Spain, Madrid" / "Madrid, Spain" / "Madrid" etc.
+function inferCountryCity(location: string): { country: string; city: string } {
+  const parts = location.split(/[,/|]/).map((s) => s.trim()).filter(Boolean);
+  let country = "";
+  let city = "";
+  if (parts.length === 0) return { country, city };
+  // Find any part that normalizes to a country
+  let countryIdx = -1;
+  for (let i = 0; i < parts.length; i++) {
+    const n = normalizeCountry(parts[i]);
+    if (n) {
+      country = n;
+      countryIdx = i;
+      break;
+    }
+  }
+  if (countryIdx >= 0) {
+    // city = first non-country, non-"remote" looking part
+    for (let i = 0; i < parts.length; i++) {
+      if (i === countryIdx) continue;
+      const v = parts[i];
+      if (/^(remote|hybrid|onsite|worldwide|anywhere)$/i.test(v)) continue;
+      if (normalizeCountry(v)) continue;
+      city = v;
+      break;
+    }
+  } else if (parts.length === 1) {
+    // single token: leave city/country empty; user can fill
+  }
+  return { country, city };
+}
+
+// ---------- Data ----------
 async function fetchLocationRules(): Promise<LocationRule[]> {
   const { data, error } = await gtmSupabase
     .from("location_filter_rules" as never)
     .select("*");
   if (error) throw error;
   const rows = (data ?? []) as unknown as LocationRule[];
-  // ordering: location_score desc (nulls last), rule_type, priority asc, country, city, pattern
   const ruleTypeOrder: Record<RuleType, number> = { hard: 0, maybe: 1, accept: 2 };
   return [...rows].sort((a, b) => {
     const sa = a.location_score ?? -Infinity;
@@ -95,18 +317,39 @@ async function fetchLocationRules(): Promise<LocationRule[]> {
 }
 
 function draftToRow(d: DraftRule) {
+  // Apply auto-derivation for any field the user did not explicitly override
+  const dirty = d._advancedDirty;
+  const rule_type = dirty.rule_type ? d.rule_type : ruleTypeFromScore(d.location_score);
+  const scope = dirty.scope ? d.scope : deriveScope(d);
+  const remote_scope = dirty.remote_scope ? d.remote_scope : deriveRemoteScope(d.pattern);
+  let region: string | null = null;
+  if (dirty.region) {
+    region = d.region.trim() || null;
+  } else {
+    region =
+      deriveRegionFromPattern(d.pattern) ??
+      (d.country.trim() ? COUNTRY_REGION[d.country.trim()] ?? null : null);
+  }
+  const match_mode = dirty.match_mode ? d.match_mode : d.match_mode; // default already set by caller
+  const priority = dirty.priority
+    ? d.priority
+    : derivePriorityFromScope(scope ?? "raw_pattern");
+  const reason = dirty.reason
+    ? (d.reason.trim() || null)
+    : (d.reason.trim() || suggestedReason(d.location_score) || null);
+
   return {
     pattern: d.pattern.trim(),
-    rule_type: d.rule_type,
+    rule_type,
     location_score: d.location_score,
-    scope: d.scope,
+    scope,
     country: d.country.trim() || null,
     city: d.city.trim() || null,
-    region: d.region.trim() || null,
-    remote_scope: d.remote_scope,
-    match_mode: d.match_mode,
-    priority: d.priority,
-    reason: d.reason.trim() || null,
+    region,
+    remote_scope,
+    match_mode,
+    priority,
+    reason,
     notes: d.notes.trim() || null,
     is_active: d.is_active,
   };
@@ -143,6 +386,7 @@ async function deleteRule(id: string) {
   if (error) throw error;
 }
 
+// ---------- Theme ----------
 const BG = "#111118";
 const BG_DEEP = "#0A0A0F";
 const BORDER = "#1E1E2E";
@@ -202,6 +446,7 @@ function fieldStyle(): React.CSSProperties {
   };
 }
 
+// ---------- Main ----------
 export function LocationTab() {
   const qc = useQueryClient();
   const { data: rules = [], isLoading, error } = useQuery({
@@ -212,7 +457,6 @@ export function LocationTab() {
   const [search, setSearch] = useState("");
   const [scoreFilter, setScoreFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [scopeFilter, setScopeFilter] = useState<string>("all");
   const [activeFilter, setActiveFilter] = useState<string>("all");
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -230,7 +474,6 @@ export function LocationTab() {
         } else if (String(r.location_score) !== scoreFilter) return false;
       }
       if (typeFilter !== "all" && r.rule_type !== typeFilter) return false;
-      if (scopeFilter !== "all" && r.scope !== scopeFilter) return false;
       if (activeFilter === "active" && !r.is_active) return false;
       if (activeFilter === "inactive" && r.is_active) return false;
       if (q) {
@@ -241,12 +484,13 @@ export function LocationTab() {
       }
       return true;
     });
-  }, [rules, search, scoreFilter, typeFilter, scopeFilter, activeFilter]);
+  }, [rules, search, scoreFilter, typeFilter, activeFilter]);
 
   const insertMut = useMutation({
     mutationFn: insertRule,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["location-filter-rules"] });
+      qc.invalidateQueries({ queryKey: ["job-postings-locations"] });
       toast.success("Saved");
       setModalOpen(false);
     },
@@ -259,6 +503,7 @@ export function LocationTab() {
     mutationFn: ({ id, draft }: { id: string; draft: DraftRule }) => updateRule(id, draft),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["location-filter-rules"] });
+      qc.invalidateQueries({ queryKey: ["job-postings-locations"] });
       toast.success("Saved");
       setModalOpen(false);
     },
@@ -272,6 +517,7 @@ export function LocationTab() {
       setActive(id, is_active),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["location-filter-rules"] });
+      qc.invalidateQueries({ queryKey: ["job-postings-locations"] });
       toast.success("Saved");
     },
     onError: () => toast.error("Save failed — try again"),
@@ -280,6 +526,7 @@ export function LocationTab() {
     mutationFn: deleteRule,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["location-filter-rules"] });
+      qc.invalidateQueries({ queryKey: ["job-postings-locations"] });
       toast.success("Saved");
       setConfirmDelete(null);
     },
@@ -287,12 +534,13 @@ export function LocationTab() {
   });
 
   function openAdd() {
-    setDraft(EMPTY_DRAFT);
+    setDraft({ ...EMPTY_DRAFT, _advancedDirty: {} });
     setEditId(null);
     setFormError("");
     setModalOpen(true);
   }
   function openEdit(r: LocationRule) {
+    // Treat existing values as user-set (dirty) so editing doesn't silently overwrite them
     setDraft({
       id: r.id,
       pattern: r.pattern ?? "",
@@ -308,6 +556,15 @@ export function LocationTab() {
       reason: r.reason ?? "",
       notes: r.notes ?? "",
       is_active: r.is_active,
+      _advancedDirty: {
+        rule_type: true,
+        scope: true,
+        remote_scope: true,
+        region: true,
+        match_mode: true,
+        priority: true,
+        reason: !!r.reason,
+      },
     });
     setEditId(r.id);
     setFormError("");
@@ -316,11 +573,11 @@ export function LocationTab() {
 
   function submit() {
     if (!draft.pattern.trim()) {
-      setFormError("Pattern is required");
+      setFormError("Match text is required");
       return;
     }
-    if (!Number.isFinite(draft.priority)) {
-      setFormError("Priority must be a number");
+    if (draft.location_score === null) {
+      setFormError("Location score is required");
       return;
     }
     setFormError("");
@@ -338,7 +595,7 @@ export function LocationTab() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search pattern, country, city, region, reason, notes..."
+          placeholder="Search match text, country, city, reason, notes..."
           style={{ ...fieldStyle(), flex: "1 1 260px", minWidth: 200 }}
         />
         <FilterSelect
@@ -347,11 +604,11 @@ export function LocationTab() {
           onChange={setScoreFilter}
           options={[
             { value: "all", label: "All" },
-            { value: "5", label: "5" },
-            { value: "4", label: "4" },
-            { value: "3", label: "3" },
-            { value: "2", label: "2" },
-            { value: "1", label: "1" },
+            { value: "5", label: "5 — Ideal" },
+            { value: "4", label: "4 — Good" },
+            { value: "3", label: "3 — Possible" },
+            { value: "2", label: "2 — Weak" },
+            { value: "1", label: "1 — Reject" },
             { value: "unscored", label: "Unscored" },
           ]}
         />
@@ -362,15 +619,6 @@ export function LocationTab() {
           options={[
             { value: "all", label: "All" },
             ...RULE_TYPES.map((t) => ({ value: t, label: t })),
-          ]}
-        />
-        <FilterSelect
-          label="Scope"
-          value={scopeFilter}
-          onChange={setScopeFilter}
-          options={[
-            { value: "all", label: "All" },
-            ...SCOPES.map((s) => ({ value: s, label: s })),
           ]}
         />
         <FilterSelect
@@ -416,17 +664,12 @@ export function LocationTab() {
               <tr style={{ background: BG_DEEP, color: MUTED, textAlign: "left" }}>
                 {[
                   "Score",
-                  "Type",
-                  "Scope",
+                  "Meaning",
+                  "Match text",
                   "Country",
                   "City",
-                  "Region",
-                  "Remote",
-                  "Pattern",
-                  "Match",
-                  "Pri",
-                  "Reason",
-                  "Notes",
+                  "Type",
+                  "Matching",
                   "Active",
                   "",
                 ].map((h) => (
@@ -444,7 +687,7 @@ export function LocationTab() {
               {isLoading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 14 }).map((__, j) => (
+                    {Array.from({ length: 9 }).map((__, j) => (
                       <td
                         key={j}
                         className="px-2 py-2"
@@ -457,21 +700,13 @@ export function LocationTab() {
                 ))
               ) : error ? (
                 <tr>
-                  <td
-                    colSpan={14}
-                    className="px-3 py-6 text-center"
-                    style={{ color: "#EF4444" }}
-                  >
+                  <td colSpan={9} className="px-3 py-6 text-center" style={{ color: "#EF4444" }}>
                     Failed to load: {(error as Error).message}
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={14}
-                    className="px-3 py-6 text-center"
-                    style={{ color: MUTED }}
-                  >
+                  <td colSpan={9} className="px-3 py-6 text-center" style={{ color: MUTED }}>
                     No rules match the current filters.
                   </td>
                 </tr>
@@ -485,58 +720,41 @@ export function LocationTab() {
                         opacity: r.is_active ? 1 : 0.55,
                         borderBottom: `1px solid ${BORDER}`,
                       }}
+                      title={
+                        [
+                          r.priority != null ? `priority ${r.priority}` : null,
+                          r.region ? `region ${r.region}` : null,
+                          r.remote_scope ? `remote ${r.remote_scope}` : null,
+                          r.scope ? `scope ${r.scope}` : null,
+                          r.notes ? `notes: ${r.notes}` : null,
+                          r.reason ? `reason: ${r.reason}` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")
+                      }
                     >
                       <td className="px-2 py-1.5">
                         {r.location_score ?? <span style={{ color: MUTED }}>—</span>}
                       </td>
+                      <td className="px-2 py-1.5" style={{ color: MUTED }}>
+                        {scoreMeaning(r.location_score)}
+                      </td>
+                      <td
+                        className="px-2 py-1.5"
+                        style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis" }}
+                        title={r.pattern}
+                      >
+                        {r.pattern}
+                      </td>
+                      <td className="px-2 py-1.5">{r.country ?? ""}</td>
+                      <td className="px-2 py-1.5">{r.city ?? ""}</td>
                       <td className="px-2 py-1.5">
                         <Badge color={rt.color} bg={rt.bg}>
                           {r.rule_type}
                         </Badge>
                       </td>
                       <td className="px-2 py-1.5" style={{ color: MUTED }}>
-                        {r.scope ?? "—"}
-                      </td>
-                      <td className="px-2 py-1.5">{r.country ?? ""}</td>
-                      <td className="px-2 py-1.5">{r.city ?? ""}</td>
-                      <td className="px-2 py-1.5">{r.region ?? ""}</td>
-                      <td className="px-2 py-1.5" style={{ color: MUTED }}>
-                        {r.remote_scope ?? ""}
-                      </td>
-                      <td
-                        className="px-2 py-1.5"
-                        style={{ maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis" }}
-                        title={r.pattern}
-                      >
-                        {r.pattern}
-                      </td>
-                      <td className="px-2 py-1.5" style={{ color: MUTED }}>
                         {r.match_mode}
-                      </td>
-                      <td className="px-2 py-1.5">{r.priority}</td>
-                      <td
-                        className="px-2 py-1.5"
-                        style={{
-                          maxWidth: 180,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          color: MUTED,
-                        }}
-                        title={r.reason ?? ""}
-                      >
-                        {r.reason ?? ""}
-                      </td>
-                      <td
-                        className="px-2 py-1.5"
-                        style={{
-                          maxWidth: 180,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          color: MUTED,
-                        }}
-                        title={r.notes ?? ""}
-                      >
-                        {r.notes ?? ""}
                       </td>
                       <td className="px-2 py-1.5">
                         {r.is_active ? (
@@ -558,10 +776,7 @@ export function LocationTab() {
                         >
                           {r.is_active ? "Deactivate" : "Reactivate"}
                         </RowAction>
-                        <RowAction
-                          onClick={() => setConfirmDelete(r)}
-                          color="#EF4444"
-                        >
+                        <RowAction onClick={() => setConfirmDelete(r)} color="#EF4444">
                           Delete
                         </RowAction>
                       </td>
@@ -576,7 +791,8 @@ export function LocationTab() {
           className="px-3 py-2 text-[11px]"
           style={{ borderTop: `1px solid ${BORDER}`, color: MUTED, fontFamily: MONO }}
         >
-          {filtered.length} of {rules.length} rules
+          {filtered.length} of {rules.length} rules · hover a row to see priority, region,
+          remote scope, and notes
         </div>
       </div>
 
@@ -584,12 +800,15 @@ export function LocationTab() {
       <UnratedLocations
         rules={rules}
         onRate={(location) => {
+          const { country, city } = inferCountryCity(location);
           setDraft({
             ...EMPTY_DRAFT,
             pattern: location,
+            country,
+            city,
             match_mode: "equals",
             is_active: true,
-            priority: 100,
+            _advancedDirty: {},
           });
           setEditId(null);
           setFormError("");
@@ -615,18 +834,13 @@ export function LocationTab() {
       {confirmDelete && (
         <Modal onClose={() => setConfirmDelete(null)}>
           <div className="flex flex-col gap-4" style={{ minWidth: 360 }}>
-            <h3
-              className="text-sm font-semibold"
-              style={{ color: TEXT, fontFamily: MONO }}
-            >
+            <h3 className="text-sm font-semibold" style={{ color: TEXT, fontFamily: MONO }}>
               Delete rule?
             </h3>
             <p className="text-[13px]" style={{ color: MUTED }}>
-              This will permanently delete the rule for pattern{" "}
-              <span style={{ color: TEXT, fontFamily: MONO }}>
-                "{confirmDelete.pattern}"
-              </span>
-              . This cannot be undone.
+              This will permanently delete the rule for match text{" "}
+              <span style={{ color: TEXT, fontFamily: MONO }}>"{confirmDelete.pattern}"</span>.
+              This cannot be undone.
             </p>
             <div className="flex justify-end gap-2">
               <button
@@ -712,12 +926,7 @@ function FilterSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        style={{
-          ...fieldStyle(),
-          padding: "4px 6px",
-          width: "auto",
-          fontSize: 12,
-        }}
+        style={{ ...fieldStyle(), padding: "4px 6px", width: "auto", fontSize: 12 }}
       >
         {options.map((o) => (
           <option key={o.value} value={o.value} style={{ background: BG_DEEP }}>
@@ -813,9 +1022,28 @@ function RuleForm({
   isPending: boolean;
   title: string;
 }) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
   function up<K extends keyof DraftRule>(k: K, v: DraftRule[K]) {
     setDraft({ ...draft, [k]: v });
   }
+  function markDirty(k: keyof DraftRule["_advancedDirty"]) {
+    setDraft({ ...draft, _advancedDirty: { ...draft._advancedDirty, [k]: true } });
+  }
+
+  // Live preview of auto-derived values (what will be saved)
+  const previewRow = useMemo(() => draftToRow(draft), [draft]);
+
+  // Keep reason auto-suggested when user hasn't edited it
+  useEffect(() => {
+    if (!draft._advancedDirty.reason) {
+      const suggested = suggestedReason(draft.location_score);
+      if (draft.reason !== suggested) {
+        setDraft({ ...draft, reason: suggested });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.location_score]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -832,148 +1060,89 @@ function RuleForm({
           borderRadius: 3,
         }}
       >
-        <span>Pattern is the actual text used to match job_postings.location.</span>
+        <span>Pick a location score from 1 to 5. The rule type is set automatically.</span>
         <span>
-          Country, city, region, and remote scope are metadata used to organize the rule.
-        </span>
-        <span>Use equals for short exact values like US, EMEA, or Remote.</span>
-        <span>
-          Use contains for longer location phrases like Remote - California or San
-          Francisco.
-        </span>
-        <span>
-          Hard rules can dismiss jobs. Maybe and accept rules should only affect scoring
-          or prioritization.
+          Match text is what we look for in job locations. Country and city help organize the
+          rule.
         </span>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Pattern *">
+        <Field label="Match text *" hint="What we look for inside the job location string.">
           <input
             value={draft.pattern}
             onChange={(e) => up("pattern", e.target.value)}
             style={fieldStyle()}
-            placeholder="e.g. Remote - United States"
+            placeholder="e.g. Spain, Madrid"
           />
         </Field>
-        <Field label="Rule type *">
-          <select
-            value={draft.rule_type}
-            onChange={(e) => up("rule_type", e.target.value as RuleType)}
-            style={fieldStyle()}
-          >
-            {RULE_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </Field>
 
-        <Field label="Location score (1-5)">
+        <Field label="Location score *">
           <select
             value={draft.location_score ?? ""}
-            onChange={(e) =>
-              up("location_score", e.target.value === "" ? null : Number(e.target.value))
-            }
+            onChange={(e) => {
+              const v = e.target.value === "" ? null : Number(e.target.value);
+              setDraft({ ...draft, location_score: v });
+            }}
             style={fieldStyle()}
           >
-            <option value="">—</option>
+            <option value="">— Select score —</option>
             {[1, 2, 3, 4, 5].map((n) => (
               <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Scope">
-          <select
-            value={draft.scope ?? ""}
-            onChange={(e) =>
-              up("scope", e.target.value === "" ? null : (e.target.value as Scope))
-            }
-            style={fieldStyle()}
-          >
-            <option value="">—</option>
-            {SCOPES.map((s) => (
-              <option key={s} value={s}>
-                {s}
+                {scoreLabel(n)}
               </option>
             ))}
           </select>
         </Field>
 
         <Field label="Country">
-          <input
+          <select
             value={draft.country}
             onChange={(e) => up("country", e.target.value)}
             style={fieldStyle()}
-          />
+          >
+            <option value="">—</option>
+            {COUNTRIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
         </Field>
+
         <Field label="City">
           <input
             value={draft.city}
             onChange={(e) => up("city", e.target.value)}
             style={fieldStyle()}
+            placeholder="optional"
           />
         </Field>
 
-        <Field label="Region">
-          <input
-            value={draft.region}
-            onChange={(e) => up("region", e.target.value)}
-            style={fieldStyle()}
-          />
-        </Field>
-        <Field label="Remote scope">
-          <select
-            value={draft.remote_scope ?? ""}
-            onChange={(e) =>
-              up(
-                "remote_scope",
-                e.target.value === "" ? null : (e.target.value as RemoteScope),
-              )
-            }
-            style={fieldStyle()}
-          >
-            <option value="">—</option>
-            {REMOTE_SCOPES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </Field>
+        <div className="col-span-2">
+          <Field label="Reason" hint="Auto-suggested from score. Edit to override.">
+            <input
+              value={draft.reason}
+              onChange={(e) => {
+                markDirty("reason");
+                setDraft({ ...draft, reason: e.target.value, _advancedDirty: { ...draft._advancedDirty, reason: true } });
+              }}
+              style={fieldStyle()}
+              placeholder={suggestedReason(draft.location_score) || "optional"}
+            />
+          </Field>
+        </div>
 
-        <Field label="Match mode *">
-          <select
-            value={draft.match_mode}
-            onChange={(e) => up("match_mode", e.target.value as MatchMode)}
-            style={fieldStyle()}
-          >
-            {MATCH_MODES.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Priority *">
-          <input
-            type="number"
-            value={draft.priority}
-            onChange={(e) => up("priority", Number(e.target.value))}
-            style={fieldStyle()}
-          />
-        </Field>
+        <div className="col-span-2">
+          <Field label="Notes">
+            <textarea
+              value={draft.notes}
+              onChange={(e) => up("notes", e.target.value)}
+              style={{ ...fieldStyle(), minHeight: 70, resize: "vertical" }}
+            />
+          </Field>
+        </div>
 
-        <Field label="Reason">
-          <input
-            value={draft.reason}
-            onChange={(e) => up("reason", e.target.value)}
-            style={fieldStyle()}
-          />
-        </Field>
         <Field label="Active">
           <label
             className="flex items-center gap-2 text-[13px]"
@@ -987,16 +1156,186 @@ function RuleForm({
             {draft.is_active ? "Active" : "Inactive"}
           </label>
         </Field>
+      </div>
 
-        <div className="col-span-2">
-          <Field label="Notes">
-            <textarea
-              value={draft.notes}
-              onChange={(e) => up("notes", e.target.value)}
-              style={{ ...fieldStyle(), minHeight: 70, resize: "vertical" }}
-            />
-          </Field>
-        </div>
+      {/* Auto-derived preview */}
+      <div
+        className="text-[11px] p-2.5"
+        style={{
+          background: BG_DEEP,
+          border: `1px solid ${BORDER}`,
+          borderRadius: 4,
+          color: MUTED,
+          fontFamily: MONO,
+        }}
+      >
+        Will save as:{" "}
+        <span style={{ color: TEXT }}>type {previewRow.rule_type}</span>
+        {" · "}
+        <span style={{ color: TEXT }}>scope {previewRow.scope ?? "—"}</span>
+        {" · "}
+        <span style={{ color: TEXT }}>matching {previewRow.match_mode}</span>
+        {" · "}
+        <span style={{ color: TEXT }}>priority {previewRow.priority}</span>
+        {previewRow.region ? (
+          <>
+            {" · "}
+            <span style={{ color: TEXT }}>region {previewRow.region}</span>
+          </>
+        ) : null}
+        {previewRow.remote_scope ? (
+          <>
+            {" · "}
+            <span style={{ color: TEXT }}>remote {previewRow.remote_scope}</span>
+          </>
+        ) : null}
+      </div>
+
+      {/* Advanced */}
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowAdvanced((v) => !v)}
+          className="text-[11px] px-2 py-1"
+          style={{
+            background: "transparent",
+            color: MUTED,
+            border: `1px solid ${BORDER}`,
+            borderRadius: 4,
+            fontFamily: MONO,
+            cursor: "pointer",
+          }}
+        >
+          {showAdvanced ? "▾ Hide advanced options" : "▸ Show advanced options"}
+        </button>
+        {showAdvanced && (
+          <div className="mt-3 flex flex-col gap-3">
+            <div
+              className="text-[11px] p-2.5"
+              style={{
+                borderLeft: `2px solid #F59E0B`,
+                background: "rgba(249,158,11,0.05)",
+                color: MUTED,
+                borderRadius: 3,
+              }}
+            >
+              Advanced fields control how rules match jobs. Most users should not need to edit
+              these.
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Rule type">
+                <select
+                  value={draft.rule_type}
+                  onChange={(e) => {
+                    markDirty("rule_type");
+                    setDraft({
+                      ...draft,
+                      rule_type: e.target.value as RuleType,
+                      _advancedDirty: { ...draft._advancedDirty, rule_type: true },
+                    });
+                  }}
+                  style={fieldStyle()}
+                >
+                  {RULE_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Location type (scope)">
+                <select
+                  value={draft.scope ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value === "" ? null : (e.target.value as Scope);
+                    setDraft({
+                      ...draft,
+                      scope: v,
+                      _advancedDirty: { ...draft._advancedDirty, scope: true },
+                    });
+                  }}
+                  style={fieldStyle()}
+                >
+                  <option value="">— auto —</option>
+                  {SCOPES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Remote scope">
+                <select
+                  value={draft.remote_scope ?? ""}
+                  onChange={(e) => {
+                    const v =
+                      e.target.value === "" ? null : (e.target.value as RemoteScope);
+                    setDraft({
+                      ...draft,
+                      remote_scope: v,
+                      _advancedDirty: { ...draft._advancedDirty, remote_scope: true },
+                    });
+                  }}
+                  style={fieldStyle()}
+                >
+                  <option value="">— auto —</option>
+                  {REMOTE_SCOPES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Region">
+                <input
+                  value={draft.region}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      region: e.target.value,
+                      _advancedDirty: { ...draft._advancedDirty, region: true },
+                    })
+                  }
+                  style={fieldStyle()}
+                  placeholder="auto"
+                />
+              </Field>
+              <Field label="Matching (match mode)">
+                <select
+                  value={draft.match_mode}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      match_mode: e.target.value as MatchMode,
+                      _advancedDirty: { ...draft._advancedDirty, match_mode: true },
+                    })
+                  }
+                  style={fieldStyle()}
+                >
+                  {MATCH_MODES.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Priority">
+                <input
+                  type="number"
+                  value={draft.priority}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      priority: Number(e.target.value),
+                      _advancedDirty: { ...draft._advancedDirty, priority: true },
+                    })
+                  }
+                  style={fieldStyle()}
+                />
+              </Field>
+            </div>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -1039,6 +1378,7 @@ function RuleForm({
   );
 }
 
+// ---------- Unrated ----------
 type JobPostingRow = {
   location: string | null;
   title: string | null;
@@ -1147,7 +1487,12 @@ function UnratedLocations({
 
   return (
     <div
-      style={{ background: BG, border: `1px solid ${BORDER}`, borderRadius: 6, overflow: "hidden" }}
+      style={{
+        background: BG,
+        border: `1px solid ${BORDER}`,
+        borderRadius: 6,
+        overflow: "hidden",
+      }}
     >
       <div
         className="flex flex-wrap items-center gap-2 p-3"
