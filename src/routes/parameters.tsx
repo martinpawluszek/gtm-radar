@@ -648,6 +648,17 @@ function CommercialOverridesTab() {
     },
   });
 
+  const reactivateMutation = useMutation({
+    mutationFn: reactivateOverride,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["commercial-overrides"] });
+      toast.success("Saved");
+    },
+    onError: () => {
+      toast.error("Save failed — try again");
+    },
+  });
+
   const deactivateMutation = useMutation({
     mutationFn: deactivateOverride,
     onSuccess: () => {
