@@ -455,7 +455,9 @@ function PostingsPage() {
           )}
         </div>
         <div className="ml-auto" style={{ color: "#8B8B9E", fontFamily: MONO, fontSize: 11 }}>
-          {filtered.length} of {postings.length}
+          {filtered.length === 0
+            ? `0 of ${postings.length.toLocaleString()}`
+            : `${(startIdx + 1).toLocaleString()}–${endIdx.toLocaleString()} of ${filtered.length.toLocaleString()}`}
         </div>
       </div>
 
@@ -477,12 +479,25 @@ function PostingsPage() {
           </p>
         </div>
       ) : (
-        <PostingsTable
-          rows={filtered}
-          companyMap={companyMap}
-          onRowClick={setSelectedId}
-          onChanged={() => qc.invalidateQueries({ queryKey: ["postings"] })}
-        />
+        <>
+          <PostingsTable
+            rows={paginated}
+            companyMap={companyMap}
+            onRowClick={setSelectedId}
+            onChanged={() => qc.invalidateQueries({ queryKey: ["postings"] })}
+          />
+          <PaginationBar
+            page={safePage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            totalItems={filtered.length}
+            startIdx={startIdx}
+            endIdx={endIdx}
+            onPageChange={setPage}
+            onPageSizeChange={handlePageSizeChange}
+          />
+        </>
       )}
 
       {/* Side panel */}
