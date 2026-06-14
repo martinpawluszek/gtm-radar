@@ -792,3 +792,273 @@ function CommercialOverridesTab() {
     </div>
   );
 }
+
+function ExcludedTitlesTab() {
+  const qc = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [inputValue, setInputValue] = useState("");
+  const [error, setError] = useState("");
+
+  const { data: excludedData, isLoading } = useQuery({
+    queryKey: ["excluded-titles"],
+    queryFn: fetchExcludedTitles,
+  });
+
+  const titles = useMemo(() => excludedData?.titles ?? [], [excludedData]);
+  const rowId = excludedData?.id ?? "";
+
+  const filteredTitles = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return titles;
+    return titles.filter((t) => t.toLowerCase().includes(q));
+  }, [titles, search]);
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, newTitles }: { id: string; newTitles: string[] }) =>
+      updateExcludedTitles(id, newTitles),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["excluded-titles"] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to update excluded titles");
+    },
+  });
+
+  function handleRemove(titleToRemove: string) {
+    if (!rowId) return;
+    const newTitles = titles.filter((t) => t !== titleToRemove);
+    updateMutation.mutate(
+      { id: rowId, newTitles },
+      { onSuccess: () => toast.success(`Removed "${titleToRemove}"`) },
+    );
+  }
+
+  function handleAdd() {
+    const trimmed = inputValue.trim();
+    if (!trimmed) {
+      setError("Title cannot be empty");
+      return;
+    }
+
+    const exists = titles.some(
+      (t) => t.toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (exists) {
+      setError("Title already exists");
+      return;
+    }
+
+    setError("");
+    if (!rowId) return;
+    const newTitles = [...titles, trimmed];
+    updateMutation.mutate(
+      { id: rowId, newTitles },
+      {
+        onSuccess: () => {
+          setInputValue("");
+          toast.success(`Added "${trimmed}"`);
+        },
+      },
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Info box */}
+      <div
+        className="px-4 py-3 text-sm"
+        style={{
+          background: "#111118",
+          border: "1px solid #1E1E2E",
+          borderLeft: "2px solid #00D4FF",
+          borderRadius: 6,
+          color: "#F0F0FF",
+        }}
+      >
+        Hard disqualifiers applied before keyword filters and before Claude. Any job title
+        matching one of these strings is rejected immediately.
+      </div>
+
+      {/* Card */}
+      <div
+        className="flex flex-col"
+        style={{
+          background: "#111118",
+          border: "1px solid #1E1E2E",
+          borderRadius: 6,
+          padding: 20,
+          gap: 16,
+        }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <h2
+            className="text-sm font-semibold tracking-tight"
+            style={{ color: "#F0F0FF", fontFamily: MONO }}
+          >
+            Excluded Titles
+          </h2>
+          <span
+            className="text-[11px] font-medium px-2 py-0.5"
+            style={{
+              color: "#00D4FF",
+              background: "rgba(0,212,255,0.1)",
+              borderRadius: 4,
+              fontFamily: MONO,
+            }}
+          >
+            {titles.length}
+          </span>
+        </div>
+        <p className="text-xs" style={{ color: "#8B8B9E" }}>
+          {titles.length === 1 ? "1 excluded title" : `${titles.length} excluded titles`}
+        </p>
+
+        {/* Search */}
+        <div
+          className="flex items-center gap-3 px-3"
+          style={{
+            background: "#0A0A0F",
+            border: "1px solid #1E1E2E",
+            borderRadius: 4,
+            height: 40,
+          }}
+        >
+          <span style={{ color: "#8B8B9E", fontFamily: MONO, fontSize: 12 }}>
+            Search
+          </span>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Filter excluded titles..."
+            className="flex-1 bg-transparent outline-none text-sm"
+            style={{ color: "#F0F0FF", fontFamily: MONO }}
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="flex items-center justify-center"
+              style={{ width: 20, height: 20, borderRadius: 4, color: "#8B8B9E" }}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* Pill list */}
+        <div
+          className="flex flex-wrap gap-2"
+          style={{ maxHeight: 320, overflowY: "auto", minHeight: 80 }}
+        >
+          {isLoading ? (
+            <>
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton
+                  key={i}
+                  className="rounded-md"
+                  style={{ width: 80 + Math.random() * 60, height: 28 }}
+                />
+              ))}
+            </>
+          ) : filteredTitles.length === 0 ? (
+            <div className="w-full flex items-center justify-center" style={{ minHeight: 80 }}>
+              <span className="text-xs" style={{ color: "#8B8B9E", fontFamily: MONO }}>
+                No excluded titles
+              </span>
+            </div>
+          ) : (
+            filteredTitles.map((title) => (
+              <div
+                key={title}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-[13px]"
+                style={{
+                  background: "#0A0A0F",
+                  border: "1px solid #1E1E2E",
+                  borderRadius: 4,
+                  color: "#F0F0FF",
+                  fontFamily: MONO,
+                }}
+              >
+                <span>{title}</span>
+                <button
+                  onClick={() => handleRemove(title)}
+                  disabled={updateMutation.isPending}
+                  className="flex items-center justify-center ml-0.5"
+                  style={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 3,
+                    color: "#8B8B9E",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = "#EF4444";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = "#8B8B9E";
+                  }}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Add row */}
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <input
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleAdd();
+              }}
+              placeholder="Add excluded title..."
+              disabled={updateMutation.isPending}
+              className="flex-1 px-2.5 py-1.5 text-[13px] outline-none"
+              style={{
+                background: "#0A0A0F",
+                border: "1px solid #1E1E2E",
+                borderRadius: 4,
+                color: "#F0F0FF",
+                fontFamily: MONO,
+              }}
+            />
+            <button
+              onClick={handleAdd}
+              disabled={updateMutation.isPending}
+              className="px-3 py-1.5 text-[13px] font-medium transition-colors"
+              style={{
+                background: updateMutation.isPending ? "#1E1E2E" : "rgba(0,212,255,0.1)",
+                border: updateMutation.isPending ? "1px solid #1E1E2E" : "1px solid rgba(0,212,255,0.25)",
+                borderRadius: 4,
+                color: updateMutation.isPending ? "#8B8B9E" : "#00D4FF",
+                fontFamily: MONO,
+                cursor: updateMutation.isPending ? "not-allowed" : "pointer",
+              }}
+            >
+              Add
+            </button>
+          </div>
+          {error && (
+            <span className="text-xs" style={{ color: "#EF4444", fontFamily: MONO }}>
+              {error}
+            </span>
+          )}
+        </div>
+
+        {/* Link to Role Criteria */}
+        <div className="pt-2">
+          <Link
+            to="/role-criteria"
+            className="text-[13px] transition-colors hover:underline"
+            style={{ color: "#00D4FF", fontFamily: MONO }}
+          >
+            Edit full Role Criteria →
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
