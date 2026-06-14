@@ -1210,10 +1210,15 @@ function ConfirmDialog({
 }
 
 function FormShell({
-  onClose, onSave, saving, saveLabel = "Save", children,
-}: { onClose: () => void; onSave: () => void; saving: boolean; saveLabel?: string; children: ReactNode }) {
+  onClose, onSave, saving, saveLabel = "Save", subtitle, children,
+}: { onClose: () => void; onSave: () => void; saving: boolean; saveLabel?: string; subtitle?: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-3">
+      {subtitle && (
+        <p className="text-[12px]" style={{ color: "#8B8B9E" }}>
+          {subtitle}
+        </p>
+      )}
       {children}
       <div className="flex gap-2 pt-1 justify-end">
         <button
