@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Building2,
   Sliders,
+  SlidersHorizontal,
   Inbox,
   Kanban,
   Users,
@@ -15,6 +16,7 @@ const NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/companies", label: "Companies", icon: Building2 },
   { to: "/role-criteria", label: "Role Criteria", icon: Sliders },
+  { to: "/parameters", label: "Parameters", icon: SlidersHorizontal },
   { to: "/postings", label: "Postings", icon: Inbox },
   { to: "/applications", label: "Applications", icon: Kanban },
   { to: "/outreach", label: "Outreach", icon: Users },
@@ -35,6 +37,7 @@ export function AppShell() {
     pathname === "/" ||
     pathname.startsWith("/companies") ||
     pathname.startsWith("/role-criteria") ||
+    pathname.startsWith("/parameters") ||
     pathname.startsWith("/applications") ||
     pathname.startsWith("/outreach");
   const pageTitle = hideHeaderTitle ? "" : current?.label ?? "GTM Intelligence";

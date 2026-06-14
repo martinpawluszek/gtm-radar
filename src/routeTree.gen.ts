@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RoleCriteriaRouteImport } from './routes/role-criteria'
 import { Route as PostingsRouteImport } from './routes/postings'
+import { Route as ParametersRouteImport } from './routes/parameters'
 import { Route as OutreachRouteImport } from './routes/outreach'
 import { Route as CompaniesRouteImport } from './routes/companies'
 import { Route as ApplicationsRouteImport } from './routes/applications'
@@ -24,6 +25,11 @@ const RoleCriteriaRoute = RoleCriteriaRouteImport.update({
 const PostingsRoute = PostingsRouteImport.update({
   id: '/postings',
   path: '/postings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ParametersRoute = ParametersRouteImport.update({
+  id: '/parameters',
+  path: '/parameters',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OutreachRoute = OutreachRouteImport.update({
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/applications': typeof ApplicationsRoute
   '/companies': typeof CompaniesRoute
   '/outreach': typeof OutreachRoute
+  '/parameters': typeof ParametersRoute
   '/postings': typeof PostingsRoute
   '/role-criteria': typeof RoleCriteriaRoute
 }
@@ -60,6 +67,7 @@ export interface FileRoutesByTo {
   '/applications': typeof ApplicationsRoute
   '/companies': typeof CompaniesRoute
   '/outreach': typeof OutreachRoute
+  '/parameters': typeof ParametersRoute
   '/postings': typeof PostingsRoute
   '/role-criteria': typeof RoleCriteriaRoute
 }
@@ -69,6 +77,7 @@ export interface FileRoutesById {
   '/applications': typeof ApplicationsRoute
   '/companies': typeof CompaniesRoute
   '/outreach': typeof OutreachRoute
+  '/parameters': typeof ParametersRoute
   '/postings': typeof PostingsRoute
   '/role-criteria': typeof RoleCriteriaRoute
 }
@@ -79,6 +88,7 @@ export interface FileRouteTypes {
     | '/applications'
     | '/companies'
     | '/outreach'
+    | '/parameters'
     | '/postings'
     | '/role-criteria'
   fileRoutesByTo: FileRoutesByTo
@@ -87,6 +97,7 @@ export interface FileRouteTypes {
     | '/applications'
     | '/companies'
     | '/outreach'
+    | '/parameters'
     | '/postings'
     | '/role-criteria'
   id:
@@ -95,6 +106,7 @@ export interface FileRouteTypes {
     | '/applications'
     | '/companies'
     | '/outreach'
+    | '/parameters'
     | '/postings'
     | '/role-criteria'
   fileRoutesById: FileRoutesById
@@ -104,6 +116,7 @@ export interface RootRouteChildren {
   ApplicationsRoute: typeof ApplicationsRoute
   CompaniesRoute: typeof CompaniesRoute
   OutreachRoute: typeof OutreachRoute
+  ParametersRoute: typeof ParametersRoute
   PostingsRoute: typeof PostingsRoute
   RoleCriteriaRoute: typeof RoleCriteriaRoute
 }
@@ -122,6 +135,13 @@ declare module '@tanstack/react-router' {
       path: '/postings'
       fullPath: '/postings'
       preLoaderRoute: typeof PostingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/parameters': {
+      id: '/parameters'
+      path: '/parameters'
+      fullPath: '/parameters'
+      preLoaderRoute: typeof ParametersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/outreach': {
@@ -160,9 +180,20 @@ const rootRouteChildren: RootRouteChildren = {
   ApplicationsRoute: ApplicationsRoute,
   CompaniesRoute: CompaniesRoute,
   OutreachRoute: OutreachRoute,
+  ParametersRoute: ParametersRoute,
   PostingsRoute: PostingsRoute,
   RoleCriteriaRoute: RoleCriteriaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
