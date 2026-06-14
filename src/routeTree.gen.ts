@@ -13,6 +13,7 @@ import { Route as RoleCriteriaRouteImport } from './routes/role-criteria'
 import { Route as PostingsRouteImport } from './routes/postings'
 import { Route as ParametersRouteImport } from './routes/parameters'
 import { Route as OutreachRouteImport } from './routes/outreach'
+import { Route as LinkedinPresenceRouteImport } from './routes/linkedin-presence'
 import { Route as CompaniesRouteImport } from './routes/companies'
 import { Route as ApplicationsRouteImport } from './routes/applications'
 import { Route as IndexRouteImport } from './routes/index'
@@ -37,6 +38,11 @@ const OutreachRoute = OutreachRouteImport.update({
   path: '/outreach',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LinkedinPresenceRoute = LinkedinPresenceRouteImport.update({
+  id: '/linkedin-presence',
+  path: '/linkedin-presence',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CompaniesRoute = CompaniesRouteImport.update({
   id: '/companies',
   path: '/companies',
@@ -57,6 +63,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/applications': typeof ApplicationsRoute
   '/companies': typeof CompaniesRoute
+  '/linkedin-presence': typeof LinkedinPresenceRoute
   '/outreach': typeof OutreachRoute
   '/parameters': typeof ParametersRoute
   '/postings': typeof PostingsRoute
@@ -66,6 +73,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/applications': typeof ApplicationsRoute
   '/companies': typeof CompaniesRoute
+  '/linkedin-presence': typeof LinkedinPresenceRoute
   '/outreach': typeof OutreachRoute
   '/parameters': typeof ParametersRoute
   '/postings': typeof PostingsRoute
@@ -76,6 +84,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/applications': typeof ApplicationsRoute
   '/companies': typeof CompaniesRoute
+  '/linkedin-presence': typeof LinkedinPresenceRoute
   '/outreach': typeof OutreachRoute
   '/parameters': typeof ParametersRoute
   '/postings': typeof PostingsRoute
@@ -87,6 +96,7 @@ export interface FileRouteTypes {
     | '/'
     | '/applications'
     | '/companies'
+    | '/linkedin-presence'
     | '/outreach'
     | '/parameters'
     | '/postings'
@@ -96,6 +106,7 @@ export interface FileRouteTypes {
     | '/'
     | '/applications'
     | '/companies'
+    | '/linkedin-presence'
     | '/outreach'
     | '/parameters'
     | '/postings'
@@ -105,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/applications'
     | '/companies'
+    | '/linkedin-presence'
     | '/outreach'
     | '/parameters'
     | '/postings'
@@ -115,6 +127,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApplicationsRoute: typeof ApplicationsRoute
   CompaniesRoute: typeof CompaniesRoute
+  LinkedinPresenceRoute: typeof LinkedinPresenceRoute
   OutreachRoute: typeof OutreachRoute
   ParametersRoute: typeof ParametersRoute
   PostingsRoute: typeof PostingsRoute
@@ -151,6 +164,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OutreachRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/linkedin-presence': {
+      id: '/linkedin-presence'
+      path: '/linkedin-presence'
+      fullPath: '/linkedin-presence'
+      preLoaderRoute: typeof LinkedinPresenceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/companies': {
       id: '/companies'
       path: '/companies'
@@ -179,6 +199,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApplicationsRoute: ApplicationsRoute,
   CompaniesRoute: CompaniesRoute,
+  LinkedinPresenceRoute: LinkedinPresenceRoute,
   OutreachRoute: OutreachRoute,
   ParametersRoute: ParametersRoute,
   PostingsRoute: PostingsRoute,
@@ -187,13 +208,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
