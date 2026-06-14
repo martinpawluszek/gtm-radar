@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { toast } from "sonner";
@@ -109,6 +109,34 @@ async function updateExcludedTitles(id: string, titles: string[]): Promise<void>
 function ParametersPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("keyword-filters");
 
+  const { data: allRules = [] } = useQuery({
+    queryKey: ["pre-filter-rules"],
+    queryFn: fetchRules,
+  });
+  const { data: allOverrides = [] } = useQuery({
+    queryKey: ["commercial-overrides"],
+    queryFn: fetchOverrides,
+  });
+  const { data: excludedData } = useQuery({
+    queryKey: ["excluded-titles"],
+    queryFn: fetchExcludedTitles,
+  });
+
+  const keywordCount = allRules.filter((r) => r.is_active).length;
+  const overrideCount = allOverrides.filter((o) => o.is_active).length;
+  const excludedCount = excludedData?.titles.length ?? 0;
+
+  function tabLabel(key: TabKey): string {
+    const base = TABS.find((t) => t.key === key)?.label ?? key;
+    const count =
+      key === "keyword-filters"
+        ? keywordCount
+        : key === "commercial-overrides"
+          ? overrideCount
+          : excludedCount;
+    return `${base} (${count})`;
+  }
+
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
@@ -159,7 +187,7 @@ function ParametersPage() {
               }
             }}
           >
-            {t.label}
+            {tabLabel(t.key)}
           </button>
         ))}
       </div>
@@ -198,6 +226,14 @@ function KeywordFiltersTab() {
   const [hardError, setHardError] = useState("");
   const [softError, setSoftError] = useState("");
 
+  useEffect(() => {
+    setSearch("");
+    setHardInput("");
+    setSoftInput("");
+    setHardError("");
+    setSoftError("");
+  }, []);
+
   const { data: allRules = [], isLoading } = useQuery({
     queryKey: ["pre-filter-rules"],
     queryFn: fetchRules,
@@ -228,9 +264,10 @@ function KeywordFiltersTab() {
       addRule(keyword, tier),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pre-filter-rules"] });
+      toast.success("Saved");
     },
-    onError: (err: Error) => {
-      toast.error(err.message || "Failed to add keyword");
+    onError: () => {
+      toast.error("Save failed — try again");
     },
   });
 
@@ -238,9 +275,10 @@ function KeywordFiltersTab() {
     mutationFn: deactivateRule,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pre-filter-rules"] });
+      toast.success("Saved");
     },
-    onError: (err: Error) => {
-      toast.error(err.message || "Failed to remove keyword");
+    onError: () => {
+      toast.error("Save failed — try again");
     },
   });
 
@@ -269,7 +307,6 @@ function KeywordFiltersTab() {
       {
         onSuccess: () => {
           setInput("");
-          toast.success(`Added "${trimmed}" to ${tier} tier`);
         },
         onError: (err: Error) => {
           if (err.message?.includes("duplicate") || err.message?.includes("unique")) {
@@ -534,6 +571,12 @@ function CommercialOverridesTab() {
   const [inputValue, setInputValue] = useState("");
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    setSearch("");
+    setInputValue("");
+    setError("");
+  }, []);
+
   const { data: allOverrides = [], isLoading } = useQuery({
     queryKey: ["commercial-overrides"],
     queryFn: fetchOverrides,
@@ -554,9 +597,10 @@ function CommercialOverridesTab() {
     mutationFn: addOverride,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["commercial-overrides"] });
+      toast.success("Saved");
     },
-    onError: (err: Error) => {
-      toast.error(err.message || "Failed to add override word");
+    onError: () => {
+      toast.error("Save failed — try again");
     },
   });
 
@@ -564,9 +608,10 @@ function CommercialOverridesTab() {
     mutationFn: deactivateOverride,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["commercial-overrides"] });
+      toast.success("Saved");
     },
-    onError: (err: Error) => {
-      toast.error(err.message || "Failed to remove override word");
+    onError: () => {
+      toast.error("Save failed — try again");
     },
   });
 
@@ -589,7 +634,6 @@ function CommercialOverridesTab() {
     addMutation.mutate(trimmed, {
       onSuccess: () => {
         setInputValue("");
-        toast.success(`Added "${trimmed}"`);
       },
       onError: (err: Error) => {
         if (err.message?.includes("duplicate") || err.message?.includes("unique")) {
@@ -799,6 +843,12 @@ function ExcludedTitlesTab() {
   const [inputValue, setInputValue] = useState("");
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    setSearch("");
+    setInputValue("");
+    setError("");
+  }, []);
+
   const { data: excludedData, isLoading } = useQuery({
     queryKey: ["excluded-titles"],
     queryFn: fetchExcludedTitles,
@@ -818,19 +868,17 @@ function ExcludedTitlesTab() {
       updateExcludedTitles(id, newTitles),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["excluded-titles"] });
+      toast.success("Saved");
     },
-    onError: (err: Error) => {
-      toast.error(err.message || "Failed to update excluded titles");
+    onError: () => {
+      toast.error("Save failed — try again");
     },
   });
 
   function handleRemove(titleToRemove: string) {
     if (!rowId) return;
     const newTitles = titles.filter((t) => t !== titleToRemove);
-    updateMutation.mutate(
-      { id: rowId, newTitles },
-      { onSuccess: () => toast.success(`Removed "${titleToRemove}"`) },
-    );
+    updateMutation.mutate({ id: rowId, newTitles });
   }
 
   function handleAdd() {
@@ -856,7 +904,6 @@ function ExcludedTitlesTab() {
       {
         onSuccess: () => {
           setInputValue("");
-          toast.success(`Added "${trimmed}"`);
         },
       },
     );
