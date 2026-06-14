@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { toast } from "sonner";
 import { gtmSupabase } from "@/lib/gtmSupabase";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LocationTab } from "@/components/parameters/LocationTab";
 
 const MONO = "var(--font-mono)";
 
@@ -13,13 +14,15 @@ export const Route = createFileRoute("/parameters")({
   component: ParametersPage,
 });
 
-type TabKey = "keyword-filters" | "commercial-overrides" | "excluded-titles";
+type TabKey = "keyword-filters" | "commercial-overrides" | "excluded-titles" | "location";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "keyword-filters", label: "Keyword Filters" },
   { key: "commercial-overrides", label: "Commercial Overrides" },
   { key: "excluded-titles", label: "Excluded Titles" },
+  { key: "location", label: "Location" },
 ];
+
 
 // ---------- Types ----------
 type PreFilterRule = {
