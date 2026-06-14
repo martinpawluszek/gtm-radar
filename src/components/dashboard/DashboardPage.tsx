@@ -1,11 +1,18 @@
 import { useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Minus, ExternalLink } from "lucide-react";
+import { useQueries, useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { ArrowDown, ArrowUp, Minus, ExternalLink, Linkedin } from "lucide-react";
 import { toast } from "sonner";
 import { gtmSupabase } from "@/lib/gtmSupabase";
 import { TIER_META, type Tier } from "@/lib/companies";
 import { Button } from "@/components/ui/button";
+import {
+  computeWeeks,
+  currentWeekOf,
+  useProjectStartDate,
+  type LpGoal,
+  type LpItem,
+} from "@/lib/linkedinProgress";
 
 type AbStats = {
   invitesSent: number;
