@@ -43,7 +43,7 @@ async function fetchRules(): Promise<PreFilterRule[]> {
 async function addRule(keyword: string, filter_tier: "hard" | "soft"): Promise<void> {
   const { error } = await gtmSupabase
     .from("pre_filter_rules" as never)
-    .insert({ keyword: keyword.trim(), filter_tier, is_active: true });
+    .insert({ keyword: keyword.trim(), filter_tier, is_active: true } as never);
   if (error) throw error;
 }
 
