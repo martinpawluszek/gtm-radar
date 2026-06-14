@@ -149,12 +149,48 @@ function rubricToDb(r: RoleCriteria["rubric"]) {
   };
 }
 
+function normalizeTargetTitles(raw: unknown): TargetTitle[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      if (typeof item === "string") return { title: item };
+      if (item && typeof item === "object") {
+        const o = item as Record<string, unknown>;
+        const title = typeof o.title === "string" ? o.title : typeof o.name === "string" ? (o.name as string) : "";
+        if (!title) return null;
+        return {
+          title,
+          weight: typeof o.weight === "number" ? o.weight : undefined,
+          applied_count: typeof o.applied_count === "number" ? o.applied_count : undefined,
+          dismissed_count: typeof o.dismissed_count === "number" ? o.dismissed_count : undefined,
+        };
+      }
+      return null;
+    })
+    .filter((x): x is TargetTitle => !!x);
+}
+
+function normalizeExcludedTitles(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object") {
+        const o = item as Record<string, unknown>;
+        if (typeof o.title === "string") return o.title;
+        if (typeof o.name === "string") return o.name;
+      }
+      return "";
+    })
+    .filter(Boolean);
+}
+
 function makeDraftFrom(row: RoleCriteria | null): RoleCriteria {
   if (row) {
     const normalized = {
       ...row,
-      target_titles: Array.isArray(row.target_titles) ? row.target_titles : [],
-      excluded_titles: Array.isArray(row.excluded_titles) ? row.excluded_titles : [],
+      target_titles: normalizeTargetTitles(row.target_titles),
+      excluded_titles: normalizeExcludedTitles(row.excluded_titles),
       weights: { ...DEFAULT_CRITERIA.weights, ...(row.weights ?? {}) },
       rubric: rubricFromDb(row.rubric),
       disqualifiers: normalizeDisqualifiers(row.disqualifiers),
@@ -169,6 +205,7 @@ function makeDraftFrom(row: RoleCriteria | null): RoleCriteria {
     ...DEFAULT_CRITERIA,
   };
 }
+
 
 function RoleCriteriaPage() {
   const { data, isLoading, error, refetch } = useQuery({
