@@ -1022,6 +1022,7 @@ function PostIdeaForm({
   const [improved_title, setTitle] = useState(initial?.improved_title ?? "");
   const [angle, setAngle] = useState(initial?.angle ?? "");
   const [category, setCategory] = useState<Category | "">((initial?.category as Category) ?? "");
+  const [final_text, setFinalText] = useState(initial?.final_text ?? "");
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -1033,6 +1034,7 @@ function PostIdeaForm({
       improved_title: improved_title.trim() || null,
       angle: angle.trim() || null,
       category: category || null,
+      final_text: final_text.trim() || null,
       status: initial?.status ?? "idea",
       updated_at: new Date().toISOString(),
     };
@@ -1056,6 +1058,7 @@ function PostIdeaForm({
         options={[{ value: "", label: "—" }, ...POST_CATEGORIES.map(c => ({ value: c.value, label: c.label }))]}
         onChange={(v) => setCategory(v as Category | "")}
       />
+      <TextAreaField label="final_text" value={final_text} onChange={setFinalText} rows={6} />
     </FormShell>
   );
 }
