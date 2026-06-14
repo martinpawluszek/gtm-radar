@@ -581,6 +581,10 @@ function RemovableTag({ label, secondary, onRemove }: { label: string; secondary
       style={{ background: "#1E1E2E", color: "#F0F0FF", borderRadius: 3, fontFamily: MONO, height: 24 }}
     >
       {label}
+      {secondary && (
+        <span style={{ color: "#8B8B9E", marginLeft: 2 }}>{secondary}</span>
+      )}
+
       <button
         onClick={onRemove}
         onMouseEnter={() => setHover(true)}
