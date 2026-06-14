@@ -50,7 +50,7 @@ async function addRule(keyword: string, filter_tier: "hard" | "soft"): Promise<v
 async function deactivateRule(id: string): Promise<void> {
   const { error } = await gtmSupabase
     .from("pre_filter_rules" as never)
-    .update({ is_active: false })
+    .update({ is_active: false } as never)
     .eq("id", id);
   if (error) throw error;
 }
