@@ -667,6 +667,9 @@ export function DashboardPage() {
         )}
       </Card>
 
+      {/* SECTION 1.5 — LinkedIn Presence */}
+      <LinkedInPresenceCard />
+
       {/* SECTION 2 */}
       <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <Card>
