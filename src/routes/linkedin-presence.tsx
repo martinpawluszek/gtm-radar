@@ -68,12 +68,33 @@ type WeeklyStatus = {
 };
 
 const POST_CATEGORIES: { value: Category; label: string }[] = [
-  { value: "build_log", label: "build_log" },
-  { value: "gtm_opinion", label: "gtm_opinion" },
-  { value: "ai_workflow", label: "ai_workflow" },
-  { value: "founder_operator", label: "founder_operator" },
-  { value: "tool_stack", label: "tool_stack" },
+  { value: "build_log", label: "Build log" },
+  { value: "gtm_opinion", label: "GTM opinion" },
+  { value: "ai_workflow", label: "AI workflow" },
+  { value: "founder_operator", label: "Founder operator" },
+  { value: "tool_stack", label: "Tool stack" },
 ];
+
+const CATEGORY_LABEL: Record<Category, string> = {
+  build_log: "Build log",
+  gtm_opinion: "GTM opinion",
+  ai_workflow: "AI workflow",
+  founder_operator: "Founder operator",
+  tool_stack: "Tool stack",
+  reply: "Reply",
+};
+
+const STATUS_LABEL: Record<ItemStatus, string> = {
+  idea: "Idea",
+  drafted: "Drafted",
+  posted: "Posted",
+  archived: "Archived",
+};
+
+const TYPE_LABEL: Record<ItemType, string> = {
+  post_idea: "Post idea",
+  reply_opportunity: "Reply opportunity",
+};
 
 const DAYS = [
   { v: 1, l: "Monday" },
@@ -87,13 +108,13 @@ const DAYS = [
 
 type TabKey = "ideas" | "replies" | "posted" | "archived" | "settings" | "style";
 
-const TABS: { key: TabKey; label: string }[] = [
-  { key: "ideas", label: "Ideas" },
-  { key: "replies", label: "Replies" },
-  { key: "posted", label: "Posted" },
-  { key: "archived", label: "Archived" },
-  { key: "settings", label: "Settings" },
-  { key: "style", label: "Style Guide" },
+const TABS: { key: TabKey; label: string; showCount: boolean }[] = [
+  { key: "ideas", label: "Ideas", showCount: true },
+  { key: "replies", label: "Replies", showCount: true },
+  { key: "posted", label: "Posted", showCount: true },
+  { key: "archived", label: "Archived", showCount: true },
+  { key: "settings", label: "Settings", showCount: false },
+  { key: "style", label: "Style Guide", showCount: false },
 ];
 
 // ---------- Data ----------
