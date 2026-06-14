@@ -460,7 +460,7 @@ function IdeasTab() {
               item={it}
               onEdit={() => setEditing(it)}
               onChanged={refresh}
-              copyAction={{ label: "Copy prompt", prompt: () => buildPostPrompt(it) }}
+              copyAction={{ successMessage: "Prompt copied.", prompt: () => buildPostPrompt(it) }}
             />
           ))}
         </div>
