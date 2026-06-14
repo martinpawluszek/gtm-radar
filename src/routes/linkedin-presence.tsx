@@ -861,17 +861,30 @@ function ItemCard({
   item: Item;
   onEdit: () => void;
   onChanged: () => void;
-  copyAction: { label: string; prompt: () => string };
+  copyAction: { successMessage: string; prompt: () => string };
   variant?: "reply";
 }) {
-  async function updateStatus(patch: Partial<Item>) {
-    const { error } = await gtmSupabase
-      .from("linkedin_presence_items" as never)
-      .update({ ...patch, updated_at: new Date().toISOString() } as never)
-      .eq("id", item.id);
-    if (error) { toast.error("Update failed"); return; }
-    toast.success("Updated");
-    onChanged();
+  const [busy, setBusy] = useState(false);
+
+  async function updateStatus(patch: Partial<Item>, successMessage: string) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const { error } = await gtmSupabase
+        .from("linkedin_presence_items" as never)
+        .update({ ...patch, updated_at: new Date().toISOString() } as never)
+        .eq("id", item.id);
+      if (error) {
+        toast.error(error.message || "Update failed");
+        return;
+      }
+      toast.success(successMessage);
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
   const title = item.improved_title || item.raw_input.slice(0, 120);
@@ -913,15 +926,36 @@ function ItemCard({
       )}
 
       <div className="flex flex-wrap gap-1.5 mt-3">
-        <Action onClick={onEdit}>Edit</Action>
-        <Action onClick={() => updateStatus({ status: "drafted" })}>Mark as drafted</Action>
-        <Action onClick={() => updateStatus({ status: "posted", posted_at: new Date().toISOString() })} color="#10B981">
+        <Action onClick={onEdit} disabled={busy}>Edit</Action>
+        <Action
+          onClick={() => updateStatus({ status: "drafted" }, "Marked as drafted")}
+          disabled={busy}
+        >
+          Mark as drafted
+        </Action>
+        <Action
+          onClick={() =>
+            updateStatus(
+              { status: "posted", posted_at: new Date().toISOString() },
+              "Marked as posted",
+            )
+          }
+          color="#10B981"
+          disabled={busy}
+        >
           Mark as posted
         </Action>
-        <Action onClick={() => copyText(copyAction.prompt(), copyAction.label)} color="#00D4FF">
-          {copyAction.label}
+        <Action
+          onClick={() => copyText(copyAction.prompt(), copyAction.successMessage)}
+          color="#00D4FF"
+        >
+          Copy prompt
         </Action>
-        <Action onClick={() => updateStatus({ status: "archived" })} color="#8B8B9E">
+        <Action
+          onClick={() => updateStatus({ status: "archived" }, "Archived")}
+          color="#8B8B9E"
+          disabled={busy}
+        >
           Archive
         </Action>
       </div>
