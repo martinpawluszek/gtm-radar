@@ -68,12 +68,33 @@ type WeeklyStatus = {
 };
 
 const POST_CATEGORIES: { value: Category; label: string }[] = [
-  { value: "build_log", label: "build_log" },
-  { value: "gtm_opinion", label: "gtm_opinion" },
-  { value: "ai_workflow", label: "ai_workflow" },
-  { value: "founder_operator", label: "founder_operator" },
-  { value: "tool_stack", label: "tool_stack" },
+  { value: "build_log", label: "Build log" },
+  { value: "gtm_opinion", label: "GTM opinion" },
+  { value: "ai_workflow", label: "AI workflow" },
+  { value: "founder_operator", label: "Founder operator" },
+  { value: "tool_stack", label: "Tool stack" },
 ];
+
+const CATEGORY_LABEL: Record<Category, string> = {
+  build_log: "Build log",
+  gtm_opinion: "GTM opinion",
+  ai_workflow: "AI workflow",
+  founder_operator: "Founder operator",
+  tool_stack: "Tool stack",
+  reply: "Reply",
+};
+
+const STATUS_LABEL: Record<ItemStatus, string> = {
+  idea: "Idea",
+  drafted: "Drafted",
+  posted: "Posted",
+  archived: "Archived",
+};
+
+const TYPE_LABEL: Record<ItemType, string> = {
+  post_idea: "Post idea",
+  reply_opportunity: "Reply opportunity",
+};
 
 const DAYS = [
   { v: 1, l: "Monday" },
@@ -87,13 +108,13 @@ const DAYS = [
 
 type TabKey = "ideas" | "replies" | "posted" | "archived" | "settings" | "style";
 
-const TABS: { key: TabKey; label: string }[] = [
-  { key: "ideas", label: "Ideas" },
-  { key: "replies", label: "Replies" },
-  { key: "posted", label: "Posted" },
-  { key: "archived", label: "Archived" },
-  { key: "settings", label: "Settings" },
-  { key: "style", label: "Style Guide" },
+const TABS: { key: TabKey; label: string; showCount: boolean }[] = [
+  { key: "ideas", label: "Ideas", showCount: true },
+  { key: "replies", label: "Replies", showCount: true },
+  { key: "posted", label: "Posted", showCount: true },
+  { key: "archived", label: "Archived", showCount: true },
+  { key: "settings", label: "Settings", showCount: false },
+  { key: "style", label: "Style Guide", showCount: false },
 ];
 
 // ---------- Data ----------
@@ -210,6 +231,24 @@ function LinkedInPresencePage() {
     queryFn: fetchWeeklyStatus,
   });
 
+  const { data: allItems = [] } = useQuery({
+    queryKey: ["lp-items"],
+    queryFn: fetchItems,
+  });
+
+  const counts = useMemo(() => {
+    const active = (t: ItemType) =>
+      allItems.filter(
+        (i) => i.item_type === t && i.status !== "posted" && i.status !== "archived",
+      ).length;
+    return {
+      ideas: active("post_idea"),
+      replies: active("reply_opportunity"),
+      posted: allItems.filter((i) => i.status === "posted").length,
+      archived: allItems.filter((i) => i.status === "archived").length,
+    };
+  }, [allItems]);
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -237,23 +276,29 @@ function LinkedInPresencePage() {
           paddingBottom: 6,
         }}
       >
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className="px-3 py-1 text-[13px] font-medium transition-colors"
-            style={{
-              color: tab === t.key ? "#00D4FF" : "#8B8B9E",
-              background: tab === t.key ? "rgba(0,212,255,0.1)" : "transparent",
-              borderRadius: 4,
-              border:
-                tab === t.key ? "1px solid rgba(0,212,255,0.25)" : "1px solid transparent",
-              fontFamily: MONO,
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
+        {TABS.map((t) => {
+          const countLabel = t.showCount
+            ? ` (${counts[t.key as "ideas" | "replies" | "posted" | "archived"]})`
+            : "";
+          return (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className="px-3 py-1 text-[13px] font-medium transition-colors"
+              style={{
+                color: tab === t.key ? "#00D4FF" : "#8B8B9E",
+                background: tab === t.key ? "rgba(0,212,255,0.1)" : "transparent",
+                borderRadius: 4,
+                border:
+                  tab === t.key ? "1px solid rgba(0,212,255,0.25)" : "1px solid transparent",
+                fontFamily: MONO,
+              }}
+            >
+              {t.label}
+              {countLabel}
+            </button>
+          );
+        })}
       </div>
 
       {tab === "ideas" && <ItemsTab kind="post_idea" />}
@@ -668,8 +713,8 @@ function ItemCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
       }}
     >
       <div className="flex items-center gap-2 mb-2 text-[11px]" style={{ fontFamily: MONO }}>
-        {item.category && <Tag color="#00D4FF">{item.category}</Tag>}
-        <Tag color={statusColor(item.status)}>{item.status}</Tag>
+        {item.category && <Tag color="#00D4FF">{CATEGORY_LABEL[item.category]}</Tag>}
+        <Tag color={statusColor(item.status)}>{STATUS_LABEL[item.status]}</Tag>
         <span style={{ color: "#8B8B9E", marginLeft: "auto" }}>
           {item.status === "posted" && item.posted_at
             ? new Date(item.posted_at).toLocaleDateString()
@@ -776,33 +821,49 @@ function DetailModal({
     <Modal title={title} onClose={onClose}>
       <div className="flex flex-col gap-3 text-sm" style={{ color: "#F0F0FF" }}>
         <div className="flex items-center gap-2 text-[11px]" style={{ fontFamily: MONO }}>
-          <Tag color="#00D4FF">{item.item_type}</Tag>
-          {item.category && <Tag color="#8B8B9E">{item.category}</Tag>}
-          <Tag color={statusColor(item.status)}>{item.status}</Tag>
+          <Tag color="#00D4FF">{TYPE_LABEL[item.item_type]}</Tag>
+          {item.category && <Tag color="#8B8B9E">{CATEGORY_LABEL[item.category]}</Tag>}
+          <Tag color={statusColor(item.status)}>{STATUS_LABEL[item.status]}</Tag>
         </div>
 
-        <Field label="raw_input">
-          <pre className="whitespace-pre-wrap font-sans text-sm" style={{ color: "#F0F0FF" }}>{item.raw_input}</pre>
-        </Field>
-        {item.improved_title && <Field label="improved_title"><div>{item.improved_title}</div></Field>}
-        {item.angle && <Field label="angle"><div>{item.angle}</div></Field>}
-        {item.final_text && (
-          <Field label="final_text">
-            <pre className="whitespace-pre-wrap font-sans text-sm" style={{ color: "#F0F0FF" }}>{item.final_text}</pre>
-          </Field>
+        {item.item_type === "reply_opportunity" ? (
+          <>
+            <Field label="LinkedIn post text">
+              <pre className="whitespace-pre-wrap font-sans text-sm" style={{ color: "#F0F0FF" }}>{item.raw_input}</pre>
+            </Field>
+            {item.source_url && (
+              <Field label="Post URL">
+                <a href={item.source_url} target="_blank" rel="noreferrer" style={{ color: "#00D4FF" }}>{item.source_url}</a>
+              </Field>
+            )}
+            {item.target_person && <Field label="Person"><div>{item.target_person}</div></Field>}
+            {item.target_company && <Field label="Company"><div>{item.target_company}</div></Field>}
+            {item.final_text && (
+              <Field label="Final comment text">
+                <pre className="whitespace-pre-wrap font-sans text-sm" style={{ color: "#F0F0FF" }}>{item.final_text}</pre>
+              </Field>
+            )}
+          </>
+        ) : (
+          <>
+            <Field label="Rough idea">
+              <pre className="whitespace-pre-wrap font-sans text-sm" style={{ color: "#F0F0FF" }}>{item.raw_input}</pre>
+            </Field>
+            {item.improved_title && <Field label="Better title"><div>{item.improved_title}</div></Field>}
+            {item.angle && <Field label="Angle"><div>{item.angle}</div></Field>}
+            {item.final_text && (
+              <Field label="Final post text">
+                <pre className="whitespace-pre-wrap font-sans text-sm" style={{ color: "#F0F0FF" }}>{item.final_text}</pre>
+              </Field>
+            )}
+          </>
         )}
-        {item.source_url && (
-          <Field label="source_url">
-            <a href={item.source_url} target="_blank" rel="noreferrer" style={{ color: "#00D4FF" }}>{item.source_url}</a>
-          </Field>
-        )}
-        {item.target_person && <Field label="target_person"><div>{item.target_person}</div></Field>}
-        {item.target_company && <Field label="target_company"><div>{item.target_company}</div></Field>}
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label="created_at"><div style={{ color: "#8B8B9E" }}>{new Date(item.created_at).toLocaleString()}</div></Field>
-          {item.posted_at && <Field label="posted_at"><div style={{ color: "#8B8B9E" }}>{new Date(item.posted_at).toLocaleString()}</div></Field>}
+          <Field label="Created"><div style={{ color: "#8B8B9E" }}>{new Date(item.created_at).toLocaleString()}</div></Field>
+          {item.posted_at && <Field label="Posted"><div style={{ color: "#8B8B9E" }}>{new Date(item.posted_at).toLocaleString()}</div></Field>}
         </div>
+
 
         <div className="flex flex-wrap gap-2 pt-2 border-t" style={{ borderColor: "#1E1E2E" }}>
           <Action onClick={() => setEditing(true)} disabled={busy}>Edit</Action>
@@ -904,7 +965,7 @@ function PostIdeaForm({
   const [saving, setSaving] = useState(false);
 
   async function save() {
-    if (!raw_input.trim()) { toast.error("raw_input is required"); return; }
+    if (!raw_input.trim()) { toast.error("Rough idea is required"); return; }
     setSaving(true);
     const payload: Record<string, unknown> = {
       item_type: "post_idea",
@@ -926,17 +987,48 @@ function PostIdeaForm({
   }
 
   return (
-    <FormShell onClose={onClose} onSave={save} saving={saving} saveLabel={initial ? "Save" : "Save idea"}>
-      <TextAreaField label="raw_input *" value={raw_input} onChange={setRaw} rows={4} />
-      <TextField label="improved_title" value={improved_title} onChange={setTitle} />
-      <TextAreaField label="angle" value={angle} onChange={setAngle} rows={2} />
+    <FormShell
+      onClose={onClose}
+      onSave={save}
+      saving={saving}
+      saveLabel={initial ? "Save" : "Save idea"}
+      subtitle={initial ? undefined : "Capture the rough thought. It does not need to be polished yet."}
+    >
+      <TextAreaField
+        label="Rough idea *"
+        value={raw_input}
+        onChange={setRaw}
+        rows={4}
+        placeholder="Write the rough thought. Example: I moved location scoring from frontend logic into backend rules."
+      />
+      <TextField
+        label="Better title"
+        value={improved_title}
+        onChange={setTitle}
+        placeholder="Optional. Example: The source of truth matters more than the prompt."
+      />
+      <TextAreaField
+        label="Angle"
+        value={angle}
+        onChange={setAngle}
+        rows={2}
+        placeholder="Optional. What makes this worth posting?"
+      />
       <SelectField
-        label="category"
+        label="Category"
         value={category}
         options={[{ value: "", label: "—" }, ...POST_CATEGORIES.map(c => ({ value: c.value, label: c.label }))]}
         onChange={(v) => setCategory(v as Category | "")}
       />
-      {initial && <TextAreaField label="final_text" value={final_text} onChange={setFinalText} rows={6} />}
+      {initial && (
+        <TextAreaField
+          label="Final post text"
+          value={final_text}
+          onChange={setFinalText}
+          rows={6}
+          placeholder="Paste the final version of the post here once it is ready."
+        />
+      )}
     </FormShell>
   );
 }
@@ -957,7 +1049,7 @@ function ReplyForm({
   const [saving, setSaving] = useState(false);
 
   async function save() {
-    if (!raw_input.trim()) { toast.error("raw_input is required"); return; }
+    if (!raw_input.trim()) { toast.error("LinkedIn post text is required"); return; }
     setSaving(true);
     const payload: Record<string, unknown> = {
       item_type: "reply_opportunity",
@@ -979,11 +1071,38 @@ function ReplyForm({
   }
 
   return (
-    <FormShell onClose={onClose} onSave={save} saving={saving} saveLabel={initial ? "Save" : "Save reply"}>
-      <TextAreaField label="raw_input * (post text you want to reply to)" value={raw_input} onChange={setRaw} rows={5} />
-      <TextField label="source_url" value={source_url} onChange={setUrl} />
-      <TextField label="target_person" value={target_person} onChange={setPerson} />
-      <TextField label="target_company" value={target_company} onChange={setCompany} />
+    <FormShell
+      onClose={onClose}
+      onSave={save}
+      saving={saving}
+      saveLabel={initial ? "Save" : "Save reply"}
+      subtitle={initial ? undefined : "Paste a LinkedIn post you may want to answer. The app will give you a clean prompt to generate a sharp comment outside the app."}
+    >
+      <TextAreaField
+        label="LinkedIn post text *"
+        value={raw_input}
+        onChange={setRaw}
+        rows={5}
+        placeholder="Paste the post text here. It can be rough. You do not need to clean it."
+      />
+      <TextField
+        label="Post URL"
+        value={source_url}
+        onChange={setUrl}
+        placeholder="Optional. Paste the LinkedIn post URL."
+      />
+      <TextField
+        label="Person"
+        value={target_person}
+        onChange={setPerson}
+        placeholder="Optional. Who posted it?"
+      />
+      <TextField
+        label="Company"
+        value={target_company}
+        onChange={setCompany}
+        placeholder="Optional. Their company."
+      />
     </FormShell>
   );
 }
@@ -1091,10 +1210,15 @@ function ConfirmDialog({
 }
 
 function FormShell({
-  onClose, onSave, saving, saveLabel = "Save", children,
-}: { onClose: () => void; onSave: () => void; saving: boolean; saveLabel?: string; children: ReactNode }) {
+  onClose, onSave, saving, saveLabel = "Save", subtitle, children,
+}: { onClose: () => void; onSave: () => void; saving: boolean; saveLabel?: string; subtitle?: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-3">
+      {subtitle && (
+        <p className="text-[12px]" style={{ color: "#8B8B9E" }}>
+          {subtitle}
+        </p>
+      )}
       {children}
       <div className="flex gap-2 pt-1 justify-end">
         <button
@@ -1119,12 +1243,13 @@ function FormShell({
   );
 }
 
-function TextField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function TextField({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
   return (
     <label className="flex flex-col gap-1">
       <span className="text-[11px] uppercase" style={{ color: "#8B8B9E", fontFamily: MONO }}>{label}</span>
       <input
         value={value}
+        placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
         className="bg-transparent outline-none text-sm px-2 py-1.5"
         style={{ color: "#F0F0FF", border: "1px solid #1E1E2E", borderRadius: 4, fontFamily: MONO }}
@@ -1133,13 +1258,14 @@ function TextField({ label, value, onChange }: { label: string; value: string; o
   );
 }
 
-function TextAreaField({ label, value, onChange, rows = 3 }: { label: string; value: string; onChange: (v: string) => void; rows?: number }) {
+function TextAreaField({ label, value, onChange, rows = 3, placeholder }: { label: string; value: string; onChange: (v: string) => void; rows?: number; placeholder?: string }) {
   return (
     <label className="flex flex-col gap-1">
       <span className="text-[11px] uppercase" style={{ color: "#8B8B9E", fontFamily: MONO }}>{label}</span>
       <textarea
         value={value}
         rows={rows}
+        placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
         className="bg-transparent outline-none text-sm px-2 py-1.5"
         style={{ color: "#F0F0FF", border: "1px solid #1E1E2E", borderRadius: 4, fontFamily: MONO }}
