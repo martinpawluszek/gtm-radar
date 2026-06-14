@@ -109,6 +109,34 @@ async function updateExcludedTitles(id: string, titles: string[]): Promise<void>
 function ParametersPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("keyword-filters");
 
+  const { data: allRules = [] } = useQuery({
+    queryKey: ["pre-filter-rules"],
+    queryFn: fetchRules,
+  });
+  const { data: allOverrides = [] } = useQuery({
+    queryKey: ["commercial-overrides"],
+    queryFn: fetchOverrides,
+  });
+  const { data: excludedData } = useQuery({
+    queryKey: ["excluded-titles"],
+    queryFn: fetchExcludedTitles,
+  });
+
+  const keywordCount = allRules.filter((r) => r.is_active).length;
+  const overrideCount = allOverrides.filter((o) => o.is_active).length;
+  const excludedCount = excludedData?.titles.length ?? 0;
+
+  function tabLabel(key: TabKey): string {
+    const base = TABS.find((t) => t.key === key)?.label ?? key;
+    const count =
+      key === "keyword-filters"
+        ? keywordCount
+        : key === "commercial-overrides"
+          ? overrideCount
+          : excludedCount;
+    return `${base} (${count})`;
+  }
+
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
@@ -159,7 +187,7 @@ function ParametersPage() {
               }
             }}
           >
-            {t.label}
+            {tabLabel(t.key)}
           </button>
         ))}
       </div>
