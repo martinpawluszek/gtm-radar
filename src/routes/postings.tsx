@@ -23,6 +23,7 @@ const MONO = "var(--font-mono)";
 // ---------- Types ----------
 type PostingStatus = "new" | "saved" | "dismissed" | "applied";
 type TierFilter = "all" | Tier;
+type CompanyFilter = "all" | string;
 
 type ParamKey = "comp" | "fit" | "seniority" | "location" | "competition";
 const PARAM_KEYS: ParamKey[] = ["comp", "fit", "seniority", "location", "competition"];
@@ -300,9 +301,24 @@ function PostingsPage() {
     return m;
   }, [companies]);
 
+  const companiesWithPostings = useMemo(() => {
+    const seen = new Set<string>();
+    const list: { id: string; name: string }[] = [];
+    for (const p of postings) {
+      const c = p.company_id ? companyMap.get(p.company_id) : null;
+      if (c && !seen.has(c.id)) {
+        seen.add(c.id);
+        list.push({ id: c.id, name: c.name });
+      }
+    }
+    return list.sort((a, b) => a.name.localeCompare(b.name));
+  }, [postings, companyMap]);
+
   const [statusFilter, setStatusFilter] = useState<"all" | PostingStatus>("all");
   const [tierFilter, setTierFilter] = useState<TierFilter>("all");
   const [tierOpen, setTierOpen] = useState(false);
+  const [companyFilter, setCompanyFilter] = useState<CompanyFilter>("all");
+  const [companyOpen, setCompanyOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
@@ -314,7 +330,7 @@ function PostingsPage() {
   // Reset to page 1 when filters or tabs change
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, tierFilter]);
+  }, [statusFilter, tierFilter, companyFilter]);
 
   // Reset to page 1 when page size changes
   const handlePageSizeChange = (size: number) => {
@@ -341,9 +357,10 @@ function PostingsPage() {
         const c = p.company_id ? companyMap.get(p.company_id) : null;
         if (!c || c.tier !== tierFilter) return false;
       }
+      if (companyFilter !== "all" && p.company_id !== companyFilter) return false;
       return true;
     });
-  }, [postings, statusFilter, tierFilter, companyMap]);
+  }, [postings, statusFilter, tierFilter, companyMap, companyFilter]);
 
   // Pagination calculations
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -392,7 +409,10 @@ function PostingsPage() {
             <FilterPill
               key={s}
               active={statusFilter === s}
-              onClick={() => setStatusFilter(s)}
+              onClick={() => {
+                setStatusFilter(s);
+                setCompanyFilter("all");
+              }}
               label={s === "all" ? "All" : STATUS_META[s].label}
             />
           ))}
@@ -449,6 +469,90 @@ function PostingsPage() {
                   }}
                 >
                   {t === "all" ? "All Tiers" : TIER_META[t].label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="relative">
+          <button
+            onClick={() => setCompanyOpen((v) => !v)}
+            className="flex items-center gap-2 px-3"
+            style={{
+              height: 28,
+              background: "#0A0A0F",
+              border: "1px solid #1E1E2E",
+              borderRadius: 4,
+              color: "#F0F0FF",
+              fontSize: 12,
+              fontFamily: MONO,
+            }}
+          >
+            {companyFilter === "all"
+              ? "All Companies"
+              : companiesWithPostings.find((c) => c.id === companyFilter)?.name ?? "All Companies"}
+            <ChevronDown size={12} />
+          </button>
+          {companyOpen && (
+            <div
+              className="absolute left-0 mt-1 z-10 p-1"
+              style={{
+                background: "#111118",
+                border: "1px solid #1E1E2E",
+                borderRadius: 6,
+                minWidth: 180,
+                maxHeight: 300,
+                overflowY: "auto",
+              }}
+            >
+              <button
+                key="all"
+                onClick={() => {
+                  setCompanyFilter("all");
+                  setCompanyOpen(false);
+                }}
+                className="w-full text-left px-2 py-1.5"
+                style={{
+                  color: "#F0F0FF",
+                  fontSize: 12,
+                  fontFamily: MONO,
+                  borderRadius: 3,
+                  background: companyFilter === "all" ? "rgba(0,212,255,0.1)" : "transparent",
+                }}
+                onMouseEnter={(e) => {
+                  if (companyFilter !== "all")
+                    e.currentTarget.style.background = "rgba(0,212,255,0.06)";
+                }}
+                onMouseLeave={(e) => {
+                  if (companyFilter !== "all") e.currentTarget.style.background = "transparent";
+                }}
+              >
+                All Companies
+              </button>
+              {companiesWithPostings.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => {
+                    setCompanyFilter(c.id);
+                    setCompanyOpen(false);
+                  }}
+                  className="w-full text-left px-2 py-1.5"
+                  style={{
+                    color: "#F0F0FF",
+                    fontSize: 12,
+                    fontFamily: MONO,
+                    borderRadius: 3,
+                    background: companyFilter === c.id ? "rgba(0,212,255,0.1)" : "transparent",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (companyFilter !== c.id)
+                      e.currentTarget.style.background = "rgba(0,212,255,0.06)";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (companyFilter !== c.id) e.currentTarget.style.background = "transparent";
+                  }}
+                >
+                  {c.name}
                 </button>
               ))}
             </div>
