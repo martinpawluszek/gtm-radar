@@ -256,9 +256,10 @@ function KeywordFiltersTab() {
       addRule(keyword, tier),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pre-filter-rules"] });
+      toast.success("Saved");
     },
-    onError: (err: Error) => {
-      toast.error(err.message || "Failed to add keyword");
+    onError: () => {
+      toast.error("Save failed — try again");
     },
   });
 
@@ -266,9 +267,10 @@ function KeywordFiltersTab() {
     mutationFn: deactivateRule,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pre-filter-rules"] });
+      toast.success("Saved");
     },
-    onError: (err: Error) => {
-      toast.error(err.message || "Failed to remove keyword");
+    onError: () => {
+      toast.error("Save failed — try again");
     },
   });
 
@@ -297,7 +299,6 @@ function KeywordFiltersTab() {
       {
         onSuccess: () => {
           setInput("");
-          toast.success(`Added "${trimmed}" to ${tier} tier`);
         },
         onError: (err: Error) => {
           if (err.message?.includes("duplicate") || err.message?.includes("unique")) {
