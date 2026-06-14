@@ -776,12 +776,15 @@ function SettingsTab() {
         } as never)
         .eq("id", goal.id);
       if (error) throw error;
+      const normalised = startDraft && /^\d{4}-\d{2}-\d{2}$/.test(startDraft) ? startDraft : null;
+      setStartDate(normalised);
     },
     onSuccess: () => {
       toast.success("Settings saved");
       setForm({});
       qc.invalidateQueries({ queryKey: ["lp-active-goal"] });
       qc.invalidateQueries({ queryKey: ["lp-weekly-status"] });
+      qc.invalidateQueries({ queryKey: ["lp-weekly-progress"] });
     },
     onError: (e: Error) => toast.error(e.message || "Save failed"),
   });
