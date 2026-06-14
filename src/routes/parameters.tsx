@@ -86,6 +86,25 @@ async function deactivateOverride(id: string): Promise<void> {
   if (error) throw error;
 }
 
+async function fetchExcludedTitles(): Promise<{ id: string; titles: string[] }> {
+  const { data, error } = await gtmSupabase
+    .from("role_criteria" as never)
+    .select("id, excluded_titles")
+    .eq("is_active", true)
+    .maybeSingle();
+  if (error) throw error;
+  const row = data as unknown as { id: string; excluded_titles: string[] } | null;
+  return { id: row?.id ?? "", titles: row?.excluded_titles ?? [] };
+}
+
+async function updateExcludedTitles(id: string, titles: string[]): Promise<void> {
+  const { error } = await gtmSupabase
+    .from("role_criteria" as never)
+    .update({ excluded_titles: titles, updated_at: new Date().toISOString() } as never)
+    .eq("id", id);
+  if (error) throw error;
+}
+
 // ---------- Components ----------
 function ParametersPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("keyword-filters");
