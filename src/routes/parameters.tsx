@@ -287,6 +287,18 @@ function KeywordFiltersTab() {
     },
   });
 
+  const reactivateMutation = useMutation({
+    mutationFn: ({ id, tier }: { id: string; tier: "hard" | "soft" }) =>
+      reactivateRule(id, tier),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pre-filter-rules"] });
+      toast.success("Saved");
+    },
+    onError: () => {
+      toast.error("Save failed — try again");
+    },
+  });
+
   const deactivateMutation = useMutation({
     mutationFn: deactivateRule,
     onSuccess: () => {
