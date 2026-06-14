@@ -679,7 +679,7 @@ function ProgressTab() {
           </thead>
           <tbody>
             {rows.map((r) => {
-              const isCurrent = todayIso >= r.week_start && todayIso < r.week_end;
+              const isCurrent = r.is_current;
               let statusLabel = "No activity";
               let accent = "#8B8B9E";
               let rowBg = "transparent";
