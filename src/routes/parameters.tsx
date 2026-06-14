@@ -14,13 +14,19 @@ export const Route = createFileRoute("/parameters")({
   component: ParametersPage,
 });
 
-type TabKey = "keyword-filters" | "commercial-overrides" | "excluded-titles" | "location";
+type TabKey =
+  | "keyword-filters"
+  | "commercial-overrides"
+  | "excluded-titles"
+  | "location"
+  | "search-patterns";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "keyword-filters", label: "Keyword Filters" },
   { key: "commercial-overrides", label: "Commercial Overrides" },
   { key: "excluded-titles", label: "Excluded Titles" },
   { key: "location", label: "Location" },
+  { key: "search-patterns", label: "Search Patterns" },
 ];
 
 
