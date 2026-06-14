@@ -47,6 +47,14 @@ async function addRule(keyword: string, filter_tier: "hard" | "soft"): Promise<v
   if (error) throw error;
 }
 
+async function reactivateRule(id: string, filter_tier: "hard" | "soft"): Promise<void> {
+  const { error } = await gtmSupabase
+    .from("pre_filter_rules" as never)
+    .update({ is_active: true, filter_tier } as never)
+    .eq("id", id);
+  if (error) throw error;
+}
+
 async function deactivateRule(id: string): Promise<void> {
   const { error } = await gtmSupabase
     .from("pre_filter_rules" as never)
@@ -75,6 +83,14 @@ async function addOverride(keyword: string): Promise<void> {
   const { error } = await gtmSupabase
     .from("commercial_overrides" as never)
     .insert({ keyword: keyword.trim(), is_active: true } as never);
+  if (error) throw error;
+}
+
+async function reactivateOverride(id: string): Promise<void> {
+  const { error } = await gtmSupabase
+    .from("commercial_overrides" as never)
+    .update({ is_active: true } as never)
+    .eq("id", id);
   if (error) throw error;
 }
 
@@ -271,6 +287,18 @@ function KeywordFiltersTab() {
     },
   });
 
+  const reactivateMutation = useMutation({
+    mutationFn: ({ id, tier }: { id: string; tier: "hard" | "soft" }) =>
+      reactivateRule(id, tier),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pre-filter-rules"] });
+      toast.success("Saved");
+    },
+    onError: () => {
+      toast.error("Save failed — try again");
+    },
+  });
+
   const deactivateMutation = useMutation({
     mutationFn: deactivateRule,
     onSuccess: () => {
@@ -293,11 +321,27 @@ function KeywordFiltersTab() {
       return;
     }
 
-    const exists = allRules.some(
-      (r) => r.keyword.toLowerCase() === trimmed.toLowerCase(),
+    const activeMatch = allRules.find(
+      (r) => r.keyword.toLowerCase() === trimmed.toLowerCase() && r.is_active,
     );
-    if (exists) {
+    if (activeMatch) {
       setError("Keyword already exists");
+      return;
+    }
+
+    const inactiveMatch = allRules.find(
+      (r) => r.keyword.toLowerCase() === trimmed.toLowerCase() && !r.is_active,
+    );
+    if (inactiveMatch) {
+      setError("");
+      reactivateMutation.mutate(
+        { id: inactiveMatch.id, tier },
+        {
+          onSuccess: () => {
+            setInput("");
+          },
+        },
+      );
       return;
     }
 
@@ -604,6 +648,17 @@ function CommercialOverridesTab() {
     },
   });
 
+  const reactivateMutation = useMutation({
+    mutationFn: reactivateOverride,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["commercial-overrides"] });
+      toast.success("Saved");
+    },
+    onError: () => {
+      toast.error("Save failed — try again");
+    },
+  });
+
   const deactivateMutation = useMutation({
     mutationFn: deactivateOverride,
     onSuccess: () => {
@@ -622,11 +677,24 @@ function CommercialOverridesTab() {
       return;
     }
 
-    const exists = allOverrides.some(
-      (o) => o.keyword.toLowerCase() === trimmed.toLowerCase(),
+    const activeMatch = allOverrides.find(
+      (o) => o.keyword.toLowerCase() === trimmed.toLowerCase() && o.is_active,
     );
-    if (exists) {
+    if (activeMatch) {
       setError("Keyword already exists");
+      return;
+    }
+
+    const inactiveMatch = allOverrides.find(
+      (o) => o.keyword.toLowerCase() === trimmed.toLowerCase() && !o.is_active,
+    );
+    if (inactiveMatch) {
+      setError("");
+      reactivateMutation.mutate(inactiveMatch.id, {
+        onSuccess: () => {
+          setInputValue("");
+        },
+      });
       return;
     }
 
