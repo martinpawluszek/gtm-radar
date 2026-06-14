@@ -147,6 +147,7 @@ function ParametersPage() {
 
   function tabLabel(key: TabKey): string {
     const base = TABS.find((t) => t.key === key)?.label ?? key;
+    if (key === "location") return base;
     const count =
       key === "keyword-filters"
         ? keywordCount
@@ -155,6 +156,7 @@ function ParametersPage() {
           : excludedCount;
     return `${base} (${count})`;
   }
+
 
   return (
     <div className="flex flex-col gap-6">
