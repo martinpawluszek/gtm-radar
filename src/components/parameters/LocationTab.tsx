@@ -580,21 +580,22 @@ export function LocationTab() {
         </div>
       </div>
 
-      {/* Placeholder for Unrated section */}
-      <div
-        className="px-4 py-6"
-        style={{
-          background: BG,
-          border: `1px dashed ${BORDER}`,
-          borderRadius: 6,
-          color: MUTED,
-          fontFamily: MONO,
-          fontSize: 13,
-          textAlign: "center",
+      {/* Unrated Job Locations */}
+      <UnratedLocations
+        rules={rules}
+        onRate={(location) => {
+          setDraft({
+            ...EMPTY_DRAFT,
+            pattern: location,
+            match_mode: "equals",
+            is_active: true,
+            priority: 100,
+          });
+          setEditId(null);
+          setFormError("");
+          setModalOpen(true);
         }}
-      >
-        Unrated job locations will appear here in the next step.
-      </div>
+      />
 
       {/* Modal */}
       {modalOpen && (
