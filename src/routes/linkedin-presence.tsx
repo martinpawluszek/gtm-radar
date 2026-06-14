@@ -96,6 +96,30 @@ const TYPE_LABEL: Record<ItemType, string> = {
   reply_opportunity: "Reply opportunity",
 };
 
+const STATUS_DESCRIPTION: Record<ItemStatus, string> = {
+  idea: "Captured but not drafted or posted.",
+  drafted: "Draft exists or is in progress, but not counted as published.",
+  posted: "Counted as published in weekly stats based on Posted date.",
+  archived: "Hidden from active workflow.",
+};
+
+// Convert ISO timestamp to value usable by <input type="datetime-local"> in the user's local timezone.
+function isoToLocalInput(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// Convert a datetime-local string back to an ISO string. Empty -> null.
+function localInputToIso(local: string): string | null {
+  if (!local) return null;
+  const d = new Date(local);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
 const DAYS = [
   { v: 1, l: "Monday" },
   { v: 2, l: "Tuesday" },
@@ -859,18 +883,42 @@ function DetailModal({
           </>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Field label="Created"><div style={{ color: "#8B8B9E" }}>{new Date(item.created_at).toLocaleString()}</div></Field>
-          {item.posted_at && <Field label="Posted"><div style={{ color: "#8B8B9E" }}>{new Date(item.posted_at).toLocaleString()}</div></Field>}
+          <Field label="Posted">
+            <div style={{ color: "#8B8B9E" }}>
+              {item.posted_at ? new Date(item.posted_at).toLocaleString() : "—"}
+            </div>
+          </Field>
+          <Field label="Last updated">
+            <div style={{ color: "#8B8B9E" }}>
+              {item.updated_at ? new Date(item.updated_at).toLocaleString() : "—"}
+            </div>
+          </Field>
         </div>
 
+        <div
+          className="text-[12px]"
+          style={{
+            color: "#8B8B9E",
+            background: "#0D0D14",
+            border: "1px solid #1E1E2E",
+            borderRadius: 4,
+            padding: "8px 10px",
+          }}
+        >
+          <span style={{ color: statusColor(item.status), fontFamily: MONO, marginRight: 6 }}>
+            {STATUS_LABEL[item.status]}:
+          </span>
+          {STATUS_DESCRIPTION[item.status]}
+        </div>
 
         <div className="flex flex-wrap gap-2 pt-2 border-t" style={{ borderColor: "#1E1E2E" }}>
           <Action onClick={() => setEditing(true)} disabled={busy}>Edit</Action>
           <Action onClick={() => copyText(promptFor(item))} color="#00D4FF">Copy prompt</Action>
           {item.status !== "drafted" && (
             <Action
-              onClick={() => update({ status: "drafted", posted_at: item.status === "posted" ? null : item.posted_at }, "Marked as drafted")}
+              onClick={() => update({ status: "drafted" }, "Marked as drafted")}
               disabled={busy}
             >
               {item.status === "posted" ? "Move back to drafted" : "Mark as drafted"}
@@ -878,7 +926,12 @@ function DetailModal({
           )}
           {item.status !== "posted" && (
             <Action
-              onClick={() => update({ status: "posted", posted_at: new Date().toISOString() }, "Marked as posted")}
+              onClick={() =>
+                update(
+                  { status: "posted", posted_at: item.posted_at ?? new Date().toISOString() },
+                  "Marked as posted",
+                )
+              }
               color="#10B981"
               disabled={busy}
             >
@@ -962,6 +1015,8 @@ function PostIdeaForm({
   const [angle, setAngle] = useState(initial?.angle ?? "");
   const [category, setCategory] = useState<Category | "">((initial?.category as Category) ?? "");
   const [final_text, setFinalText] = useState(initial?.final_text ?? "");
+  const [createdAt, setCreatedAt] = useState<string>(isoToLocalInput(initial?.created_at));
+  const [postedAt, setPostedAt] = useState<string>(isoToLocalInput(initial?.posted_at));
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -976,7 +1031,13 @@ function PostIdeaForm({
       final_text: final_text.trim() || null,
       updated_at: new Date().toISOString(),
     };
-    if (!initial) payload.status = "idea";
+    if (initial) {
+      const newCreated = localInputToIso(createdAt);
+      if (newCreated) payload.created_at = newCreated;
+      payload.posted_at = localInputToIso(postedAt);
+    } else {
+      payload.status = "idea";
+    }
     const { error } = initial
       ? await gtmSupabase.from("linkedin_presence_items" as never).update(payload as never).eq("id", initial.id)
       : await gtmSupabase.from("linkedin_presence_items" as never).insert(payload as never);
@@ -1021,13 +1082,29 @@ function PostIdeaForm({
         onChange={(v) => setCategory(v as Category | "")}
       />
       {initial && (
-        <TextAreaField
-          label="Final post text"
-          value={final_text}
-          onChange={setFinalText}
-          rows={6}
-          placeholder="Paste the final version of the post here once it is ready."
-        />
+        <>
+          <TextAreaField
+            label="Final post text"
+            value={final_text}
+            onChange={setFinalText}
+            rows={6}
+            placeholder="Paste the final version of the post here once it is ready."
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <DateTimeField
+              label="Created date"
+              value={createdAt}
+              onChange={setCreatedAt}
+              hint="Used for backfilling when you capture an idea late."
+            />
+            <DateTimeField
+              label="Posted date"
+              value={postedAt}
+              onChange={setPostedAt}
+              hint="Leave empty if not posted yet. Used when backfilling a post you already published."
+            />
+          </div>
+        </>
       )}
     </FormShell>
   );
@@ -1046,6 +1123,8 @@ function ReplyForm({
   const [source_url, setUrl] = useState(initial?.source_url ?? "");
   const [target_person, setPerson] = useState(initial?.target_person ?? "");
   const [target_company, setCompany] = useState(initial?.target_company ?? "");
+  const [createdAt, setCreatedAt] = useState<string>(isoToLocalInput(initial?.created_at));
+  const [postedAt, setPostedAt] = useState<string>(isoToLocalInput(initial?.posted_at));
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -1060,7 +1139,13 @@ function ReplyForm({
       category: "reply",
       updated_at: new Date().toISOString(),
     };
-    if (!initial) payload.status = "idea";
+    if (initial) {
+      const newCreated = localInputToIso(createdAt);
+      if (newCreated) payload.created_at = newCreated;
+      payload.posted_at = localInputToIso(postedAt);
+    } else {
+      payload.status = "idea";
+    }
     const { error } = initial
       ? await gtmSupabase.from("linkedin_presence_items" as never).update(payload as never).eq("id", initial.id)
       : await gtmSupabase.from("linkedin_presence_items" as never).insert(payload as never);
@@ -1103,6 +1188,22 @@ function ReplyForm({
         onChange={setCompany}
         placeholder="Optional. Their company."
       />
+      {initial && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <DateTimeField
+            label="Created date"
+            value={createdAt}
+            onChange={setCreatedAt}
+            hint="Used for backfilling when you capture an item late."
+          />
+          <DateTimeField
+            label="Posted date"
+            value={postedAt}
+            onChange={setPostedAt}
+            hint="Leave empty if not posted yet. Used when backfilling a comment you already published."
+          />
+        </div>
+      )}
     </FormShell>
   );
 }
@@ -1270,6 +1371,24 @@ function TextAreaField({ label, value, onChange, rows = 3, placeholder }: { labe
         className="bg-transparent outline-none text-sm px-2 py-1.5"
         style={{ color: "#F0F0FF", border: "1px solid #1E1E2E", borderRadius: 4, fontFamily: MONO }}
       />
+    </label>
+  );
+}
+
+function DateTimeField({ label, value, onChange, hint }: { label: string; value: string; onChange: (v: string) => void; hint?: string }) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[11px] uppercase" style={{ color: "#8B8B9E", fontFamily: MONO }}>{label}</span>
+      <input
+        type="datetime-local"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="bg-transparent outline-none text-sm px-2 py-1.5"
+        style={{ color: "#F0F0FF", border: "1px solid #1E1E2E", borderRadius: 4, fontFamily: MONO, colorScheme: "dark" }}
+      />
+      {hint && (
+        <span className="text-[11px]" style={{ color: "#8B8B9E" }}>{hint}</span>
+      )}
     </label>
   );
 }
