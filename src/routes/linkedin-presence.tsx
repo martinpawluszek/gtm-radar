@@ -3,6 +3,13 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { gtmSupabase } from "@/lib/gtmSupabase";
+import {
+  computeWeeks,
+  formatWeekRange,
+  useProjectStartDate,
+  type LpGoal,
+  type LpItem,
+} from "@/lib/linkedinProgress";
 
 const MONO = "var(--font-mono)";
 
@@ -601,20 +608,24 @@ function ItemsTab({ kind }: { kind: TabKind }) {
 }
 
 // ---------- Progress Tab ----------
-function formatWeekRange(startIso: string, endIso: string): string {
-  const fmt = (iso: string) => {
-    const [y, m, d] = iso.split("-").map(Number);
-    const dt = new Date(y, (m ?? 1) - 1, d ?? 1);
-    return dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  };
-  return `${fmt(startIso)} to ${fmt(endIso)}`;
-}
 
 function ProgressTab() {
-  const { data: rows = [], isLoading, error } = useQuery({
-    queryKey: ["lp-weekly-progress"],
-    queryFn: fetchWeeklyProgress,
+  const { data: items = [], isLoading: itemsLoading } = useQuery({
+    queryKey: ["lp-items"],
+    queryFn: fetchItems,
   });
+  const { data: goal, isLoading: goalLoading } = useQuery({
+    queryKey: ["lp-active-goal"],
+    queryFn: fetchActiveGoal,
+  });
+  const { value: startDate } = useProjectStartDate();
+
+  const rows = useMemo(
+    () => computeWeeks(items as LpItem[], goal as LpGoal | null, startDate),
+    [items, goal, startDate],
+  );
+  const isLoading = itemsLoading || goalLoading;
+  const error: Error | null = null;
 
   const summary = useMemo(() => {
     if (!rows.length) return { best: 0, avg: 0, streak: 0 };
@@ -628,8 +639,6 @@ function ProgressTab() {
     return { best, avg, streak };
   }, [rows]);
 
-  const todayIso = new Date().toISOString().slice(0, 10);
-
   if (isLoading) {
     return <Panel><p className="text-sm" style={{ color: "#8B8B9E" }}>Loading…</p></Panel>;
   }
@@ -637,7 +646,13 @@ function ProgressTab() {
     return <Panel><p className="text-sm" style={{ color: "#F87171" }}>{(error as Error).message}</p></Panel>;
   }
   if (!rows.length) {
-    return <Panel><p className="text-sm" style={{ color: "#8B8B9E" }}>No weekly progress yet.</p></Panel>;
+    return (
+      <Panel>
+        <p className="text-sm" style={{ color: "#8B8B9E" }}>
+          No weekly progress yet. Set a project start date in Settings to begin tracking.
+        </p>
+      </Panel>
+    );
   }
 
   const Stat = ({ label, value }: { label: string; value: string }) => (
@@ -668,7 +683,7 @@ function ProgressTab() {
           </thead>
           <tbody>
             {rows.map((r) => {
-              const isCurrent = todayIso >= r.week_start && todayIso < r.week_end;
+              const isCurrent = r.is_current;
               let statusLabel = "No activity";
               let accent = "#8B8B9E";
               let rowBg = "transparent";
@@ -698,6 +713,7 @@ function ProgressTab() {
                   }}
                 >
                   <td className="px-3 py-2" style={{ color: textColor, fontFamily: MONO }}>
+                    <span style={{ color: "#8B8B9E" }}>W{r.week_number}</span>{" "}
                     {formatWeekRange(r.week_start, r.week_end)}
                     {isCurrent && (
                       <span className="ml-2 text-[10px] uppercase" style={{ color: "#00D4FF" }}>
@@ -737,6 +753,11 @@ function SettingsTab() {
     queryKey: ["lp-active-goal"],
     queryFn: fetchActiveGoal,
   });
+  const { value: startDate, set: setStartDate } = useProjectStartDate();
+  const [startDraft, setStartDraft] = useState<string>("");
+  useEffect(() => {
+    setStartDraft(startDate ?? "");
+  }, [startDate]);
 
   const [form, setForm] = useState<Partial<Goal>>({});
   const current = { ...goal, ...form } as Goal;
@@ -755,12 +776,15 @@ function SettingsTab() {
         } as never)
         .eq("id", goal.id);
       if (error) throw error;
+      const normalised = startDraft && /^\d{4}-\d{2}-\d{2}$/.test(startDraft) ? startDraft : null;
+      setStartDate(normalised);
     },
     onSuccess: () => {
       toast.success("Settings saved");
       setForm({});
       qc.invalidateQueries({ queryKey: ["lp-active-goal"] });
       qc.invalidateQueries({ queryKey: ["lp-weekly-status"] });
+      qc.invalidateQueries({ queryKey: ["lp-weekly-progress"] });
     },
     onError: (e: Error) => toast.error(e.message || "Save failed"),
   });
@@ -788,6 +812,28 @@ function SettingsTab() {
         options={DAYS.map((d) => ({ value: String(d.v), label: d.l }))}
         onChange={(v) => setForm((f) => ({ ...f, reminder_day: Number(v) }))}
       />
+      <div className="flex flex-col gap-1.5">
+        <label className="text-[11px] uppercase" style={{ color: "#8B8B9E", fontFamily: MONO }}>
+          Project start date
+        </label>
+        <input
+          type="date"
+          value={startDraft}
+          onChange={(e) => setStartDraft(e.target.value)}
+          className="px-3 py-1.5 text-sm"
+          style={{
+            background: "#0B0B12",
+            border: "1px solid #1E1E2E",
+            borderRadius: 4,
+            color: "#F0F0FF",
+            fontFamily: MONO,
+            maxWidth: 220,
+          }}
+        />
+        <p className="text-[11px]" style={{ color: "#6B6B80" }}>
+          Week 1 starts on the Monday of this date. Every Monday after that starts the next week.
+        </p>
+      </div>
       <SelectField
         label="Reminder threshold"
         value={current.reminder_threshold}

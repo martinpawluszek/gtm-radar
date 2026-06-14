@@ -1,11 +1,19 @@
 import { useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Minus, ExternalLink } from "lucide-react";
+import { useQueries, useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { ArrowDown, ArrowUp, Minus, ExternalLink, Linkedin } from "lucide-react";
 import { toast } from "sonner";
 import { gtmSupabase } from "@/lib/gtmSupabase";
 import { TIER_META, type Tier } from "@/lib/companies";
 import { Button } from "@/components/ui/button";
+import {
+  computeWeeks,
+  currentWeekOf,
+  useProjectStartDate,
+  type LpGoal,
+  type LpItem,
+  type WeekStat,
+} from "@/lib/linkedinProgress";
 
 type AbStats = {
   invitesSent: number;
@@ -667,6 +675,9 @@ export function DashboardPage() {
         )}
       </Card>
 
+      {/* SECTION 1.5 — LinkedIn Presence */}
+      <LinkedInPresenceCard />
+
       {/* SECTION 2 */}
       <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <Card>
@@ -1200,4 +1211,201 @@ async function bumpTitleWeight(title: string, delta: 1 | -1) {
     .from("role_criteria" as never)
     .update({ target_titles: titles, updated_at: new Date().toISOString() } as never)
     .eq("id", c.id);
+}
+
+// ---------- LinkedIn Presence Dashboard Card ----------
+function LinkedInPresenceCard() {
+  const navigate = useNavigate();
+  const itemsQ = useQuery({
+    queryKey: ["lp-items"],
+    queryFn: async () => {
+      const { data, error } = await gtmSupabase
+        .from("linkedin_presence_items" as never)
+        .select("id,item_type,status,posted_at,created_at");
+      if (error) {
+        console.warn("[dashboard:lp] items:", error.message);
+        return [] as LpItem[];
+      }
+      return ((data ?? []) as unknown as LpItem[]);
+    },
+  });
+  const goalQ = useQuery({
+    queryKey: ["lp-active-goal"],
+    queryFn: async () => {
+      const { data, error } = await gtmSupabase
+        .from("linkedin_presence_goals" as never)
+        .select("*")
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+      if (error) {
+        console.warn("[dashboard:lp] goal:", error.message);
+        return null;
+      }
+      return (data ?? null) as unknown as (LpGoal & { id: string }) | null;
+    },
+  });
+
+  const { value: startDate } = useProjectStartDate();
+  const weeks = useMemo(
+    () => computeWeeks(itemsQ.data ?? [], goalQ.data ?? null, startDate),
+    [itemsQ.data, goalQ.data, startDate],
+  );
+  const current = currentWeekOf(weeks);
+
+  const goToPresence = () => navigate({ to: "/linkedin-presence" });
+
+  const headerRight = (
+    <button
+      onClick={goToPresence}
+      className="text-[11px] flex items-center gap-1 cursor-pointer"
+      style={{
+        color: CYAN,
+        fontFamily: MONO,
+        background: "rgba(0,212,255,0.08)",
+        border: "1px solid rgba(0,212,255,0.25)",
+        borderRadius: 4,
+        padding: "4px 8px",
+      }}
+    >
+      Open <ExternalLink size={12} />
+    </button>
+  );
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <Linkedin size={14} style={{ color: CYAN }} />
+          <SectionTitle>LinkedIn Presence</SectionTitle>
+        </div>
+        {headerRight}
+      </div>
+
+      {!current ? (
+        <div style={{ color: MUTED, fontSize: 13, padding: "8px 0" }}>
+          {goalQ.isLoading || itemsQ.isLoading
+            ? "Loading…"
+            : !goalQ.data
+              ? "No LinkedIn goal configured."
+              : !startDate
+                ? "Set a project start date in LinkedIn Presence → Settings to begin tracking."
+                : "No active week yet."}
+        </div>
+      ) : (
+        <LpCurrentWeek week={current} onOpen={goToPresence} />
+      )}
+    </Card>
+  );
+}
+
+function LpCurrentWeek({
+  week,
+  onOpen,
+}: {
+  week: WeekStat;
+  onOpen: () => void;
+}) {
+  const w = week;
+  const onTrack = w.all_goals_met;
+  const someActivity = w.total_activity > 0;
+  const statusLabel = onTrack ? "On track" : someActivity ? "Behind" : "No activity yet";
+  const statusColor = onTrack ? SUCCESS : someActivity ? WARNING : MUTED;
+  const statusBg = onTrack
+    ? "rgba(16,185,129,0.08)"
+    : someActivity
+      ? "rgba(245,158,11,0.08)"
+      : "rgba(139,139,158,0.08)";
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div style={{ color: TEXT, fontFamily: MONO, fontSize: 13 }}>
+          Week <span style={{ color: CYAN }}>{w.week_number}</span>
+          <span style={{ color: MUTED }}> · {w.week_start} → {w.week_end}</span>
+        </div>
+        <span
+          style={{
+            color: statusColor,
+            background: statusBg,
+            border: `1px solid ${statusColor}40`,
+            borderRadius: 4,
+            padding: "2px 8px",
+            fontFamily: MONO,
+            fontSize: 11,
+          }}
+        >
+          {statusLabel}
+        </span>
+      </div>
+
+      <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+        <LpMetric label="Posts" curr={w.posts_published} goal={w.weekly_posts_goal} met={w.posts_goal_met} />
+        <LpMetric label="Comments" curr={w.comments_posted} goal={w.weekly_comments_goal} met={w.comments_goal_met} />
+        <LpMetric label="Ideas" curr={w.ideas_saved} goal={w.weekly_ideas_goal} met={w.ideas_goal_met} />
+      </div>
+
+      <div className="flex justify-between items-center">
+        <div style={{ color: MUTED, fontSize: 11, fontFamily: MONO }}>
+          {w.completion_percent}% of weekly goal
+        </div>
+        <button
+          onClick={onOpen}
+          className="text-[12px] cursor-pointer"
+          style={{
+            color: CYAN,
+            fontFamily: MONO,
+            background: "transparent",
+            border: "none",
+          }}
+        >
+          Go to LinkedIn Presence →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function LpMetric({
+  label,
+  curr,
+  goal,
+  met,
+}: {
+  label: string;
+  curr: number;
+  goal: number;
+  met: boolean;
+}) {
+  const pctVal = goal > 0 ? Math.min(100, Math.round((curr / goal) * 100)) : 0;
+  const accent = met ? SUCCESS : WARNING;
+  return (
+    <div
+      style={{
+        background: "#0D0D14",
+        border: `1px solid ${BORDER}`,
+        borderRadius: 4,
+        padding: "8px 10px",
+      }}
+    >
+      <div style={{ color: MUTED, fontSize: 10, fontFamily: MONO, textTransform: "uppercase" }}>
+        {label}
+      </div>
+      <div style={{ color: TEXT, fontFamily: MONO, fontSize: 16, marginTop: 2 }}>
+        {curr}
+        <span style={{ color: MUTED }}> / {goal}</span>
+      </div>
+      <div
+        style={{
+          marginTop: 6,
+          height: 3,
+          background: "#1E1E2E",
+          borderRadius: 2,
+          overflow: "hidden",
+        }}
+      >
+        <div style={{ width: `${pctVal}%`, height: "100%", background: accent }} />
+      </div>
+    </div>
+  );
 }
