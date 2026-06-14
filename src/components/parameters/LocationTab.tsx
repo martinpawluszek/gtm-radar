@@ -1091,7 +1091,10 @@ function RuleForm({
           />
         </Field>
 
-        <Field label="Location score *">
+        <Field
+          label="Location score *"
+          hint={scoreDescription(draft.location_score) || "Pick 1 (reject) to 5 (ideal)."}
+        >
           <select
             value={draft.location_score ?? ""}
             onChange={(e) => {
@@ -1101,7 +1104,7 @@ function RuleForm({
             style={fieldStyle()}
           >
             <option value="">— Select score —</option>
-            {[1, 2, 3, 4, 5].map((n) => (
+            {SCORE_ORDER.map((n) => (
               <option key={n} value={n}>
                 {scoreLabel(n)}
               </option>
