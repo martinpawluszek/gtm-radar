@@ -199,12 +199,13 @@ Add a practical operator example
 Each comment should be under 45 words.`;
 }
 
-async function copyText(text: string, label: string) {
+async function copyText(text: string, successMessage = "Prompt copied.") {
   try {
     await navigator.clipboard.writeText(text);
-    toast.success(`${label} copied`);
-  } catch {
-    toast.error("Copy failed");
+    toast.success(successMessage);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Copy failed";
+    toast.error(msg);
   }
 }
 
@@ -459,7 +460,7 @@ function IdeasTab() {
               item={it}
               onEdit={() => setEditing(it)}
               onChanged={refresh}
-              copyAction={{ label: "Copy prompt", prompt: () => buildPostPrompt(it) }}
+              copyAction={{ successMessage: "Prompt copied.", prompt: () => buildPostPrompt(it) }}
             />
           ))}
         </div>
@@ -546,7 +547,7 @@ function RepliesTab() {
               variant="reply"
               onEdit={() => setEditing(it)}
               onChanged={refresh}
-              copyAction={{ label: "Copy comment prompt", prompt: () => buildCommentPrompt(it) }}
+              copyAction={{ successMessage: "Prompt copied.", prompt: () => buildCommentPrompt(it) }}
             />
           ))}
         </div>
@@ -860,17 +861,30 @@ function ItemCard({
   item: Item;
   onEdit: () => void;
   onChanged: () => void;
-  copyAction: { label: string; prompt: () => string };
+  copyAction: { successMessage: string; prompt: () => string };
   variant?: "reply";
 }) {
-  async function updateStatus(patch: Partial<Item>) {
-    const { error } = await gtmSupabase
-      .from("linkedin_presence_items" as never)
-      .update({ ...patch, updated_at: new Date().toISOString() } as never)
-      .eq("id", item.id);
-    if (error) { toast.error("Update failed"); return; }
-    toast.success("Updated");
-    onChanged();
+  const [busy, setBusy] = useState(false);
+
+  async function updateStatus(patch: Partial<Item>, successMessage: string) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const { error } = await gtmSupabase
+        .from("linkedin_presence_items" as never)
+        .update({ ...patch, updated_at: new Date().toISOString() } as never)
+        .eq("id", item.id);
+      if (error) {
+        toast.error(error.message || "Update failed");
+        return;
+      }
+      toast.success(successMessage);
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
   const title = item.improved_title || item.raw_input.slice(0, 120);
@@ -912,15 +926,36 @@ function ItemCard({
       )}
 
       <div className="flex flex-wrap gap-1.5 mt-3">
-        <Action onClick={onEdit}>Edit</Action>
-        <Action onClick={() => updateStatus({ status: "drafted" })}>Mark as drafted</Action>
-        <Action onClick={() => updateStatus({ status: "posted", posted_at: new Date().toISOString() })} color="#10B981">
+        <Action onClick={onEdit} disabled={busy}>Edit</Action>
+        <Action
+          onClick={() => updateStatus({ status: "drafted" }, "Marked as drafted")}
+          disabled={busy}
+        >
+          Mark as drafted
+        </Action>
+        <Action
+          onClick={() =>
+            updateStatus(
+              { status: "posted", posted_at: new Date().toISOString() },
+              "Marked as posted",
+            )
+          }
+          color="#10B981"
+          disabled={busy}
+        >
           Mark as posted
         </Action>
-        <Action onClick={() => copyText(copyAction.prompt(), copyAction.label)} color="#00D4FF">
-          {copyAction.label}
+        <Action
+          onClick={() => copyText(copyAction.prompt(), copyAction.successMessage)}
+          color="#00D4FF"
+        >
+          Copy prompt
         </Action>
-        <Action onClick={() => updateStatus({ status: "archived" })} color="#8B8B9E">
+        <Action
+          onClick={() => updateStatus({ status: "archived" }, "Archived")}
+          color="#8B8B9E"
+          disabled={busy}
+        >
           Archive
         </Action>
       </div>
@@ -928,11 +963,12 @@ function ItemCard({
   );
 }
 
-function Action({ children, onClick, color = "#C0C0D0" }: { children: ReactNode; onClick: () => void; color?: string }) {
+function Action({ children, onClick, color = "#C0C0D0", disabled = false }: { children: ReactNode; onClick: () => void; color?: string; disabled?: boolean }) {
   return (
     <button
       onClick={onClick}
-      className="px-2.5 py-1 text-[11px] font-medium transition-colors"
+      disabled={disabled}
+      className="px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-50"
       style={{
         color,
         background: "transparent",
@@ -986,6 +1022,7 @@ function PostIdeaForm({
   const [improved_title, setTitle] = useState(initial?.improved_title ?? "");
   const [angle, setAngle] = useState(initial?.angle ?? "");
   const [category, setCategory] = useState<Category | "">((initial?.category as Category) ?? "");
+  const [final_text, setFinalText] = useState(initial?.final_text ?? "");
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -997,6 +1034,7 @@ function PostIdeaForm({
       improved_title: improved_title.trim() || null,
       angle: angle.trim() || null,
       category: category || null,
+      final_text: final_text.trim() || null,
       status: initial?.status ?? "idea",
       updated_at: new Date().toISOString(),
     };
@@ -1020,6 +1058,7 @@ function PostIdeaForm({
         options={[{ value: "", label: "—" }, ...POST_CATEGORIES.map(c => ({ value: c.value, label: c.label }))]}
         onChange={(v) => setCategory(v as Category | "")}
       />
+      <TextAreaField label="final_text" value={final_text} onChange={setFinalText} rows={6} />
     </FormShell>
   );
 }
