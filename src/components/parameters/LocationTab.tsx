@@ -400,6 +400,72 @@ async function deleteRule(id: string) {
   if (error) throw error;
 }
 
+function countryRuleReason(score: number): string {
+  switch (score) {
+    case 1: return "User-rated hard reject location.";
+    case 2: return "User-rated strong friction location.";
+    case 3: return "User-rated maybe/friction location.";
+    case 4: return "User-rated good location.";
+    case 5: return "User-rated great location.";
+    default: return "";
+  }
+}
+
+function countryRuleType(score: number): RuleType {
+  if (score === 1) return "hard";
+  if (score === 2 || score === 3) return "maybe";
+  return "accept";
+}
+
+// Upsert a country-scope rule by case-insensitive country match on `pattern`.
+async function upsertCountryRule(input: {
+  country: string;
+  score: number;
+  reason: string;
+}): Promise<{ country: string; created: boolean }> {
+  const country = input.country.trim();
+  const score = input.score;
+  const row = {
+    pattern: country,
+    country,
+    scope: "country" as Scope,
+    location_score: score,
+    rule_type: countryRuleType(score),
+    reason: input.reason.trim() || countryRuleReason(score),
+    is_active: true,
+    priority: 30,
+    match_mode: "contains" as MatchMode,
+    city: null,
+    region: null,
+    remote_scope: null,
+    notes: "Added manually from Parameters > Location > Unrated Locations.",
+  };
+
+  const { data: existing, error: findErr } = await gtmSupabase
+    .from("location_filter_rules" as never)
+    .select("id,pattern,scope")
+    .eq("scope", "country")
+    .ilike("pattern", country)
+    .limit(1);
+  if (findErr) throw findErr;
+
+  if (existing && existing.length > 0) {
+    const id = (existing[0] as { id: string }).id;
+    const { error } = await gtmSupabase
+      .from("location_filter_rules" as never)
+      .update({ ...row, updated_at: new Date().toISOString() } as never)
+      .eq("id", id);
+    if (error) throw error;
+    return { country, created: false };
+  }
+
+  const { error } = await gtmSupabase
+    .from("location_filter_rules" as never)
+    .insert(row as never);
+  if (error) throw error;
+  return { country, created: true };
+}
+
 // ---------- Theme ----------
 const BG = "#111118";
 const BG_DEEP = "#0A0A0F";
@@ -494,6 +560,29 @@ export function LocationTab() {
   const [editId, setEditId] = useState<string | null>(null);
   const [formError, setFormError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<LocationRule | null>(null);
+  const [addCountryFor, setAddCountryFor] = useState<string | null>(null);
+
+  const availableCountries = useMemo(() => {
+    const set = new Set<string>(COUNTRIES);
+    for (const r of rules) {
+      const c = (r.country ?? "").trim();
+      if (c) set.add(c);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [rules]);
+
+  const addCountryMut = useMutation({
+    mutationFn: (vars: { country: string; score: number; reason: string }) =>
+      upsertCountryRule(vars),
+    onSuccess: ({ country, created }) => {
+      qc.invalidateQueries({ queryKey: ["location-filter-rules"] });
+      qc.invalidateQueries({ queryKey: ["job-postings-locations"] });
+      setDraft((d) => ({ ...d, country }));
+      setAddCountryFor(null);
+      toast.success(created ? `Added country rule "${country}"` : `Updated country rule "${country}"`);
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not save country rule"),
+  });
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1069,9 +1158,23 @@ export function LocationTab() {
             error={formError}
             isPending={insertMut.isPending || updateMut.isPending}
             title={editId ? "Edit location rule" : "Add location rule"}
+            availableCountries={availableCountries}
+            onAddCountryRule={(text) => setAddCountryFor(text)}
           />
         </Modal>
       )}
+
+      {addCountryFor !== null && (
+        <Modal onClose={() => setAddCountryFor(null)}>
+          <AddCountryRuleForm
+            initialCountry={addCountryFor}
+            isPending={addCountryMut.isPending}
+            onCancel={() => setAddCountryFor(null)}
+            onSubmit={(vars) => addCountryMut.mutate(vars)}
+          />
+        </Modal>
+      )}
+
 
       {confirmDelete && (
         <Modal onClose={() => setConfirmDelete(null)}>
@@ -1430,6 +1533,8 @@ function RuleForm({
   error,
   isPending,
   title,
+  availableCountries,
+  onAddCountryRule,
 }: {
   draft: DraftRule;
   setDraft: (d: DraftRule) => void;
@@ -1438,6 +1543,8 @@ function RuleForm({
   error: string;
   isPending: boolean;
   title: string;
+  availableCountries?: string[];
+  onAddCountryRule?: (text: string) => void;
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -1515,19 +1622,13 @@ function RuleForm({
           </select>
         </Field>
 
-        <Field label="Country">
-          <select
+        <Field label="Country" hint="Type to search. If your country is not listed, you can add a new country rule.">
+          <CountryCombobox
             value={draft.country}
-            onChange={(e) => up("country", e.target.value)}
-            style={fieldStyle()}
-          >
-            <option value="">—</option>
-            {COUNTRIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+            options={availableCountries ?? COUNTRIES}
+            onChange={(v) => up("country", v)}
+            onAddNew={onAddCountryRule}
+          />
         </Field>
 
         <Field label="City">
@@ -1854,5 +1955,319 @@ function matchesAnyRule(loc: string, rules: LocationRule[]): boolean {
     }
   }
   return false;
+}
+
+// ---------- Country combobox ----------
+function CountryCombobox({
+  value,
+  options,
+  onChange,
+  onAddNew,
+}: {
+  value: string;
+  options: string[];
+  onChange: (v: string) => void;
+  onAddNew?: (text: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options.slice(0, 50);
+    return options.filter((c) => c.toLowerCase().includes(q)).slice(0, 50);
+  }, [options, query]);
+
+  const trimmed = query.trim();
+  const exactExists =
+    !!trimmed &&
+    options.some((c) => c.toLowerCase() === trimmed.toLowerCase());
+  const showAddNew = !!trimmed && !exactExists && !!onAddNew;
+
+  function commit(v: string) {
+    onChange(v);
+    setQuery("");
+    setOpen(false);
+  }
+
+  return (
+    <div style={{ position: "relative" }}>
+      <div className="flex items-center gap-1">
+        <input
+          value={open ? query : value}
+          placeholder={value ? value : "Type to search countries…"}
+          onFocus={() => {
+            setOpen(true);
+            setQuery("");
+          }}
+          onChange={(e) => {
+            setOpen(true);
+            setQuery(e.target.value);
+          }}
+          onBlur={() => {
+            // Delay so click-on-option still registers
+            setTimeout(() => setOpen(false), 120);
+          }}
+          style={fieldStyle()}
+        />
+        {value && (
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              onChange("");
+              setQuery("");
+            }}
+            title="Clear"
+            style={{
+              background: "transparent",
+              border: `1px solid ${BORDER}`,
+              color: MUTED,
+              borderRadius: 4,
+              padding: "4px 6px",
+              fontFamily: MONO,
+              fontSize: 11,
+              cursor: "pointer",
+            }}
+          >
+            ×
+          </button>
+        )}
+      </div>
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(100% + 2px)",
+            left: 0,
+            right: 0,
+            background: BG_DEEP,
+            border: `1px solid ${BORDER}`,
+            borderRadius: 4,
+            zIndex: 50,
+            maxHeight: 240,
+            overflowY: "auto",
+            fontFamily: MONO,
+            fontSize: 13,
+          }}
+        >
+          {matches.length === 0 && !showAddNew && (
+            <div className="px-2 py-1.5" style={{ color: MUTED }}>
+              No matches.
+            </div>
+          )}
+          {matches.map((c) => (
+            <div
+              key={c}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                commit(c);
+              }}
+              className="px-2 py-1.5 cursor-pointer"
+              style={{
+                color: TEXT,
+                background: c === value ? "rgba(0,212,255,0.08)" : "transparent",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "rgba(255,255,255,0.04)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background =
+                  c === value ? "rgba(0,212,255,0.08)" : "transparent")
+              }
+            >
+              {c}
+            </div>
+          ))}
+          {showAddNew && (
+            <div
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onAddNew!(trimmed);
+                setOpen(false);
+              }}
+              className="px-2 py-1.5 cursor-pointer"
+              style={{
+                borderTop: matches.length > 0 ? `1px solid ${BORDER}` : "none",
+                color: CYAN,
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "rgba(0,212,255,0.08)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = "transparent")
+              }
+            >
+              + Add new country rule: <span style={{ color: TEXT }}>{trimmed}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------- Add country rule form ----------
+function AddCountryRuleForm({
+  initialCountry,
+  isPending,
+  onSubmit,
+  onCancel,
+}: {
+  initialCountry: string;
+  isPending: boolean;
+  onSubmit: (vars: { country: string; score: number; reason: string }) => void;
+  onCancel: () => void;
+}) {
+  const [country, setCountry] = useState(initialCountry);
+  const [score, setScore] = useState<number | null>(null);
+  const [reasonDirty, setReasonDirty] = useState(false);
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!reasonDirty) {
+      setReason(score ? countryRuleReason(score) : "");
+    }
+  }, [score, reasonDirty]);
+
+  const derivedType = score ? countryRuleType(score) : null;
+
+  function submit() {
+    const c = country.trim();
+    if (!c) {
+      setError("Country name is required");
+      return;
+    }
+    if (!score) {
+      setError("Location score is required");
+      return;
+    }
+    setError("");
+    onSubmit({ country: c, score, reason });
+  }
+
+  return (
+    <div className="flex flex-col gap-4" style={{ minWidth: 420 }}>
+      <h3 className="text-sm font-semibold" style={{ color: TEXT, fontFamily: MONO }}>
+        Add new country rule
+      </h3>
+      <div
+        className="text-[11px] p-2.5"
+        style={{
+          borderLeft: `2px solid ${CYAN}`,
+          background: "rgba(0,212,255,0.05)",
+          color: MUTED,
+          borderRadius: 3,
+        }}
+      >
+        Creates or updates a country-scope rule in location_filter_rules.
+        Rule type is derived from the score automatically.
+      </div>
+
+      <Field label="Country name *">
+        <input
+          value={country}
+          onChange={(e) => setCountry(e.target.value)}
+          style={fieldStyle()}
+          placeholder="e.g. China"
+        />
+      </Field>
+
+      <Field
+        label="Location score *"
+        hint={score ? scoreDescription(score) : "Pick 1 (reject) to 5 (ideal)."}
+      >
+        <select
+          value={score ?? ""}
+          onChange={(e) => setScore(e.target.value ? Number(e.target.value) : null)}
+          style={fieldStyle()}
+        >
+          <option value="">— Select score —</option>
+          {SCORE_ORDER.map((n) => (
+            <option key={n} value={n}>
+              {scoreLabel(n)}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      <Field label="Reason" hint="Auto-generated from score. Edit to override.">
+        <input
+          value={reason}
+          onChange={(e) => {
+            setReasonDirty(true);
+            setReason(e.target.value);
+          }}
+          style={fieldStyle()}
+          placeholder={score ? countryRuleReason(score) : ""}
+        />
+      </Field>
+
+      <div
+        className="text-[11px] p-2.5"
+        style={{
+          background: BG_DEEP,
+          border: `1px solid ${BORDER}`,
+          borderRadius: 4,
+          color: MUTED,
+          fontFamily: MONO,
+        }}
+      >
+        Will save as: <span style={{ color: TEXT }}>scope country</span>
+        {" · "}
+        <span style={{ color: TEXT }}>
+          type {derivedType ?? "—"}
+        </span>
+        {" · "}
+        <span style={{ color: TEXT }}>match contains</span>
+        {" · "}
+        <span style={{ color: TEXT }}>priority 30</span>
+        {" · "}
+        <span style={{ color: TEXT }}>active</span>
+      </div>
+
+      {error && (
+        <div className="text-[12px]" style={{ color: "#EF4444", fontFamily: MONO }}>
+          {error}
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-3 py-1.5 text-[12px]"
+          style={{
+            background: "transparent",
+            color: MUTED,
+            border: `1px solid ${BORDER}`,
+            borderRadius: 4,
+            fontFamily: MONO,
+            cursor: "pointer",
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={isPending}
+          className="px-3 py-1.5 text-[12px]"
+          style={{
+            background: CYAN,
+            color: "#001018",
+            border: `1px solid ${CYAN}`,
+            borderRadius: 4,
+            fontFamily: MONO,
+            cursor: isPending ? "not-allowed" : "pointer",
+            opacity: isPending ? 0.6 : 1,
+          }}
+        >
+          {isPending ? "Saving…" : "Save country rule"}
+        </button>
+      </div>
+    </div>
+  );
 }
 
