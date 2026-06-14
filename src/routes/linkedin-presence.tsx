@@ -618,10 +618,22 @@ function formatWeekRange(startIso: string, endIso: string): string {
 }
 
 function ProgressTab() {
-  const { data: rows = [], isLoading, error } = useQuery({
-    queryKey: ["lp-weekly-progress"],
-    queryFn: fetchWeeklyProgress,
+  const { data: items = [], isLoading: itemsLoading } = useQuery({
+    queryKey: ["lp-items"],
+    queryFn: fetchItems,
   });
+  const { data: goal, isLoading: goalLoading } = useQuery({
+    queryKey: ["lp-active-goal"],
+    queryFn: fetchActiveGoal,
+  });
+  const { value: startDate } = useProjectStartDate();
+
+  const rows = useMemo(
+    () => computeWeeks(items as LpItem[], goal as LpGoal | null, startDate),
+    [items, goal, startDate],
+  );
+  const isLoading = itemsLoading || goalLoading;
+  const error: Error | null = null;
 
   const summary = useMemo(() => {
     if (!rows.length) return { best: 0, avg: 0, streak: 0 };
