@@ -600,6 +600,136 @@ function ItemsTab({ kind }: { kind: TabKind }) {
   );
 }
 
+// ---------- Progress Tab ----------
+function formatWeekRange(startIso: string, endIso: string): string {
+  const fmt = (iso: string) => {
+    const [y, m, d] = iso.split("-").map(Number);
+    const dt = new Date(y, (m ?? 1) - 1, d ?? 1);
+    return dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  };
+  return `${fmt(startIso)} to ${fmt(endIso)}`;
+}
+
+function ProgressTab() {
+  const { data: rows = [], isLoading, error } = useQuery({
+    queryKey: ["lp-weekly-progress"],
+    queryFn: fetchWeeklyProgress,
+  });
+
+  const summary = useMemo(() => {
+    if (!rows.length) return { best: 0, avg: 0, streak: 0 };
+    const best = Math.max(...rows.map((r) => r.completion_percent ?? 0));
+    const avg = Math.round(rows.reduce((s, r) => s + (r.completion_percent ?? 0), 0) / rows.length);
+    let streak = 0;
+    for (const r of rows) {
+      if (r.all_goals_met) streak++;
+      else break;
+    }
+    return { best, avg, streak };
+  }, [rows]);
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  if (isLoading) {
+    return <Panel><p className="text-sm" style={{ color: "#8B8B9E" }}>Loading…</p></Panel>;
+  }
+  if (error) {
+    return <Panel><p className="text-sm" style={{ color: "#F87171" }}>{(error as Error).message}</p></Panel>;
+  }
+  if (!rows.length) {
+    return <Panel><p className="text-sm" style={{ color: "#8B8B9E" }}>No weekly progress yet.</p></Panel>;
+  }
+
+  const Stat = ({ label, value }: { label: string; value: string }) => (
+    <div style={{ background: "#111118", border: "1px solid #1E1E2E", borderRadius: 6, padding: 14, flex: 1 }}>
+      <div className="text-[11px] uppercase" style={{ color: "#8B8B9E", fontFamily: MONO }}>{label}</div>
+      <div className="text-lg font-semibold mt-1" style={{ color: "#F0F0FF", fontFamily: MONO }}>{value}</div>
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex gap-3">
+        <Stat label="Current streak" value={`${summary.streak} wk${summary.streak === 1 ? "" : "s"}`} />
+        <Stat label="Best week" value={`${summary.best}%`} />
+        <Stat label="Avg completion" value={`${summary.avg}%`} />
+      </div>
+
+      <div style={{ background: "#111118", border: "1px solid #1E1E2E", borderRadius: 6, overflow: "hidden" }}>
+        <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ background: "#0B0B12", color: "#8B8B9E", fontFamily: MONO }}>
+              {["Week", "Posts", "Comments", "Ideas", "Completion", "Status"].map((h) => (
+                <th key={h} className="text-left px-3 py-2 text-[11px] uppercase font-medium" style={{ borderBottom: "1px solid #1E1E2E" }}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const isCurrent = todayIso >= r.week_start && todayIso < r.week_end;
+              let statusLabel = "No activity";
+              let accent = "#8B8B9E";
+              let rowBg = "transparent";
+              if (r.all_goals_met) {
+                statusLabel = "On track";
+                accent = "#10B981";
+                rowBg = "rgba(16,185,129,0.05)";
+              } else if (r.total_activity > 0) {
+                statusLabel = "Partial";
+                accent = "#F59E0B";
+                rowBg = "rgba(245,158,11,0.04)";
+              } else {
+                rowBg = "transparent";
+              }
+              if (isCurrent) {
+                rowBg = "rgba(0,212,255,0.08)";
+              }
+              const muted = r.total_activity === 0 && !isCurrent;
+              const textColor = muted ? "#6B6B80" : "#F0F0FF";
+              return (
+                <tr
+                  key={r.week_start}
+                  style={{
+                    background: rowBg,
+                    borderTop: "1px solid #1E1E2E",
+                    borderLeft: isCurrent ? "2px solid #00D4FF" : "2px solid transparent",
+                  }}
+                >
+                  <td className="px-3 py-2" style={{ color: textColor, fontFamily: MONO }}>
+                    {formatWeekRange(r.week_start, r.week_end)}
+                    {isCurrent && (
+                      <span className="ml-2 text-[10px] uppercase" style={{ color: "#00D4FF" }}>
+                        this week
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2" style={{ color: textColor, fontFamily: MONO }}>
+                    {r.posts_published}<span style={{ color: "#6B6B80" }}> / {r.weekly_posts_goal}</span>
+                  </td>
+                  <td className="px-3 py-2" style={{ color: textColor, fontFamily: MONO }}>
+                    {r.comments_posted}<span style={{ color: "#6B6B80" }}> / {r.weekly_comments_goal}</span>
+                  </td>
+                  <td className="px-3 py-2" style={{ color: textColor, fontFamily: MONO }}>
+                    {r.ideas_saved}<span style={{ color: "#6B6B80" }}> / {r.weekly_ideas_goal}</span>
+                  </td>
+                  <td className="px-3 py-2" style={{ color: textColor, fontFamily: MONO }}>
+                    {r.completion_percent}%
+                  </td>
+                  <td className="px-3 py-2" style={{ color: accent, fontFamily: MONO }}>
+                    {statusLabel}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ---------- Settings Tab ----------
 function SettingsTab() {
   const qc = useQueryClient();
