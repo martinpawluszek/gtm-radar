@@ -1015,6 +1015,8 @@ function PostIdeaForm({
   const [angle, setAngle] = useState(initial?.angle ?? "");
   const [category, setCategory] = useState<Category | "">((initial?.category as Category) ?? "");
   const [final_text, setFinalText] = useState(initial?.final_text ?? "");
+  const [createdAt, setCreatedAt] = useState<string>(isoToLocalInput(initial?.created_at));
+  const [postedAt, setPostedAt] = useState<string>(isoToLocalInput(initial?.posted_at));
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -1029,7 +1031,13 @@ function PostIdeaForm({
       final_text: final_text.trim() || null,
       updated_at: new Date().toISOString(),
     };
-    if (!initial) payload.status = "idea";
+    if (initial) {
+      const newCreated = localInputToIso(createdAt);
+      if (newCreated) payload.created_at = newCreated;
+      payload.posted_at = localInputToIso(postedAt);
+    } else {
+      payload.status = "idea";
+    }
     const { error } = initial
       ? await gtmSupabase.from("linkedin_presence_items" as never).update(payload as never).eq("id", initial.id)
       : await gtmSupabase.from("linkedin_presence_items" as never).insert(payload as never);
@@ -1074,13 +1082,29 @@ function PostIdeaForm({
         onChange={(v) => setCategory(v as Category | "")}
       />
       {initial && (
-        <TextAreaField
-          label="Final post text"
-          value={final_text}
-          onChange={setFinalText}
-          rows={6}
-          placeholder="Paste the final version of the post here once it is ready."
-        />
+        <>
+          <TextAreaField
+            label="Final post text"
+            value={final_text}
+            onChange={setFinalText}
+            rows={6}
+            placeholder="Paste the final version of the post here once it is ready."
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <DateTimeField
+              label="Created date"
+              value={createdAt}
+              onChange={setCreatedAt}
+              hint="Used for backfilling when you capture an idea late."
+            />
+            <DateTimeField
+              label="Posted date"
+              value={postedAt}
+              onChange={setPostedAt}
+              hint="Leave empty if not posted yet. Used when backfilling a post you already published."
+            />
+          </div>
+        </>
       )}
     </FormShell>
   );
