@@ -55,6 +55,36 @@ async function deactivateRule(id: string): Promise<void> {
   if (error) throw error;
 }
 
+type CommercialOverride = {
+  id: string;
+  keyword: string;
+  is_active: boolean;
+  created_at: string;
+};
+
+async function fetchOverrides(): Promise<CommercialOverride[]> {
+  const { data, error } = await gtmSupabase
+    .from("commercial_overrides" as never)
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as unknown as CommercialOverride[];
+}
+
+async function addOverride(keyword: string): Promise<void> {
+  const { error } = await gtmSupabase
+    .from("commercial_overrides" as never)
+    .insert({ keyword: keyword.trim(), is_active: true } as never);
+  if (error) throw error;
+}
+
+async function deactivateOverride(id: string): Promise<void> {
+  const { error } = await gtmSupabase
+    .from("commercial_overrides" as never)
+    .update({ is_active: false } as never)
+    .eq("id", id);
+  if (error) throw error;
+
 // ---------- Components ----------
 function ParametersPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("keyword-filters");
