@@ -1622,19 +1622,13 @@ function RuleForm({
           </select>
         </Field>
 
-        <Field label="Country">
-          <select
+        <Field label="Country" hint="Type to search. If your country is not listed, you can add a new country rule.">
+          <CountryCombobox
             value={draft.country}
-            onChange={(e) => up("country", e.target.value)}
-            style={fieldStyle()}
-          >
-            <option value="">—</option>
-            {COUNTRIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+            options={availableCountries ?? COUNTRIES}
+            onChange={(v) => up("country", v)}
+            onAddNew={onAddCountryRule}
+          />
         </Field>
 
         <Field label="City">
