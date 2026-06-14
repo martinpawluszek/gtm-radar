@@ -468,10 +468,26 @@ export function LocationTab() {
     queryFn: fetchLocationRules,
   });
 
+  const [view, setView] = useState<"rules" | "unrated">("rules");
+
   const [search, setSearch] = useState("");
   const [scoreFilter, setScoreFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [activeFilter, setActiveFilter] = useState<string>("all");
+
+  const [rulesPage, setRulesPage] = useState(1);
+  const [rulesPageSize, setRulesPageSize] = useState(20);
+
+  // Unrated state lifted so we can show count badge in the view switcher
+  const [unratedActiveOnly, setUnratedActiveOnly] = useState(true);
+  const [unratedSearch, setUnratedSearch] = useState("");
+  const [unratedPage, setUnratedPage] = useState(1);
+  const [unratedPageSize, setUnratedPageSize] = useState(20);
+
+  const { data: jobs = [], isLoading: jobsLoading, error: jobsError } = useQuery({
+    queryKey: ["job-postings-locations", unratedActiveOnly],
+    queryFn: () => fetchJobLocations(unratedActiveOnly),
+  });
 
   const [modalOpen, setModalOpen] = useState(false);
   const [draft, setDraft] = useState<DraftRule>(EMPTY_DRAFT);
@@ -499,6 +515,65 @@ export function LocationTab() {
       return true;
     });
   }, [rules, search, scoreFilter, typeFilter, activeFilter]);
+
+  // Reset rules page when filters/page size change
+  useEffect(() => {
+    setRulesPage(1);
+  }, [search, scoreFilter, typeFilter, activeFilter, rulesPageSize]);
+
+  const rulesTotal = filtered.length;
+  const rulesTotalPages = Math.max(1, Math.ceil(rulesTotal / rulesPageSize));
+  const rulesPageSafe = Math.min(rulesPage, rulesTotalPages);
+  const rulesStart = (rulesPageSafe - 1) * rulesPageSize;
+  const rulesEnd = Math.min(rulesStart + rulesPageSize, rulesTotal);
+  const pagedRules = filtered.slice(rulesStart, rulesEnd);
+
+  const unratedAll: UnratedRow[] = useMemo(() => {
+    const groups = new Map<string, { count: number; titles: string[] }>();
+    for (const j of jobs) {
+      const raw = (j.location ?? "").toString();
+      const loc = raw.trim();
+      if (!loc) continue;
+      if (matchesAnyRule(loc, rules)) continue;
+      let g = groups.get(loc);
+      if (!g) {
+        g = { count: 0, titles: [] };
+        groups.set(loc, g);
+      }
+      g.count += 1;
+      if (g.titles.length < 3 && j.title) {
+        if (!g.titles.includes(j.title)) g.titles.push(j.title);
+      }
+    }
+    const out: UnratedRow[] = [];
+    groups.forEach((v, k) => {
+      out.push({ location: k, job_count: v.count, example_titles: v.titles });
+    });
+    out.sort((a, b) => {
+      if (b.job_count !== a.job_count) return b.job_count - a.job_count;
+      return a.location.localeCompare(b.location);
+    });
+    return out;
+  }, [jobs, rules]);
+
+  const unratedFiltered = useMemo(() => {
+    const q = unratedSearch.trim().toLowerCase();
+    if (!q) return unratedAll;
+    return unratedAll.filter((r) => r.location.toLowerCase().includes(q));
+  }, [unratedAll, unratedSearch]);
+
+  useEffect(() => {
+    setUnratedPage(1);
+  }, [unratedSearch, unratedActiveOnly, unratedPageSize]);
+
+  const unratedTotal = unratedFiltered.length;
+  const unratedTotalPages = Math.max(1, Math.ceil(unratedTotal / unratedPageSize));
+  const unratedPageSafe = Math.min(unratedPage, unratedTotalPages);
+  const unratedStart = (unratedPageSafe - 1) * unratedPageSize;
+  const unratedEnd = Math.min(unratedStart + unratedPageSize, unratedTotal);
+  const pagedUnrated = unratedFiltered.slice(unratedStart, unratedEnd);
+
+  const unratedCount = unratedAll.length;
 
   const insertMut = useMutation({
     mutationFn: insertRule,
