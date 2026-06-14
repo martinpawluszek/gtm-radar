@@ -167,9 +167,7 @@ function ParametersPage() {
       {/* Tab content */}
       {activeTab === "keyword-filters" && <KeywordFiltersTab />}
       {activeTab === "commercial-overrides" && <CommercialOverridesTab />}
-      {activeTab === "excluded-titles" && (
-        <PlaceholderCard text="Excluded Titles content coming soon." />
-      )}
+      {activeTab === "excluded-titles" && <ExcludedTitlesTab />}
     </div>
   );
 }
