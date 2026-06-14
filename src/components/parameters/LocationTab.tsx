@@ -560,6 +560,29 @@ export function LocationTab() {
   const [editId, setEditId] = useState<string | null>(null);
   const [formError, setFormError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<LocationRule | null>(null);
+  const [addCountryFor, setAddCountryFor] = useState<string | null>(null);
+
+  const availableCountries = useMemo(() => {
+    const set = new Set<string>(COUNTRIES);
+    for (const r of rules) {
+      const c = (r.country ?? "").trim();
+      if (c) set.add(c);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [rules]);
+
+  const addCountryMut = useMutation({
+    mutationFn: (vars: { country: string; score: number; reason: string }) =>
+      upsertCountryRule(vars),
+    onSuccess: ({ country, created }) => {
+      qc.invalidateQueries({ queryKey: ["location-filter-rules"] });
+      qc.invalidateQueries({ queryKey: ["job-postings-locations"] });
+      setDraft((d) => ({ ...d, country }));
+      setAddCountryFor(null);
+      toast.success(created ? `Added country rule "${country}"` : `Updated country rule "${country}"`);
+    },
+    onError: (e: Error) => toast.error(e.message || "Could not save country rule"),
+  });
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
