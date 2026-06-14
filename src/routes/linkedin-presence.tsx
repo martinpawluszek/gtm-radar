@@ -1243,12 +1243,13 @@ function FormShell({
   );
 }
 
-function TextField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function TextField({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
   return (
     <label className="flex flex-col gap-1">
       <span className="text-[11px] uppercase" style={{ color: "#8B8B9E", fontFamily: MONO }}>{label}</span>
       <input
         value={value}
+        placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
         className="bg-transparent outline-none text-sm px-2 py-1.5"
         style={{ color: "#F0F0FF", border: "1px solid #1E1E2E", borderRadius: 4, fontFamily: MONO }}
@@ -1257,13 +1258,14 @@ function TextField({ label, value, onChange }: { label: string; value: string; o
   );
 }
 
-function TextAreaField({ label, value, onChange, rows = 3 }: { label: string; value: string; onChange: (v: string) => void; rows?: number }) {
+function TextAreaField({ label, value, onChange, rows = 3, placeholder }: { label: string; value: string; onChange: (v: string) => void; rows?: number; placeholder?: string }) {
   return (
     <label className="flex flex-col gap-1">
       <span className="text-[11px] uppercase" style={{ color: "#8B8B9E", fontFamily: MONO }}>{label}</span>
       <textarea
         value={value}
         rows={rows}
+        placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
         className="bg-transparent outline-none text-sm px-2 py-1.5"
         style={{ color: "#F0F0FF", border: "1px solid #1E1E2E", borderRadius: 4, fontFamily: MONO }}
