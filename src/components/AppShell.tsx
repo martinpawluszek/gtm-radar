@@ -16,6 +16,7 @@ const NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/companies", label: "Companies", icon: Building2 },
   { to: "/role-criteria", label: "Role Criteria", icon: Sliders },
+  { to: "/parameters", label: "Parameters", icon: SlidersHorizontal },
   { to: "/postings", label: "Postings", icon: Inbox },
   { to: "/applications", label: "Applications", icon: Kanban },
   { to: "/outreach", label: "Outreach", icon: Users },
