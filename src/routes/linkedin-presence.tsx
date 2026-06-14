@@ -1123,6 +1123,8 @@ function ReplyForm({
   const [source_url, setUrl] = useState(initial?.source_url ?? "");
   const [target_person, setPerson] = useState(initial?.target_person ?? "");
   const [target_company, setCompany] = useState(initial?.target_company ?? "");
+  const [createdAt, setCreatedAt] = useState<string>(isoToLocalInput(initial?.created_at));
+  const [postedAt, setPostedAt] = useState<string>(isoToLocalInput(initial?.posted_at));
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -1137,7 +1139,13 @@ function ReplyForm({
       category: "reply",
       updated_at: new Date().toISOString(),
     };
-    if (!initial) payload.status = "idea";
+    if (initial) {
+      const newCreated = localInputToIso(createdAt);
+      if (newCreated) payload.created_at = newCreated;
+      payload.posted_at = localInputToIso(postedAt);
+    } else {
+      payload.status = "idea";
+    }
     const { error } = initial
       ? await gtmSupabase.from("linkedin_presence_items" as never).update(payload as never).eq("id", initial.id)
       : await gtmSupabase.from("linkedin_presence_items" as never).insert(payload as never);
@@ -1180,6 +1188,22 @@ function ReplyForm({
         onChange={setCompany}
         placeholder="Optional. Their company."
       />
+      {initial && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <DateTimeField
+            label="Created date"
+            value={createdAt}
+            onChange={setCreatedAt}
+            hint="Used for backfilling when you capture an item late."
+          />
+          <DateTimeField
+            label="Posted date"
+            value={postedAt}
+            onChange={setPostedAt}
+            hint="Leave empty if not posted yet. Used when backfilling a comment you already published."
+          />
+        </div>
+      )}
     </FormShell>
   );
 }
