@@ -1141,11 +1141,6 @@ function DetailPanel({
   });
   const [savingFb, setSavingFb] = useState(false);
 
-  // ---- Manual fit rating (job_ratings) ----
-  const [fitRating, setFitRating] = useState<number | null>(null);
-  const [ratingNotes, setRatingNotes] = useState<string>("");
-  const [savingRating, setSavingRating] = useState(false);
-
   useEffect(() => {
     setRating(posting.martin_feedback_score ?? null);
     setComment(posting.martin_feedback_comment ?? "");
@@ -1155,59 +1150,7 @@ function DetailPanel({
       init[k] = { score: v ? String(v.score) : "", reason: v?.reason ?? "" };
     });
     setOverrides(init);
-
-    let cancelled = false;
-    setFitRating(null);
-    setRatingNotes("");
-    (async () => {
-      const { data } = await gtmSupabase
-        .from("job_ratings" as never)
-        .select("fit_rating, rating_notes")
-        .eq("job_posting_id", posting.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (cancelled) return;
-      const row = data as { fit_rating?: number | null; rating_notes?: string | null } | null;
-      if (row) {
-        setFitRating(row.fit_rating ?? null);
-        setRatingNotes(row.rating_notes ?? "");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
   }, [posting.id]);
-
-  async function saveManualRating() {
-    if (fitRating == null) {
-      toast.error("Pick a fit rating from 1 to 5");
-      return;
-    }
-    setSavingRating(true);
-    try {
-      const { error } = await gtmSupabase.rpc("upsert_manual_job_rating" as never, {
-        p_job_posting_id: posting.id,
-        p_fit_rating: fitRating,
-        p_rating_notes: ratingNotes || null,
-      } as never);
-      if (error) throw error;
-      toast.success("Rating saved");
-      onChanged();
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setSavingRating(false);
-    }
-  }
-
-  const FIT_LABELS: Record<number, string> = {
-    1: "bad_fit",
-    2: "weak_fit",
-    3: "maybe",
-    4: "good_fit",
-    5: "excellent_fit",
-  };
 
   const finalScore = posting.ai_composite_score;
   const params = posting.ai_rationale?.parameter_scores ?? {};
@@ -1458,59 +1401,8 @@ function DetailPanel({
         )}
       </Section>
 
-      {/* Manual Fit Rating */}
-      <Section title="Manual Fit Rating">
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <label style={{ color: "#8B8B9E", fontSize: 11, fontFamily: MONO }}>
-              Fit rating (1–5)
-            </label>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <button
-                  key={n}
-                  onClick={() => setFitRating(n)}
-                  className="tabular-nums px-2"
-                  style={{
-                    height: 32,
-                    minWidth: 110,
-                    borderRadius: 4,
-                    border: "1px solid",
-                    borderColor: fitRating === n ? "rgba(0,212,255,0.5)" : "#1E1E2E",
-                    background: fitRating === n ? "rgba(0,212,255,0.12)" : "#111118",
-                    color: fitRating === n ? "#00D4FF" : "#F0F0FF",
-                    fontFamily: MONO,
-                    fontWeight: 600,
-                    fontSize: 12,
-                  }}
-                >
-                  {n} — {FIT_LABELS[n]}
-                </button>
-              ))}
-            </div>
-          </div>
-          <Textarea
-            placeholder="Notes (optional) — why this fit rating?"
-            rows={3}
-            value={ratingNotes}
-            onChange={(e) => setRatingNotes(e.target.value)}
-            style={{ background: "#111118", border: "1px solid #1E1E2E", color: "#F0F0FF" }}
-          />
-          <div>
-            <Button
-              onClick={saveManualRating}
-              disabled={savingRating}
-              style={{ background: "#00D4FF", color: "#0A0A0F" }}
-            >
-              {savingRating ? "Saving…" : "Save Rating"}
-            </Button>
-          </div>
-        </div>
-      </Section>
-
       {/* Feedback */}
       <Section title="Your Feedback">
-
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
             <label style={{ color: "#8B8B9E", fontSize: 11, fontFamily: MONO }}>
