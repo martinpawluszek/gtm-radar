@@ -612,6 +612,151 @@ function StatusPill({ status }: { status: PostingStatus }) {
   );
 }
 
+// ---------- Pagination ----------
+function PaginationBar({
+  page,
+  totalPages,
+  pageSize,
+  pageSizeOptions,
+  totalItems,
+  startIdx,
+  endIdx,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  page: number;
+  totalPages: number;
+  pageSize: number;
+  pageSizeOptions: number[];
+  totalItems: number;
+  startIdx: number;
+  endIdx: number;
+  onPageChange: (p: number) => void;
+  onPageSizeChange: (s: number) => void;
+}) {
+  const pages: number[] = [];
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) pages.push(i);
+  } else {
+    if (page <= 4) {
+      pages.push(1, 2, 3, 4, 5, -1, totalPages);
+    } else if (page >= totalPages - 3) {
+      pages.push(1, -1, totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+    } else {
+      pages.push(1, -1, page - 1, page, page + 1, -1, totalPages);
+    }
+  }
+
+  return (
+    <div
+      className="flex items-center justify-between px-3 py-2"
+      style={{
+        background: "#111118",
+        border: "1px solid #1E1E2E",
+        borderTop: "none",
+        borderRadius: "0 0 6px 6px",
+        fontFamily: MONO,
+        fontSize: 12,
+      }}
+    >
+      <div className="flex items-center gap-2" style={{ color: "#8B8B9E" }}>
+        <span>Rows:</span>
+        <div className="flex items-center gap-1">
+          {pageSizeOptions.map((opt) => (
+            <button
+              key={opt}
+              onClick={() => onPageSizeChange(opt)}
+              className="px-2"
+              style={{
+                height: 24,
+                borderRadius: 3,
+                border: "1px solid",
+                borderColor: pageSize === opt ? "rgba(0,212,255,0.4)" : "transparent",
+                background: pageSize === opt ? "rgba(0,212,255,0.1)" : "transparent",
+                color: pageSize === opt ? "#00D4FF" : "#8B8B9E",
+                fontSize: 11,
+                fontFamily: MONO,
+              }}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ color: "#8B8B9E" }}>
+        {totalItems === 0
+          ? "0 of 0"
+          : `${(startIdx + 1).toLocaleString()}–${endIdx.toLocaleString()} of ${totalItems.toLocaleString()} postings`}
+      </div>
+
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onPageChange(page - 1)}
+          disabled={page <= 1}
+          className="inline-flex items-center justify-center"
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 4,
+            border: "1px solid #1E1E2E",
+            background: "transparent",
+            color: page <= 1 ? "#4A4A5A" : "#F0F0FF",
+            cursor: page <= 1 ? "not-allowed" : "pointer",
+          }}
+        >
+          <ChevronLeft size={14} />
+        </button>
+
+        {pages.map((p, i) =>
+          p === -1 ? (
+            <span key={`ellipsis-${i}`} className="px-1" style={{ color: "#4A4A5A" }}>
+              …
+            </span>
+          ) : (
+            <button
+              key={p}
+              onClick={() => onPageChange(p)}
+              className="inline-flex items-center justify-center"
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 4,
+                border: "1px solid",
+                borderColor: page === p ? "rgba(0,212,255,0.4)" : "#1E1E2E",
+                background: page === p ? "rgba(0,212,255,0.1)" : "transparent",
+                color: page === p ? "#00D4FF" : "#F0F0FF",
+                fontSize: 11,
+                fontFamily: MONO,
+                cursor: "pointer",
+              }}
+            >
+              {p}
+            </button>
+          ),
+        )}
+
+        <button
+          onClick={() => onPageChange(page + 1)}
+          disabled={page >= totalPages}
+          className="inline-flex items-center justify-center"
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 4,
+            border: "1px solid #1E1E2E",
+            background: "transparent",
+            color: page >= totalPages ? "#4A4A5A" : "#F0F0FF",
+            cursor: page >= totalPages ? "not-allowed" : "pointer",
+          }}
+        >
+          <ChevronRight size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ---------- Table ----------
 function PostingsTable({
   rows,
