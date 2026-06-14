@@ -68,6 +68,30 @@ export type Database = {
         }
         Relationships: []
       }
+      pre_filter_rules: {
+        Row: {
+          created_at: string
+          filter_tier: string
+          id: string
+          is_active: boolean
+          keyword: string
+        }
+        Insert: {
+          created_at?: string
+          filter_tier: string
+          id?: string
+          is_active?: boolean
+          keyword: string
+        }
+        Update: {
+          created_at?: string
+          filter_tier?: string
+          id?: string
+          is_active?: boolean
+          keyword?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
