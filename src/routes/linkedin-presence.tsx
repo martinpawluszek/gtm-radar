@@ -190,6 +190,16 @@ async function fetchActiveGoal(): Promise<Goal | null> {
   return (data ?? null) as unknown as Goal | null;
 }
 
+async function fetchWeeklyProgress(): Promise<WeeklyProgress[]> {
+  const { data, error } = await gtmSupabase
+    .from("linkedin_presence_weekly_progress" as never)
+    .select("*")
+    .order("week_start", { ascending: false })
+    .limit(12);
+  if (error) throw error;
+  return (data ?? []) as unknown as WeeklyProgress[];
+}
+
 // ---------- Prompts ----------
 function buildPostPrompt(it: Item): string {
   return `Write a LinkedIn post in my voice.
