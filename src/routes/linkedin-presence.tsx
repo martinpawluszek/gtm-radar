@@ -485,6 +485,7 @@ function ItemsTab({ kind }: { kind: TabKind }) {
   function refresh() {
     qc.invalidateQueries({ queryKey: ["lp-items"] });
     qc.invalidateQueries({ queryKey: ["lp-weekly-status"] });
+    qc.invalidateQueries({ queryKey: ["lp-weekly-progress"] });
   }
 
   const openItem = openItemId ? items.find((i) => i.id === openItemId) ?? null : null;
