@@ -12,6 +12,7 @@ import {
   useProjectStartDate,
   type LpGoal,
   type LpItem,
+  type WeekStat,
 } from "@/lib/linkedinProgress";
 
 type AbStats = {
