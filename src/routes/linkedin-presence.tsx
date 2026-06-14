@@ -1091,21 +1091,23 @@ function PostIdeaForm({
             rows={6}
             placeholder="Paste the final version of the post here once it is ready."
           />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <DateTimeField
-              label="Created date"
-              value={createdAt}
-              onChange={setCreatedAt}
-              hint="Used for backfilling when you capture an idea late."
-            />
-            <DateTimeField
-              label="Posted date"
-              value={postedAt}
-              onChange={setPostedAt}
-              hint="Leave empty if not posted yet. Used when backfilling a post you already published."
-            />
-          </div>
         </>
+      )}
+      {initial && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <DateTimeField
+            label="Created date"
+            value={createdAt}
+            onChange={setCreatedAt}
+            hint="Used for backfilling when you capture an idea late."
+          />
+          <DateTimeField
+            label="Posted date"
+            value={postedAt}
+            onChange={setPostedAt}
+            hint="Leave empty if not posted yet. Clear to mark as not posted."
+          />
+        </div>
       )}
     </FormShell>
   );
