@@ -225,6 +225,7 @@ function ParametersPage() {
       {activeTab === "commercial-overrides" && <CommercialOverridesTab />}
       {activeTab === "excluded-titles" && <ExcludedTitlesTab />}
       {activeTab === "location" && <LocationTab />}
+      {activeTab === "search-patterns" && <SearchPatternsTab />}
 
     </div>
   );
