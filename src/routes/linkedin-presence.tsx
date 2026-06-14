@@ -231,6 +231,24 @@ function LinkedInPresencePage() {
     queryFn: fetchWeeklyStatus,
   });
 
+  const { data: allItems = [] } = useQuery({
+    queryKey: ["lp-items"],
+    queryFn: fetchItems,
+  });
+
+  const counts = useMemo(() => {
+    const active = (t: ItemType) =>
+      allItems.filter(
+        (i) => i.item_type === t && i.status !== "posted" && i.status !== "archived",
+      ).length;
+    return {
+      ideas: active("post_idea"),
+      replies: active("reply_opportunity"),
+      posted: allItems.filter((i) => i.status === "posted").length,
+      archived: allItems.filter((i) => i.status === "archived").length,
+    };
+  }, [allItems]);
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -258,23 +276,29 @@ function LinkedInPresencePage() {
           paddingBottom: 6,
         }}
       >
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className="px-3 py-1 text-[13px] font-medium transition-colors"
-            style={{
-              color: tab === t.key ? "#00D4FF" : "#8B8B9E",
-              background: tab === t.key ? "rgba(0,212,255,0.1)" : "transparent",
-              borderRadius: 4,
-              border:
-                tab === t.key ? "1px solid rgba(0,212,255,0.25)" : "1px solid transparent",
-              fontFamily: MONO,
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
+        {TABS.map((t) => {
+          const countLabel = t.showCount
+            ? ` (${counts[t.key as "ideas" | "replies" | "posted" | "archived"]})`
+            : "";
+          return (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className="px-3 py-1 text-[13px] font-medium transition-colors"
+              style={{
+                color: tab === t.key ? "#00D4FF" : "#8B8B9E",
+                background: tab === t.key ? "rgba(0,212,255,0.1)" : "transparent",
+                borderRadius: 4,
+                border:
+                  tab === t.key ? "1px solid rgba(0,212,255,0.25)" : "1px solid transparent",
+                fontFamily: MONO,
+              }}
+            >
+              {t.label}
+              {countLabel}
+            </button>
+          );
+        })}
       </div>
 
       {tab === "ideas" && <ItemsTab kind="post_idea" />}
