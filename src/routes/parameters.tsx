@@ -226,6 +226,14 @@ function KeywordFiltersTab() {
   const [hardError, setHardError] = useState("");
   const [softError, setSoftError] = useState("");
 
+  useEffect(() => {
+    setSearch("");
+    setHardInput("");
+    setSoftInput("");
+    setHardError("");
+    setSoftError("");
+  }, []);
+
   const { data: allRules = [], isLoading } = useQuery({
     queryKey: ["pre-filter-rules"],
     queryFn: fetchRules,
@@ -583,9 +591,10 @@ function CommercialOverridesTab() {
     mutationFn: addOverride,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["commercial-overrides"] });
+      toast.success("Saved");
     },
-    onError: (err: Error) => {
-      toast.error(err.message || "Failed to add override word");
+    onError: () => {
+      toast.error("Save failed — try again");
     },
   });
 
@@ -593,9 +602,10 @@ function CommercialOverridesTab() {
     mutationFn: deactivateOverride,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["commercial-overrides"] });
+      toast.success("Saved");
     },
-    onError: (err: Error) => {
-      toast.error(err.message || "Failed to remove override word");
+    onError: () => {
+      toast.error("Save failed — try again");
     },
   });
 
@@ -618,7 +628,6 @@ function CommercialOverridesTab() {
     addMutation.mutate(trimmed, {
       onSuccess: () => {
         setInputValue("");
-        toast.success(`Added "${trimmed}"`);
       },
       onError: (err: Error) => {
         if (err.message?.includes("duplicate") || err.message?.includes("unique")) {
@@ -847,19 +856,17 @@ function ExcludedTitlesTab() {
       updateExcludedTitles(id, newTitles),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["excluded-titles"] });
+      toast.success("Saved");
     },
-    onError: (err: Error) => {
-      toast.error(err.message || "Failed to update excluded titles");
+    onError: () => {
+      toast.error("Save failed — try again");
     },
   });
 
   function handleRemove(titleToRemove: string) {
     if (!rowId) return;
     const newTitles = titles.filter((t) => t !== titleToRemove);
-    updateMutation.mutate(
-      { id: rowId, newTitles },
-      { onSuccess: () => toast.success(`Removed "${titleToRemove}"`) },
-    );
+    updateMutation.mutate({ id: rowId, newTitles });
   }
 
   function handleAdd() {
@@ -885,7 +892,6 @@ function ExcludedTitlesTab() {
       {
         onSuccess: () => {
           setInputValue("");
-          toast.success(`Added "${trimmed}"`);
         },
       },
     );
