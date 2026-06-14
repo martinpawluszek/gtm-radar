@@ -1533,6 +1533,8 @@ function RuleForm({
   error,
   isPending,
   title,
+  availableCountries,
+  onAddCountryRule,
 }: {
   draft: DraftRule;
   setDraft: (d: DraftRule) => void;
@@ -1541,6 +1543,8 @@ function RuleForm({
   error: string;
   isPending: boolean;
   title: string;
+  availableCountries?: string[];
+  onAddCountryRule?: (text: string) => void;
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
