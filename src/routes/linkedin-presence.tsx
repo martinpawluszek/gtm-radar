@@ -809,6 +809,28 @@ function SettingsTab() {
         options={DAYS.map((d) => ({ value: String(d.v), label: d.l }))}
         onChange={(v) => setForm((f) => ({ ...f, reminder_day: Number(v) }))}
       />
+      <div className="flex flex-col gap-1.5">
+        <label className="text-[11px] uppercase" style={{ color: "#8B8B9E", fontFamily: MONO }}>
+          Project start date
+        </label>
+        <input
+          type="date"
+          value={startDraft}
+          onChange={(e) => setStartDraft(e.target.value)}
+          className="px-3 py-1.5 text-sm"
+          style={{
+            background: "#0B0B12",
+            border: "1px solid #1E1E2E",
+            borderRadius: 4,
+            color: "#F0F0FF",
+            fontFamily: MONO,
+            maxWidth: 220,
+          }}
+        />
+        <p className="text-[11px]" style={{ color: "#6B6B80" }}>
+          Week 1 starts on the Monday of this date. Every Monday after that starts the next week.
+        </p>
+      </div>
       <SelectField
         label="Reminder threshold"
         value={current.reminder_threshold}
