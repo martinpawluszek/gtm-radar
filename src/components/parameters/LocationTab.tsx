@@ -199,13 +199,27 @@ function scoreMeaning(score: number | null): string {
 function scoreLabel(score: number): string {
   switch (score) {
     case 1: return "1 — Reject / hard no";
-    case 2: return "2 — Very low fit";
-    case 3: return "3 — Possible, but friction";
+    case 2: return "2 — Weak fit";
+    case 3: return "3 — Possible / friction";
     case 4: return "4 — Good fit";
     case 5: return "5 — Ideal fit";
     default: return String(score);
   }
 }
+
+function scoreDescription(score: number | null): string {
+  switch (score) {
+    case 5: return "Best possible location, e.g. Berlin or fully remote anywhere.";
+    case 4: return "Strong practical fit, e.g. target European cities or remote Europe.";
+    case 3: return "Potentially interesting but has location friction.";
+    case 2: return "Unlikely, but not an automatic rejection.";
+    case 1: return "Hard-no location; can be dismissed automatically.";
+    default: return "";
+  }
+}
+
+// Best-to-worst order for dropdowns
+const SCORE_ORDER = [5, 4, 3, 2, 1] as const;
 
 function suggestedReason(score: number | null): string {
   switch (score) {
@@ -454,10 +468,26 @@ export function LocationTab() {
     queryFn: fetchLocationRules,
   });
 
+  const [view, setView] = useState<"rules" | "unrated">("rules");
+
   const [search, setSearch] = useState("");
   const [scoreFilter, setScoreFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [activeFilter, setActiveFilter] = useState<string>("all");
+
+  const [rulesPage, setRulesPage] = useState(1);
+  const [rulesPageSize, setRulesPageSize] = useState(20);
+
+  // Unrated state lifted so we can show count badge in the view switcher
+  const [unratedActiveOnly, setUnratedActiveOnly] = useState(true);
+  const [unratedSearch, setUnratedSearch] = useState("");
+  const [unratedPage, setUnratedPage] = useState(1);
+  const [unratedPageSize, setUnratedPageSize] = useState(20);
+
+  const { data: jobs = [], isLoading: jobsLoading, error: jobsError } = useQuery({
+    queryKey: ["job-postings-locations", unratedActiveOnly],
+    queryFn: () => fetchJobLocations(unratedActiveOnly),
+  });
 
   const [modalOpen, setModalOpen] = useState(false);
   const [draft, setDraft] = useState<DraftRule>(EMPTY_DRAFT);
@@ -485,6 +515,65 @@ export function LocationTab() {
       return true;
     });
   }, [rules, search, scoreFilter, typeFilter, activeFilter]);
+
+  // Reset rules page when filters/page size change
+  useEffect(() => {
+    setRulesPage(1);
+  }, [search, scoreFilter, typeFilter, activeFilter, rulesPageSize]);
+
+  const rulesTotal = filtered.length;
+  const rulesTotalPages = Math.max(1, Math.ceil(rulesTotal / rulesPageSize));
+  const rulesPageSafe = Math.min(rulesPage, rulesTotalPages);
+  const rulesStart = (rulesPageSafe - 1) * rulesPageSize;
+  const rulesEnd = Math.min(rulesStart + rulesPageSize, rulesTotal);
+  const pagedRules = filtered.slice(rulesStart, rulesEnd);
+
+  const unratedAll: UnratedRow[] = useMemo(() => {
+    const groups = new Map<string, { count: number; titles: string[] }>();
+    for (const j of jobs) {
+      const raw = (j.location ?? "").toString();
+      const loc = raw.trim();
+      if (!loc) continue;
+      if (matchesAnyRule(loc, rules)) continue;
+      let g = groups.get(loc);
+      if (!g) {
+        g = { count: 0, titles: [] };
+        groups.set(loc, g);
+      }
+      g.count += 1;
+      if (g.titles.length < 3 && j.title) {
+        if (!g.titles.includes(j.title)) g.titles.push(j.title);
+      }
+    }
+    const out: UnratedRow[] = [];
+    groups.forEach((v, k) => {
+      out.push({ location: k, job_count: v.count, example_titles: v.titles });
+    });
+    out.sort((a, b) => {
+      if (b.job_count !== a.job_count) return b.job_count - a.job_count;
+      return a.location.localeCompare(b.location);
+    });
+    return out;
+  }, [jobs, rules]);
+
+  const unratedFiltered = useMemo(() => {
+    const q = unratedSearch.trim().toLowerCase();
+    if (!q) return unratedAll;
+    return unratedAll.filter((r) => r.location.toLowerCase().includes(q));
+  }, [unratedAll, unratedSearch]);
+
+  useEffect(() => {
+    setUnratedPage(1);
+  }, [unratedSearch, unratedActiveOnly, unratedPageSize]);
+
+  const unratedTotal = unratedFiltered.length;
+  const unratedTotalPages = Math.max(1, Math.ceil(unratedTotal / unratedPageSize));
+  const unratedPageSafe = Math.min(unratedPage, unratedTotalPages);
+  const unratedStart = (unratedPageSafe - 1) * unratedPageSize;
+  const unratedEnd = Math.min(unratedStart + unratedPageSize, unratedTotal);
+  const pagedUnrated = unratedFiltered.slice(unratedStart, unratedEnd);
+
+  const unratedCount = unratedAll.length;
 
   const insertMut = useMutation({
     mutationFn: insertRule,
@@ -587,234 +676,387 @@ export function LocationTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Filters bar */}
+      {/* View switcher */}
       <div
-        className="flex flex-wrap items-center gap-2 p-3"
-        style={{ background: BG, border: `1px solid ${BORDER}`, borderRadius: 6 }}
+        className="flex flex-wrap items-center gap-1 p-1"
+        style={{ background: BG, border: `1px solid ${BORDER}`, borderRadius: 6, width: "fit-content" }}
       >
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search match text, country, city, reason, notes..."
-          style={{ ...fieldStyle(), flex: "1 1 260px", minWidth: 200 }}
+        <ViewTab
+          active={view === "rules"}
+          onClick={() => setView("rules")}
+          label="Rules"
+          count={rules.length}
         />
-        <FilterSelect
-          label="Score"
-          value={scoreFilter}
-          onChange={setScoreFilter}
-          options={[
-            { value: "all", label: "All" },
-            { value: "5", label: "5 — Ideal" },
-            { value: "4", label: "4 — Good" },
-            { value: "3", label: "3 — Possible" },
-            { value: "2", label: "2 — Weak" },
-            { value: "1", label: "1 — Reject" },
-            { value: "unscored", label: "Unscored" },
-          ]}
+        <ViewTab
+          active={view === "unrated"}
+          onClick={() => setView("unrated")}
+          label="Unrated locations"
+          count={unratedCount}
+          highlight={unratedCount > 0}
+          loading={jobsLoading}
         />
-        <FilterSelect
-          label="Type"
-          value={typeFilter}
-          onChange={setTypeFilter}
-          options={[
-            { value: "all", label: "All" },
-            ...RULE_TYPES.map((t) => ({ value: t, label: t })),
-          ]}
-        />
-        <FilterSelect
-          label="Status"
-          value={activeFilter}
-          onChange={setActiveFilter}
-          options={[
-            { value: "all", label: "All" },
-            { value: "active", label: "Active" },
-            { value: "inactive", label: "Inactive" },
-          ]}
-        />
-        <button
-          onClick={openAdd}
-          className="px-3 py-1.5 text-[12px] font-semibold transition-colors"
-          style={{
-            background: CYAN,
-            color: "#000",
-            borderRadius: 4,
-            fontFamily: MONO,
-            cursor: "pointer",
-          }}
-        >
-          + Add Rule
-        </button>
       </div>
 
-      {/* Table */}
-      <div
-        style={{
-          background: BG,
-          border: `1px solid ${BORDER}`,
-          borderRadius: 6,
-          overflow: "hidden",
-        }}
-      >
-        <div style={{ overflowX: "auto" }}>
-          <table
-            className="w-full text-[12px]"
-            style={{ borderCollapse: "collapse", fontFamily: MONO, color: TEXT }}
+      {view === "rules" && (
+        <div className="flex flex-col gap-3">
+          <SectionHeader
+            title="Location Rules"
+            description="Rules saved in the database. The score drives type, scope, priority and region automatically."
+            count={rules.length}
+          />
+
+          {/* Filters bar */}
+          <div
+            className="flex flex-wrap items-center gap-2 p-3"
+            style={{ background: BG, border: `1px solid ${BORDER}`, borderRadius: 6 }}
           >
-            <thead>
-              <tr style={{ background: BG_DEEP, color: MUTED, textAlign: "left" }}>
-                {[
-                  "Score",
-                  "Meaning",
-                  "Match text",
-                  "Country",
-                  "City",
-                  "Type",
-                  "Matching",
-                  "Active",
-                  "",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    className="px-2 py-2 text-[11px] uppercase tracking-wide font-medium whitespace-nowrap"
-                    style={{ borderBottom: `1px solid ${BORDER}` }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading ? (
-                Array.from({ length: 8 }).map((_, i) => (
-                  <tr key={i}>
-                    {Array.from({ length: 9 }).map((__, j) => (
-                      <td
-                        key={j}
-                        className="px-2 py-2"
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search match text, country, city, reason, notes..."
+              style={{ ...fieldStyle(), flex: "1 1 260px", minWidth: 200 }}
+            />
+            <FilterSelect
+              label="Score"
+              value={scoreFilter}
+              onChange={setScoreFilter}
+              options={[
+                { value: "all", label: "All" },
+                { value: "5", label: "5 — Ideal" },
+                { value: "4", label: "4 — Good" },
+                { value: "3", label: "3 — Possible" },
+                { value: "2", label: "2 — Weak" },
+                { value: "1", label: "1 — Reject" },
+                { value: "unscored", label: "Unscored" },
+              ]}
+            />
+            <FilterSelect
+              label="Type"
+              value={typeFilter}
+              onChange={setTypeFilter}
+              options={[
+                { value: "all", label: "All" },
+                ...RULE_TYPES.map((t) => ({ value: t, label: t })),
+              ]}
+            />
+            <FilterSelect
+              label="Status"
+              value={activeFilter}
+              onChange={setActiveFilter}
+              options={[
+                { value: "all", label: "All" },
+                { value: "active", label: "Active" },
+                { value: "inactive", label: "Inactive" },
+              ]}
+            />
+            <button
+              onClick={openAdd}
+              className="px-3 py-1.5 text-[12px] font-semibold transition-colors"
+              style={{
+                background: CYAN,
+                color: "#000",
+                borderRadius: 4,
+                fontFamily: MONO,
+                cursor: "pointer",
+              }}
+            >
+              + Add Rule
+            </button>
+          </div>
+
+          {/* Table */}
+          <div
+            style={{
+              background: BG,
+              border: `1px solid ${BORDER}`,
+              borderRadius: 6,
+              overflow: "hidden",
+            }}
+          >
+            <div style={{ overflowX: "auto" }}>
+              <table
+                className="w-full text-[12px]"
+                style={{ borderCollapse: "collapse", fontFamily: MONO, color: TEXT }}
+              >
+                <thead>
+                  <tr style={{ background: BG_DEEP, color: MUTED, textAlign: "left" }}>
+                    {[
+                      "Score",
+                      "Meaning",
+                      "Match text",
+                      "Country",
+                      "City",
+                      "Type",
+                      "Matching",
+                      "Active",
+                      "",
+                    ].map((h) => (
+                      <th
+                        key={h}
+                        className="px-2 py-2 text-[11px] uppercase tracking-wide font-medium whitespace-nowrap"
                         style={{ borderBottom: `1px solid ${BORDER}` }}
                       >
-                        <Skeleton style={{ height: 16, width: "80%" }} />
-                      </td>
+                        {h}
+                      </th>
                     ))}
                   </tr>
-                ))
-              ) : error ? (
-                <tr>
-                  <td colSpan={9} className="px-3 py-6 text-center" style={{ color: "#EF4444" }}>
-                    Failed to load: {(error as Error).message}
-                  </td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-3 py-6 text-center" style={{ color: MUTED }}>
-                    No rules match the current filters.
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((r) => {
-                  const rt = ruleTypeBadge(r.rule_type);
-                  return (
-                    <tr
-                      key={r.id}
-                      style={{
-                        opacity: r.is_active ? 1 : 0.55,
-                        borderBottom: `1px solid ${BORDER}`,
-                      }}
-                      title={
-                        [
-                          r.priority != null ? `priority ${r.priority}` : null,
-                          r.region ? `region ${r.region}` : null,
-                          r.remote_scope ? `remote ${r.remote_scope}` : null,
-                          r.scope ? `scope ${r.scope}` : null,
-                          r.notes ? `notes: ${r.notes}` : null,
-                          r.reason ? `reason: ${r.reason}` : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")
-                      }
-                    >
-                      <td className="px-2 py-1.5">
-                        {r.location_score ?? <span style={{ color: MUTED }}>—</span>}
-                      </td>
-                      <td className="px-2 py-1.5" style={{ color: MUTED }}>
-                        {scoreMeaning(r.location_score)}
-                      </td>
-                      <td
-                        className="px-2 py-1.5"
-                        style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis" }}
-                        title={r.pattern}
-                      >
-                        {r.pattern}
-                      </td>
-                      <td className="px-2 py-1.5">{r.country ?? ""}</td>
-                      <td className="px-2 py-1.5">{r.city ?? ""}</td>
-                      <td className="px-2 py-1.5">
-                        <Badge color={rt.color} bg={rt.bg}>
-                          {r.rule_type}
-                        </Badge>
-                      </td>
-                      <td className="px-2 py-1.5" style={{ color: MUTED }}>
-                        {r.match_mode}
-                      </td>
-                      <td className="px-2 py-1.5">
-                        {r.is_active ? (
-                          <Badge color={CYAN} bg="rgba(0,212,255,0.12)">
-                            on
-                          </Badge>
-                        ) : (
-                          <Badge color={MUTED} bg="rgba(139,139,158,0.12)">
-                            off
-                          </Badge>
-                        )}
-                      </td>
-                      <td className="px-2 py-1.5 whitespace-nowrap">
-                        <RowAction onClick={() => openEdit(r)}>Edit</RowAction>
-                        <RowAction
-                          onClick={() =>
-                            toggleMut.mutate({ id: r.id, is_active: !r.is_active })
-                          }
-                        >
-                          {r.is_active ? "Deactivate" : "Reactivate"}
-                        </RowAction>
-                        <RowAction onClick={() => setConfirmDelete(r)} color="#EF4444">
-                          Delete
-                        </RowAction>
+                </thead>
+                <tbody>
+                  {isLoading ? (
+                    Array.from({ length: 8 }).map((_, i) => (
+                      <tr key={i}>
+                        {Array.from({ length: 9 }).map((__, j) => (
+                          <td
+                            key={j}
+                            className="px-2 py-2"
+                            style={{ borderBottom: `1px solid ${BORDER}` }}
+                          >
+                            <Skeleton style={{ height: 16, width: "80%" }} />
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  ) : error ? (
+                    <tr>
+                      <td colSpan={9} className="px-3 py-6 text-center" style={{ color: "#EF4444" }}>
+                        Failed to load: {(error as Error).message}
                       </td>
                     </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                  ) : pagedRules.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="px-3 py-6 text-center" style={{ color: MUTED }}>
+                        No rules match the current filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    pagedRules.map((r) => {
+                      const rt = ruleTypeBadge(r.rule_type);
+                      return (
+                        <tr
+                          key={r.id}
+                          style={{
+                            opacity: r.is_active ? 1 : 0.55,
+                            borderBottom: `1px solid ${BORDER}`,
+                          }}
+                          title={
+                            [
+                              r.priority != null ? `priority ${r.priority}` : null,
+                              r.region ? `region ${r.region}` : null,
+                              r.remote_scope ? `remote ${r.remote_scope}` : null,
+                              r.scope ? `scope ${r.scope}` : null,
+                              r.notes ? `notes: ${r.notes}` : null,
+                              r.reason ? `reason: ${r.reason}` : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")
+                          }
+                        >
+                          <td className="px-2 py-1.5">
+                            {r.location_score ?? <span style={{ color: MUTED }}>—</span>}
+                          </td>
+                          <td className="px-2 py-1.5" style={{ color: MUTED }}>
+                            {scoreMeaning(r.location_score)}
+                          </td>
+                          <td
+                            className="px-2 py-1.5"
+                            style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis" }}
+                            title={r.pattern}
+                          >
+                            {r.pattern}
+                          </td>
+                          <td className="px-2 py-1.5">{r.country ?? ""}</td>
+                          <td className="px-2 py-1.5">{r.city ?? ""}</td>
+                          <td className="px-2 py-1.5">
+                            <Badge color={rt.color} bg={rt.bg}>
+                              {r.rule_type}
+                            </Badge>
+                          </td>
+                          <td className="px-2 py-1.5" style={{ color: MUTED }}>
+                            {r.match_mode}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            {r.is_active ? (
+                              <Badge color={CYAN} bg="rgba(0,212,255,0.12)">
+                                on
+                              </Badge>
+                            ) : (
+                              <Badge color={MUTED} bg="rgba(139,139,158,0.12)">
+                                off
+                              </Badge>
+                            )}
+                          </td>
+                          <td className="px-2 py-1.5 whitespace-nowrap">
+                            <RowAction onClick={() => openEdit(r)}>Edit</RowAction>
+                            <RowAction
+                              onClick={() =>
+                                toggleMut.mutate({ id: r.id, is_active: !r.is_active })
+                              }
+                            >
+                              {r.is_active ? "Deactivate" : "Reactivate"}
+                            </RowAction>
+                            <RowAction onClick={() => setConfirmDelete(r)} color="#EF4444">
+                              Delete
+                            </RowAction>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <PaginationBar
+              total={rulesTotal}
+              page={rulesPageSafe}
+              pageSize={rulesPageSize}
+              start={rulesStart}
+              end={rulesEnd}
+              totalPages={rulesTotalPages}
+              onPage={setRulesPage}
+              onPageSize={setRulesPageSize}
+              pageSizeOptions={[10, 20, 50, 100]}
+              itemLabel="rules"
+            />
+          </div>
         </div>
-        <div
-          className="px-3 py-2 text-[11px]"
-          style={{ borderTop: `1px solid ${BORDER}`, color: MUTED, fontFamily: MONO }}
-        >
-          {filtered.length} of {rules.length} rules · hover a row to see priority, region,
-          remote scope, and notes
-        </div>
-      </div>
+      )}
 
-      {/* Unrated Job Locations */}
-      <UnratedLocations
-        rules={rules}
-        onRate={(location) => {
-          const { country, city } = inferCountryCity(location);
-          setDraft({
-            ...EMPTY_DRAFT,
-            pattern: location,
-            country,
-            city,
-            match_mode: "equals",
-            is_active: true,
-            _advancedDirty: {},
-          });
-          setEditId(null);
-          setFormError("");
-          setModalOpen(true);
-        }}
-      />
+      {view === "unrated" && (
+        <div className="flex flex-col gap-3">
+          <SectionHeader
+            title="Unrated Job Locations"
+            description="Job locations that don't match any active rule yet. Rate one to create a new rule."
+            count={unratedCount}
+          />
+
+          <div
+            style={{
+              background: BG,
+              border: `1px solid ${BORDER}`,
+              borderRadius: 6,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              className="flex flex-wrap items-center gap-2 p-3"
+              style={{ borderBottom: `1px solid ${BORDER}` }}
+            >
+              <input
+                value={unratedSearch}
+                onChange={(e) => setUnratedSearch(e.target.value)}
+                placeholder="Search location..."
+                style={{ ...fieldStyle(), flex: "1 1 220px", minWidth: 180 }}
+              />
+              <label
+                className="flex items-center gap-1.5 text-[11px]"
+                style={{ color: MUTED, fontFamily: MONO }}
+              >
+                <input
+                  type="checkbox"
+                  checked={unratedActiveOnly}
+                  onChange={(e) => setUnratedActiveOnly(e.target.checked)}
+                />
+                Active jobs only
+              </label>
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table
+                className="w-full text-[12px]"
+                style={{ borderCollapse: "collapse", fontFamily: MONO, color: TEXT }}
+              >
+                <thead>
+                  <tr style={{ background: BG_DEEP, color: MUTED, textAlign: "left" }}>
+                    {["Location", "Jobs", "Example titles", ""].map((h) => (
+                      <th
+                        key={h}
+                        className="px-2 py-2 text-[11px] uppercase tracking-wide font-medium whitespace-nowrap"
+                        style={{ borderBottom: `1px solid ${BORDER}` }}
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {jobsLoading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <tr key={i}>
+                        {Array.from({ length: 4 }).map((__, j) => (
+                          <td
+                            key={j}
+                            className="px-2 py-2"
+                            style={{ borderBottom: `1px solid ${BORDER}` }}
+                          >
+                            <Skeleton style={{ height: 16, width: "80%" }} />
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  ) : jobsError ? (
+                    <tr>
+                      <td colSpan={4} className="px-3 py-6 text-center" style={{ color: "#EF4444" }}>
+                        Failed to load job locations: {(jobsError as Error).message}
+                      </td>
+                    </tr>
+                  ) : pagedUnrated.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-3 py-6 text-center" style={{ color: MUTED }}>
+                        No unrated locations.
+                      </td>
+                    </tr>
+                  ) : (
+                    pagedUnrated.map((r) => (
+                      <tr key={r.location} style={{ borderBottom: `1px solid ${BORDER}` }}>
+                        <td className="px-2 py-1.5" title={r.location}>
+                          {r.location}
+                        </td>
+                        <td className="px-2 py-1.5">{r.job_count}</td>
+                        <td className="px-2 py-1.5" style={{ color: MUTED }}>
+                          {r.example_titles.join(", ") || "—"}
+                        </td>
+                        <td className="px-2 py-1.5 whitespace-nowrap">
+                          <RowAction
+                            onClick={() => {
+                              const { country, city } = inferCountryCity(r.location);
+                              setDraft({
+                                ...EMPTY_DRAFT,
+                                pattern: r.location,
+                                country,
+                                city,
+                                match_mode: "equals",
+                                is_active: true,
+                                _advancedDirty: {},
+                              });
+                              setEditId(null);
+                              setFormError("");
+                              setModalOpen(true);
+                            }}
+                          >
+                            Rate location
+                          </RowAction>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <PaginationBar
+              total={unratedTotal}
+              page={unratedPageSafe}
+              pageSize={unratedPageSize}
+              start={unratedStart}
+              end={unratedEnd}
+              totalPages={unratedTotalPages}
+              onPage={setUnratedPage}
+              onPageSize={setUnratedPageSize}
+              pageSizeOptions={[10, 20, 50]}
+              itemLabel="unrated locations"
+              hint="Rating a location creates a new rule in the database."
+            />
+          </div>
+        </div>
+      )}
 
       {/* Modal */}
       {modalOpen && (
@@ -875,6 +1117,181 @@ export function LocationTab() {
           </div>
         </Modal>
       )}
+    </div>
+  );
+}
+
+function ViewTab({
+  active,
+  onClick,
+  label,
+  count,
+  highlight,
+  loading,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+  highlight?: boolean;
+  loading?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-2 px-3 py-1.5 text-[12px] font-semibold transition-colors"
+      style={{
+        background: active ? CYAN : "transparent",
+        color: active ? "#000" : TEXT,
+        borderRadius: 4,
+        fontFamily: MONO,
+        cursor: "pointer",
+        border: "none",
+      }}
+    >
+      {label}
+      <span
+        className="inline-flex items-center justify-center px-1.5 text-[10px]"
+        style={{
+          background: active ? "rgba(0,0,0,0.15)" : highlight ? "rgba(0,212,255,0.18)" : "rgba(139,139,158,0.18)",
+          color: active ? "#000" : highlight ? CYAN : MUTED,
+          borderRadius: 3,
+          fontFamily: MONO,
+          minWidth: 18,
+          height: 16,
+          lineHeight: "16px",
+        }}
+      >
+        {loading ? "…" : count}
+      </span>
+    </button>
+  );
+}
+
+function SectionHeader({
+  title,
+  description,
+  count,
+}: {
+  title: string;
+  description: string;
+  count: number;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-2">
+        <h3
+          className="text-[13px] font-semibold uppercase tracking-wide"
+          style={{ color: TEXT, fontFamily: MONO }}
+        >
+          {title}
+        </h3>
+        <span
+          className="inline-flex items-center justify-center px-1.5 text-[10px]"
+          style={{
+            background: "rgba(139,139,158,0.18)",
+            color: MUTED,
+            borderRadius: 3,
+            fontFamily: MONO,
+            minWidth: 18,
+            height: 16,
+            lineHeight: "16px",
+          }}
+        >
+          {count}
+        </span>
+      </div>
+      <p className="text-[12px]" style={{ color: MUTED }}>
+        {description}
+      </p>
+    </div>
+  );
+}
+
+function PaginationBar({
+  total,
+  page,
+  pageSize,
+  start,
+  end,
+  totalPages,
+  onPage,
+  onPageSize,
+  pageSizeOptions,
+  itemLabel,
+  hint,
+}: {
+  total: number;
+  page: number;
+  pageSize: number;
+  start: number;
+  end: number;
+  totalPages: number;
+  onPage: (p: number) => void;
+  onPageSize: (s: number) => void;
+  pageSizeOptions: number[];
+  itemLabel: string;
+  hint?: string;
+}) {
+  const displayStart = total === 0 ? 0 : start + 1;
+  return (
+    <div
+      className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-[11px]"
+      style={{ borderTop: `1px solid ${BORDER}`, color: MUTED, fontFamily: MONO }}
+    >
+      <div>
+        Showing {displayStart}–{end} of {total} {itemLabel}
+        {hint ? ` · ${hint}` : ""}
+      </div>
+      <div className="flex items-center gap-2">
+        <label className="flex items-center gap-1">
+          Rows
+          <select
+            value={pageSize}
+            onChange={(e) => onPageSize(Number(e.target.value))}
+            style={{ ...fieldStyle(), padding: "2px 4px", width: "auto", fontSize: 11 }}
+          >
+            {pageSizeOptions.map((n) => (
+              <option key={n} value={n} style={{ background: BG_DEEP }}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          onClick={() => onPage(Math.max(1, page - 1))}
+          disabled={page <= 1}
+          className="px-2 py-0.5"
+          style={{
+            background: "transparent",
+            color: page <= 1 ? "#444" : TEXT,
+            border: `1px solid ${BORDER}`,
+            borderRadius: 3,
+            fontFamily: MONO,
+            cursor: page <= 1 ? "not-allowed" : "pointer",
+          }}
+        >
+          Prev
+        </button>
+        <span>
+          {page} / {totalPages}
+        </span>
+        <button
+          onClick={() => onPage(Math.min(totalPages, page + 1))}
+          disabled={page >= totalPages}
+          className="px-2 py-0.5"
+          style={{
+            background: "transparent",
+            color: page >= totalPages ? "#444" : TEXT,
+            border: `1px solid ${BORDER}`,
+            borderRadius: 3,
+            fontFamily: MONO,
+            cursor: page >= totalPages ? "not-allowed" : "pointer",
+          }}
+        >
+          Next
+        </button>
+      </div>
     </div>
   );
 }
@@ -1077,7 +1494,10 @@ function RuleForm({
           />
         </Field>
 
-        <Field label="Location score *">
+        <Field
+          label="Location score *"
+          hint={scoreDescription(draft.location_score) || "Pick 1 (reject) to 5 (ideal)."}
+        >
           <select
             value={draft.location_score ?? ""}
             onChange={(e) => {
@@ -1087,7 +1507,7 @@ function RuleForm({
             style={fieldStyle()}
           >
             <option value="">— Select score —</option>
-            {[1, 2, 3, 4, 5].map((n) => (
+            {SCORE_ORDER.map((n) => (
               <option key={n} value={n}>
                 {scoreLabel(n)}
               </option>
@@ -1436,164 +1856,3 @@ function matchesAnyRule(loc: string, rules: LocationRule[]): boolean {
   return false;
 }
 
-function UnratedLocations({
-  rules,
-  onRate,
-}: {
-  rules: LocationRule[];
-  onRate: (location: string) => void;
-}) {
-  const [search, setSearch] = useState("");
-  const [activeOnly, setActiveOnly] = useState(true);
-
-  const { data: jobs = [], isLoading, error } = useQuery({
-    queryKey: ["job-postings-locations", activeOnly],
-    queryFn: () => fetchJobLocations(activeOnly),
-  });
-
-  const unrated: UnratedRow[] = useMemo(() => {
-    const groups = new Map<string, { count: number; titles: string[] }>();
-    for (const j of jobs) {
-      const raw = (j.location ?? "").toString();
-      const loc = raw.trim();
-      if (!loc) continue;
-      if (matchesAnyRule(loc, rules)) continue;
-      let g = groups.get(loc);
-      if (!g) {
-        g = { count: 0, titles: [] };
-        groups.set(loc, g);
-      }
-      g.count += 1;
-      if (g.titles.length < 3 && j.title) {
-        if (!g.titles.includes(j.title)) g.titles.push(j.title);
-      }
-    }
-    const out: UnratedRow[] = [];
-    groups.forEach((v, k) => {
-      out.push({ location: k, job_count: v.count, example_titles: v.titles });
-    });
-    out.sort((a, b) => {
-      if (b.job_count !== a.job_count) return b.job_count - a.job_count;
-      return a.location.localeCompare(b.location);
-    });
-    return out;
-  }, [jobs, rules]);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return unrated;
-    return unrated.filter((r) => r.location.toLowerCase().includes(q));
-  }, [unrated, search]);
-
-  return (
-    <div
-      style={{
-        background: BG,
-        border: `1px solid ${BORDER}`,
-        borderRadius: 6,
-        overflow: "hidden",
-      }}
-    >
-      <div
-        className="flex flex-wrap items-center gap-2 p-3"
-        style={{ borderBottom: `1px solid ${BORDER}` }}
-      >
-        <h3
-          className="text-[12px] font-semibold uppercase tracking-wide"
-          style={{ color: TEXT, fontFamily: MONO, marginRight: 8 }}
-        >
-          Unrated Job Locations
-        </h3>
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search location..."
-          style={{ ...fieldStyle(), flex: "1 1 220px", minWidth: 180 }}
-        />
-        <label
-          className="flex items-center gap-1.5 text-[11px]"
-          style={{ color: MUTED, fontFamily: MONO }}
-        >
-          <input
-            type="checkbox"
-            checked={activeOnly}
-            onChange={(e) => setActiveOnly(e.target.checked)}
-          />
-          Active jobs only
-        </label>
-      </div>
-      <div style={{ overflowX: "auto" }}>
-        <table
-          className="w-full text-[12px]"
-          style={{ borderCollapse: "collapse", fontFamily: MONO, color: TEXT }}
-        >
-          <thead>
-            <tr style={{ background: BG_DEEP, color: MUTED, textAlign: "left" }}>
-              {["Location", "Jobs", "Example titles", ""].map((h) => (
-                <th
-                  key={h}
-                  className="px-2 py-2 text-[11px] uppercase tracking-wide font-medium whitespace-nowrap"
-                  style={{ borderBottom: `1px solid ${BORDER}` }}
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i}>
-                  {Array.from({ length: 4 }).map((__, j) => (
-                    <td
-                      key={j}
-                      className="px-2 py-2"
-                      style={{ borderBottom: `1px solid ${BORDER}` }}
-                    >
-                      <Skeleton style={{ height: 16, width: "80%" }} />
-                    </td>
-                  ))}
-                </tr>
-              ))
-            ) : error ? (
-              <tr>
-                <td colSpan={4} className="px-3 py-6 text-center" style={{ color: "#EF4444" }}>
-                  Failed to load job locations: {(error as Error).message}
-                </td>
-              </tr>
-            ) : filtered.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-3 py-6 text-center" style={{ color: MUTED }}>
-                  No unrated locations.
-                </td>
-              </tr>
-            ) : (
-              filtered.map((r) => (
-                <tr key={r.location} style={{ borderBottom: `1px solid ${BORDER}` }}>
-                  <td className="px-2 py-1.5" title={r.location}>
-                    {r.location}
-                  </td>
-                  <td className="px-2 py-1.5">{r.job_count}</td>
-                  <td className="px-2 py-1.5" style={{ color: MUTED }}>
-                    {r.example_titles.join(", ") || "—"}
-                  </td>
-                  <td className="px-2 py-1.5 whitespace-nowrap">
-                    <RowAction onClick={() => onRate(r.location)}>Rate location</RowAction>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-      <div
-        className="px-3 py-2 text-[11px]"
-        style={{ borderTop: `1px solid ${BORDER}`, color: MUTED, fontFamily: MONO }}
-      >
-        {filtered.length} of {unrated.length} unrated locations
-        {" · "}Rating a location creates a new rule in the database. Future jobs with matching
-        locations will no longer appear as unrated.
-      </div>
-    </div>
-  );
-}
