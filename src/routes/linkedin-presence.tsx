@@ -713,6 +713,7 @@ function ProgressTab() {
                   }}
                 >
                   <td className="px-3 py-2" style={{ color: textColor, fontFamily: MONO }}>
+                    <span style={{ color: "#8B8B9E" }}>W{r.week_number}</span>{" "}
                     {formatWeekRange(r.week_start, r.week_end)}
                     {isCurrent && (
                       <span className="ml-2 text-[10px] uppercase" style={{ color: "#00D4FF" }}>
