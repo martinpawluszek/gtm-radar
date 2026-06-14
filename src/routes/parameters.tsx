@@ -86,6 +86,14 @@ async function addOverride(keyword: string): Promise<void> {
   if (error) throw error;
 }
 
+async function reactivateOverride(id: string): Promise<void> {
+  const { error } = await gtmSupabase
+    .from("commercial_overrides" as never)
+    .update({ is_active: true } as never)
+    .eq("id", id);
+  if (error) throw error;
+}
+
 async function deactivateOverride(id: string): Promise<void> {
   const { error } = await gtmSupabase
     .from("commercial_overrides" as never)
