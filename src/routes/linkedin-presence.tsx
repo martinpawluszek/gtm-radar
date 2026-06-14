@@ -639,8 +639,6 @@ function ProgressTab() {
     return { best, avg, streak };
   }, [rows]);
 
-  const todayIso = new Date().toISOString().slice(0, 10);
-
   if (isLoading) {
     return <Panel><p className="text-sm" style={{ color: "#8B8B9E" }}>Loading…</p></Panel>;
   }
@@ -648,7 +646,13 @@ function ProgressTab() {
     return <Panel><p className="text-sm" style={{ color: "#F87171" }}>{(error as Error).message}</p></Panel>;
   }
   if (!rows.length) {
-    return <Panel><p className="text-sm" style={{ color: "#8B8B9E" }}>No weekly progress yet.</p></Panel>;
+    return (
+      <Panel>
+        <p className="text-sm" style={{ color: "#8B8B9E" }}>
+          No weekly progress yet. Set a project start date in Settings to begin tracking.
+        </p>
+      </Panel>
+    );
   }
 
   const Stat = ({ label, value }: { label: string; value: string }) => (
