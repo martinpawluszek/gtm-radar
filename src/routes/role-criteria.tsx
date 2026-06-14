@@ -384,12 +384,13 @@ function Editor({ initial, onSaved }: { initial: RoleCriteria | null; onSaved: (
       <div style={CARD}>
         <div className="grid gap-0" style={{ gridTemplateColumns: "1fr 1px 1fr" }}>
           <div className="pr-6">
-            <TitleList
+            <TargetTitleList
               title="Target Titles"
               items={draft.target_titles}
               onChange={(items) => setDraft({ ...draft, target_titles: items })}
             />
           </div>
+
           <div style={{ background: "#1E1E2E", width: 1 }} />
           <div className="pl-6">
             <TitleList
