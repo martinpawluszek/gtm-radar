@@ -1458,8 +1458,59 @@ function DetailPanel({
         )}
       </Section>
 
+      {/* Manual Fit Rating */}
+      <Section title="Manual Fit Rating">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <label style={{ color: "#8B8B9E", fontSize: 11, fontFamily: MONO }}>
+              Fit rating (1–5)
+            </label>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setFitRating(n)}
+                  className="tabular-nums px-2"
+                  style={{
+                    height: 32,
+                    minWidth: 110,
+                    borderRadius: 4,
+                    border: "1px solid",
+                    borderColor: fitRating === n ? "rgba(0,212,255,0.5)" : "#1E1E2E",
+                    background: fitRating === n ? "rgba(0,212,255,0.12)" : "#111118",
+                    color: fitRating === n ? "#00D4FF" : "#F0F0FF",
+                    fontFamily: MONO,
+                    fontWeight: 600,
+                    fontSize: 12,
+                  }}
+                >
+                  {n} — {FIT_LABELS[n]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <Textarea
+            placeholder="Notes (optional) — why this fit rating?"
+            rows={3}
+            value={ratingNotes}
+            onChange={(e) => setRatingNotes(e.target.value)}
+            style={{ background: "#111118", border: "1px solid #1E1E2E", color: "#F0F0FF" }}
+          />
+          <div>
+            <Button
+              onClick={saveManualRating}
+              disabled={savingRating}
+              style={{ background: "#00D4FF", color: "#0A0A0F" }}
+            >
+              {savingRating ? "Saving…" : "Save Rating"}
+            </Button>
+          </div>
+        </div>
+      </Section>
+
       {/* Feedback */}
       <Section title="Your Feedback">
+
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
             <label style={{ color: "#8B8B9E", fontSize: 11, fontFamily: MONO }}>
