@@ -84,6 +84,7 @@ async function deactivateOverride(id: string): Promise<void> {
     .update({ is_active: false } as never)
     .eq("id", id);
   if (error) throw error;
+}
 
 // ---------- Components ----------
 function ParametersPage() {
