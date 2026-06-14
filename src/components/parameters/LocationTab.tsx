@@ -1957,3 +1957,317 @@ function matchesAnyRule(loc: string, rules: LocationRule[]): boolean {
   return false;
 }
 
+// ---------- Country combobox ----------
+function CountryCombobox({
+  value,
+  options,
+  onChange,
+  onAddNew,
+}: {
+  value: string;
+  options: string[];
+  onChange: (v: string) => void;
+  onAddNew?: (text: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options.slice(0, 50);
+    return options.filter((c) => c.toLowerCase().includes(q)).slice(0, 50);
+  }, [options, query]);
+
+  const trimmed = query.trim();
+  const exactExists =
+    !!trimmed &&
+    options.some((c) => c.toLowerCase() === trimmed.toLowerCase());
+  const showAddNew = !!trimmed && !exactExists && !!onAddNew;
+
+  function commit(v: string) {
+    onChange(v);
+    setQuery("");
+    setOpen(false);
+  }
+
+  return (
+    <div style={{ position: "relative" }}>
+      <div className="flex items-center gap-1">
+        <input
+          value={open ? query : value}
+          placeholder={value ? value : "Type to search countries…"}
+          onFocus={() => {
+            setOpen(true);
+            setQuery("");
+          }}
+          onChange={(e) => {
+            setOpen(true);
+            setQuery(e.target.value);
+          }}
+          onBlur={() => {
+            // Delay so click-on-option still registers
+            setTimeout(() => setOpen(false), 120);
+          }}
+          style={fieldStyle()}
+        />
+        {value && (
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              onChange("");
+              setQuery("");
+            }}
+            title="Clear"
+            style={{
+              background: "transparent",
+              border: `1px solid ${BORDER}`,
+              color: MUTED,
+              borderRadius: 4,
+              padding: "4px 6px",
+              fontFamily: MONO,
+              fontSize: 11,
+              cursor: "pointer",
+            }}
+          >
+            ×
+          </button>
+        )}
+      </div>
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(100% + 2px)",
+            left: 0,
+            right: 0,
+            background: BG_DEEP,
+            border: `1px solid ${BORDER}`,
+            borderRadius: 4,
+            zIndex: 50,
+            maxHeight: 240,
+            overflowY: "auto",
+            fontFamily: MONO,
+            fontSize: 13,
+          }}
+        >
+          {matches.length === 0 && !showAddNew && (
+            <div className="px-2 py-1.5" style={{ color: MUTED }}>
+              No matches.
+            </div>
+          )}
+          {matches.map((c) => (
+            <div
+              key={c}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                commit(c);
+              }}
+              className="px-2 py-1.5 cursor-pointer"
+              style={{
+                color: TEXT,
+                background: c === value ? "rgba(0,212,255,0.08)" : "transparent",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "rgba(255,255,255,0.04)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background =
+                  c === value ? "rgba(0,212,255,0.08)" : "transparent")
+              }
+            >
+              {c}
+            </div>
+          ))}
+          {showAddNew && (
+            <div
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onAddNew!(trimmed);
+                setOpen(false);
+              }}
+              className="px-2 py-1.5 cursor-pointer"
+              style={{
+                borderTop: matches.length > 0 ? `1px solid ${BORDER}` : "none",
+                color: CYAN,
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "rgba(0,212,255,0.08)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = "transparent")
+              }
+            >
+              + Add new country rule: <span style={{ color: TEXT }}>{trimmed}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------- Add country rule form ----------
+function AddCountryRuleForm({
+  initialCountry,
+  isPending,
+  onSubmit,
+  onCancel,
+}: {
+  initialCountry: string;
+  isPending: boolean;
+  onSubmit: (vars: { country: string; score: number; reason: string }) => void;
+  onCancel: () => void;
+}) {
+  const [country, setCountry] = useState(initialCountry);
+  const [score, setScore] = useState<number | null>(null);
+  const [reasonDirty, setReasonDirty] = useState(false);
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!reasonDirty) {
+      setReason(score ? countryRuleReason(score) : "");
+    }
+  }, [score, reasonDirty]);
+
+  const derivedType = score ? countryRuleType(score) : null;
+
+  function submit() {
+    const c = country.trim();
+    if (!c) {
+      setError("Country name is required");
+      return;
+    }
+    if (!score) {
+      setError("Location score is required");
+      return;
+    }
+    setError("");
+    onSubmit({ country: c, score, reason });
+  }
+
+  return (
+    <div className="flex flex-col gap-4" style={{ minWidth: 420 }}>
+      <h3 className="text-sm font-semibold" style={{ color: TEXT, fontFamily: MONO }}>
+        Add new country rule
+      </h3>
+      <div
+        className="text-[11px] p-2.5"
+        style={{
+          borderLeft: `2px solid ${CYAN}`,
+          background: "rgba(0,212,255,0.05)",
+          color: MUTED,
+          borderRadius: 3,
+        }}
+      >
+        Creates or updates a country-scope rule in location_filter_rules.
+        Rule type is derived from the score automatically.
+      </div>
+
+      <Field label="Country name *">
+        <input
+          value={country}
+          onChange={(e) => setCountry(e.target.value)}
+          style={fieldStyle()}
+          placeholder="e.g. China"
+        />
+      </Field>
+
+      <Field
+        label="Location score *"
+        hint={score ? scoreDescription(score) : "Pick 1 (reject) to 5 (ideal)."}
+      >
+        <select
+          value={score ?? ""}
+          onChange={(e) => setScore(e.target.value ? Number(e.target.value) : null)}
+          style={fieldStyle()}
+        >
+          <option value="">— Select score —</option>
+          {SCORE_ORDER.map((n) => (
+            <option key={n} value={n}>
+              {scoreLabel(n)}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      <Field label="Reason" hint="Auto-generated from score. Edit to override.">
+        <input
+          value={reason}
+          onChange={(e) => {
+            setReasonDirty(true);
+            setReason(e.target.value);
+          }}
+          style={fieldStyle()}
+          placeholder={score ? countryRuleReason(score) : ""}
+        />
+      </Field>
+
+      <div
+        className="text-[11px] p-2.5"
+        style={{
+          background: BG_DEEP,
+          border: `1px solid ${BORDER}`,
+          borderRadius: 4,
+          color: MUTED,
+          fontFamily: MONO,
+        }}
+      >
+        Will save as: <span style={{ color: TEXT }}>scope country</span>
+        {" · "}
+        <span style={{ color: TEXT }}>
+          type {derivedType ?? "—"}
+        </span>
+        {" · "}
+        <span style={{ color: TEXT }}>match contains</span>
+        {" · "}
+        <span style={{ color: TEXT }}>priority 30</span>
+        {" · "}
+        <span style={{ color: TEXT }}>active</span>
+      </div>
+
+      {error && (
+        <div className="text-[12px]" style={{ color: "#EF4444", fontFamily: MONO }}>
+          {error}
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-3 py-1.5 text-[12px]"
+          style={{
+            background: "transparent",
+            color: MUTED,
+            border: `1px solid ${BORDER}`,
+            borderRadius: 4,
+            fontFamily: MONO,
+            cursor: "pointer",
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={isPending}
+          className="px-3 py-1.5 text-[12px]"
+          style={{
+            background: CYAN,
+            color: "#001018",
+            border: `1px solid ${CYAN}`,
+            borderRadius: 4,
+            fontFamily: MONO,
+            cursor: isPending ? "not-allowed" : "pointer",
+            opacity: isPending ? 0.6 : 1,
+          }}
+        >
+          {isPending ? "Saving…" : "Save country rule"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
