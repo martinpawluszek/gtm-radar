@@ -330,7 +330,7 @@ function PostingsPage() {
   // Reset to page 1 when filters or tabs change
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, tierFilter]);
+  }, [statusFilter, tierFilter, companyFilter]);
 
   // Reset to page 1 when page size changes
   const handlePageSizeChange = (size: number) => {
