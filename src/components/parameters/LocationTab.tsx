@@ -199,13 +199,27 @@ function scoreMeaning(score: number | null): string {
 function scoreLabel(score: number): string {
   switch (score) {
     case 1: return "1 — Reject / hard no";
-    case 2: return "2 — Very low fit";
-    case 3: return "3 — Possible, but friction";
+    case 2: return "2 — Weak fit";
+    case 3: return "3 — Possible / friction";
     case 4: return "4 — Good fit";
     case 5: return "5 — Ideal fit";
     default: return String(score);
   }
 }
+
+function scoreDescription(score: number | null): string {
+  switch (score) {
+    case 5: return "Best possible location, e.g. Berlin or fully remote anywhere.";
+    case 4: return "Strong practical fit, e.g. target European cities or remote Europe.";
+    case 3: return "Potentially interesting but has location friction.";
+    case 2: return "Unlikely, but not an automatic rejection.";
+    case 1: return "Hard-no location; can be dismissed automatically.";
+    default: return "";
+  }
+}
+
+// Best-to-worst order for dropdowns
+const SCORE_ORDER = [5, 4, 3, 2, 1] as const;
 
 function suggestedReason(score: number | null): string {
   switch (score) {
