@@ -753,6 +753,11 @@ function SettingsTab() {
     queryKey: ["lp-active-goal"],
     queryFn: fetchActiveGoal,
   });
+  const { value: startDate, set: setStartDate } = useProjectStartDate();
+  const [startDraft, setStartDraft] = useState<string>("");
+  useEffect(() => {
+    setStartDraft(startDate ?? "");
+  }, [startDate]);
 
   const [form, setForm] = useState<Partial<Goal>>({});
   const current = { ...goal, ...form } as Goal;
