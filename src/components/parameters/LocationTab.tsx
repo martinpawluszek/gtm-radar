@@ -1158,9 +1158,23 @@ export function LocationTab() {
             error={formError}
             isPending={insertMut.isPending || updateMut.isPending}
             title={editId ? "Edit location rule" : "Add location rule"}
+            availableCountries={availableCountries}
+            onAddCountryRule={(text) => setAddCountryFor(text)}
           />
         </Modal>
       )}
+
+      {addCountryFor !== null && (
+        <Modal onClose={() => setAddCountryFor(null)}>
+          <AddCountryRuleForm
+            initialCountry={addCountryFor}
+            isPending={addCountryMut.isPending}
+            onCancel={() => setAddCountryFor(null)}
+            onSubmit={(vars) => addCountryMut.mutate(vars)}
+          />
+        </Modal>
+      )}
+
 
       {confirmDelete && (
         <Modal onClose={() => setConfirmDelete(null)}>
