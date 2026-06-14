@@ -713,8 +713,8 @@ function ItemCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
       }}
     >
       <div className="flex items-center gap-2 mb-2 text-[11px]" style={{ fontFamily: MONO }}>
-        {item.category && <Tag color="#00D4FF">{item.category}</Tag>}
-        <Tag color={statusColor(item.status)}>{item.status}</Tag>
+        {item.category && <Tag color="#00D4FF">{CATEGORY_LABEL[item.category]}</Tag>}
+        <Tag color={statusColor(item.status)}>{STATUS_LABEL[item.status]}</Tag>
         <span style={{ color: "#8B8B9E", marginLeft: "auto" }}>
           {item.status === "posted" && item.posted_at
             ? new Date(item.posted_at).toLocaleDateString()
