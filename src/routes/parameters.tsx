@@ -154,7 +154,7 @@ function ParametersPage() {
 
   function tabLabel(key: TabKey): string {
     const base = TABS.find((t) => t.key === key)?.label ?? key;
-    if (key === "location") return base;
+    if (key === "location" || key === "search-patterns") return base;
     const count =
       key === "keyword-filters"
         ? keywordCount
