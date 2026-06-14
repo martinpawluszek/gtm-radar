@@ -14,13 +14,19 @@ export const Route = createFileRoute("/parameters")({
   component: ParametersPage,
 });
 
-type TabKey = "keyword-filters" | "commercial-overrides" | "excluded-titles" | "location";
+type TabKey =
+  | "keyword-filters"
+  | "commercial-overrides"
+  | "excluded-titles"
+  | "location"
+  | "search-patterns";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "keyword-filters", label: "Keyword Filters" },
   { key: "commercial-overrides", label: "Commercial Overrides" },
   { key: "excluded-titles", label: "Excluded Titles" },
   { key: "location", label: "Location" },
+  { key: "search-patterns", label: "Search Patterns" },
 ];
 
 
@@ -147,7 +153,7 @@ function ParametersPage() {
 
   function tabLabel(key: TabKey): string {
     const base = TABS.find((t) => t.key === key)?.label ?? key;
-    if (key === "location") return base;
+    if (key === "location" || key === "search-patterns") return base;
     const count =
       key === "keyword-filters"
         ? keywordCount
@@ -218,6 +224,8 @@ function ParametersPage() {
       {activeTab === "commercial-overrides" && <CommercialOverridesTab />}
       {activeTab === "excluded-titles" && <ExcludedTitlesTab />}
       {activeTab === "location" && <LocationTab />}
+      {activeTab === "search-patterns" && <SearchPatternsTab />}
+
 
     </div>
   );
