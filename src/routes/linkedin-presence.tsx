@@ -1002,8 +1002,8 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
       style={{
         position: "fixed", inset: 0, zIndex: 50,
         background: "rgba(0,0,0,0.7)",
-        display: "flex", alignItems: "flex-start", justifyContent: "center",
-        padding: "5vh 16px", overflowY: "auto",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 16, overflowY: "auto",
       }}
     >
       <div
@@ -1015,6 +1015,8 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
           padding: 20,
           width: "100%",
           maxWidth: 640,
+          maxHeight: "85vh",
+          overflowY: "auto",
           boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
         }}
       >
