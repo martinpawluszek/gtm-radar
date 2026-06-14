@@ -357,6 +357,7 @@ function LinkedInPresencePage() {
       {tab === "replies" && <ItemsTab kind="reply_opportunity" />}
       {tab === "posted" && <ItemsTab kind="posted" />}
       {tab === "archived" && <ItemsTab kind="archived" />}
+      {tab === "progress" && <ProgressTab />}
       {tab === "settings" && <SettingsTab />}
       {tab === "style" && <StyleGuideTab />}
     </div>
