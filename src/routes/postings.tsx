@@ -345,6 +345,18 @@ function PostingsPage() {
     });
   }, [postings, statusFilter, tierFilter, companyMap]);
 
+  // Pagination calculations
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const startIdx = (safePage - 1) * pageSize;
+  const endIdx = Math.min(startIdx + pageSize, filtered.length);
+  const paginated = filtered.slice(startIdx, endIdx);
+
+  // Clamp page if it goes out of bounds due to filter changes
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
   return (
     <div className="space-y-4 min-w-0" style={{ marginTop: -8 }}>
       {/* Page header */}
