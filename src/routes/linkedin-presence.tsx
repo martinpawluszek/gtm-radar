@@ -3,6 +3,13 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { gtmSupabase } from "@/lib/gtmSupabase";
+import {
+  computeWeeks,
+  formatWeekRange,
+  useProjectStartDate,
+  type LpGoal,
+  type LpItem,
+} from "@/lib/linkedinProgress";
 
 const MONO = "var(--font-mono)";
 
