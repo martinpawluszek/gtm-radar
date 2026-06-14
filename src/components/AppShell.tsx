@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Building2,
   Sliders,
+  SlidersHorizontal,
   Inbox,
   Kanban,
   Users,
