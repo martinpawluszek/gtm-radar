@@ -608,14 +608,6 @@ function ItemsTab({ kind }: { kind: TabKind }) {
 }
 
 // ---------- Progress Tab ----------
-function formatWeekRange(startIso: string, endIso: string): string {
-  const fmt = (iso: string) => {
-    const [y, m, d] = iso.split("-").map(Number);
-    const dt = new Date(y, (m ?? 1) - 1, d ?? 1);
-    return dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  };
-  return `${fmt(startIso)} to ${fmt(endIso)}`;
-}
 
 function ProgressTab() {
   const { data: items = [], isLoading: itemsLoading } = useQuery({
