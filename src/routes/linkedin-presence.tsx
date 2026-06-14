@@ -1375,6 +1375,24 @@ function TextAreaField({ label, value, onChange, rows = 3, placeholder }: { labe
   );
 }
 
+function DateTimeField({ label, value, onChange, hint }: { label: string; value: string; onChange: (v: string) => void; hint?: string }) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[11px] uppercase" style={{ color: "#8B8B9E", fontFamily: MONO }}>{label}</span>
+      <input
+        type="datetime-local"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="bg-transparent outline-none text-sm px-2 py-1.5"
+        style={{ color: "#F0F0FF", border: "1px solid #1E1E2E", borderRadius: 4, fontFamily: MONO, colorScheme: "dark" }}
+      />
+      {hint && (
+        <span className="text-[11px]" style={{ color: "#8B8B9E" }}>{hint}</span>
+      )}
+    </label>
+  );
+}
+
 function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
   return (
     <label className="flex flex-col gap-1">
