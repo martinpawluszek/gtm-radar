@@ -400,6 +400,72 @@ async function deleteRule(id: string) {
   if (error) throw error;
 }
 
+function countryRuleReason(score: number): string {
+  switch (score) {
+    case 1: return "User-rated hard reject location.";
+    case 2: return "User-rated strong friction location.";
+    case 3: return "User-rated maybe/friction location.";
+    case 4: return "User-rated good location.";
+    case 5: return "User-rated great location.";
+    default: return "";
+  }
+}
+
+function countryRuleType(score: number): RuleType {
+  if (score === 1) return "hard";
+  if (score === 2 || score === 3) return "maybe";
+  return "accept";
+}
+
+// Upsert a country-scope rule by case-insensitive country match on `pattern`.
+async function upsertCountryRule(input: {
+  country: string;
+  score: number;
+  reason: string;
+}): Promise<{ country: string; created: boolean }> {
+  const country = input.country.trim();
+  const score = input.score;
+  const row = {
+    pattern: country,
+    country,
+    scope: "country" as Scope,
+    location_score: score,
+    rule_type: countryRuleType(score),
+    reason: input.reason.trim() || countryRuleReason(score),
+    is_active: true,
+    priority: 30,
+    match_mode: "contains" as MatchMode,
+    city: null,
+    region: null,
+    remote_scope: null,
+    notes: "Added manually from Parameters > Location > Unrated Locations.",
+  };
+
+  const { data: existing, error: findErr } = await gtmSupabase
+    .from("location_filter_rules" as never)
+    .select("id,pattern,scope")
+    .eq("scope", "country")
+    .ilike("pattern", country)
+    .limit(1);
+  if (findErr) throw findErr;
+
+  if (existing && existing.length > 0) {
+    const id = (existing[0] as { id: string }).id;
+    const { error } = await gtmSupabase
+      .from("location_filter_rules" as never)
+      .update({ ...row, updated_at: new Date().toISOString() } as never)
+      .eq("id", id);
+    if (error) throw error;
+    return { country, created: false };
+  }
+
+  const { error } = await gtmSupabase
+    .from("location_filter_rules" as never)
+    .insert(row as never);
+  if (error) throw error;
+  return { country, created: true };
+}
+
 // ---------- Theme ----------
 const BG = "#111118";
 const BG_DEEP = "#0A0A0F";
