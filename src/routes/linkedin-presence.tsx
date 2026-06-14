@@ -130,16 +130,34 @@ const DAYS = [
   { v: 7, l: "Sunday" },
 ];
 
-type TabKey = "ideas" | "replies" | "posted" | "archived" | "settings" | "style";
+type TabKey = "ideas" | "replies" | "posted" | "archived" | "progress" | "settings" | "style";
 
 const TABS: { key: TabKey; label: string; showCount: boolean }[] = [
   { key: "ideas", label: "Ideas", showCount: true },
   { key: "replies", label: "Replies", showCount: true },
   { key: "posted", label: "Posted", showCount: true },
   { key: "archived", label: "Archived", showCount: true },
+  { key: "progress", label: "Progress", showCount: false },
   { key: "settings", label: "Settings", showCount: false },
   { key: "style", label: "Style Guide", showCount: false },
 ];
+
+type WeeklyProgress = {
+  week_start: string;
+  week_end: string;
+  posts_published: number;
+  comments_posted: number;
+  ideas_saved: number;
+  weekly_posts_goal: number;
+  weekly_comments_goal: number;
+  weekly_ideas_goal: number;
+  posts_goal_met: boolean;
+  comments_goal_met: boolean;
+  ideas_goal_met: boolean;
+  all_goals_met: boolean;
+  total_activity: number;
+  completion_percent: number;
+};
 
 // ---------- Data ----------
 async function fetchItems(): Promise<Item[]> {
