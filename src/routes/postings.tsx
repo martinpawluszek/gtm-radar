@@ -306,6 +306,22 @@ function PostingsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+
+  // Reset to page 1 when filters or tabs change
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, tierFilter]);
+
+  // Reset to page 1 when page size changes
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size);
+    setPage(1);
+  };
+
   useEffect(() => {
     try {
       const id = sessionStorage.getItem("dashboard:open:postings");
