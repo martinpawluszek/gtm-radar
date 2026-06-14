@@ -301,9 +301,24 @@ function PostingsPage() {
     return m;
   }, [companies]);
 
+  const companiesWithPostings = useMemo(() => {
+    const seen = new Set<string>();
+    const list: { id: string; name: string }[] = [];
+    for (const p of postings) {
+      const c = p.company_id ? companyMap.get(p.company_id) : null;
+      if (c && !seen.has(c.id)) {
+        seen.add(c.id);
+        list.push({ id: c.id, name: c.name });
+      }
+    }
+    return list.sort((a, b) => a.name.localeCompare(b.name));
+  }, [postings, companyMap]);
+
   const [statusFilter, setStatusFilter] = useState<"all" | PostingStatus>("all");
   const [tierFilter, setTierFilter] = useState<TierFilter>("all");
   const [tierOpen, setTierOpen] = useState(false);
+  const [companyFilter, setCompanyFilter] = useState<CompanyFilter>("all");
+  const [companyOpen, setCompanyOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
