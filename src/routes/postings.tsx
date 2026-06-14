@@ -1047,18 +1047,32 @@ function RowActions({
   company: CompanyLite | null;
   onChanged: () => void;
 }) {
+  const qc = useQueryClient();
   const m = useMutation({
     mutationFn: async (action: "save" | "dismiss" | "apply") => {
       if (action === "apply") await applyPosting(posting);
       else await setPostingStatus(posting.id, action === "save" ? "saved" : "dismissed");
     },
+    onMutate: async (action) => {
+      await qc.cancelQueries({ queryKey: ["postings"] });
+      const prev = qc.getQueryData<Posting[]>(["postings"]);
+      const nextStatus: PostingStatus =
+        action === "apply" ? "applied" : action === "save" ? "saved" : "dismissed";
+      qc.setQueryData<Posting[]>(["postings"], (old) =>
+        (old ?? []).map((p) => (p.id === posting.id ? { ...p, status: nextStatus } : p)),
+      );
+      return { prev };
+    },
+    onError: (e: Error, _a, ctx) => {
+      if (ctx?.prev) qc.setQueryData(["postings"], ctx.prev);
+      toast.error(e.message);
+    },
     onSuccess: (_d, action) => {
-      onChanged();
       toast.success(
         action === "apply" ? "Moved to Applications" : action === "save" ? "Saved" : "Dismissed",
       );
     },
-    onError: (e: Error) => toast.error(e.message),
+    onSettled: () => onChanged(),
   });
   const stop = (e: React.MouseEvent) => e.stopPropagation();
   return (
@@ -1209,18 +1223,32 @@ function DetailPanel({
     }
   }
 
+  const qcPanel = useQueryClient();
   const actionMut = useMutation({
     mutationFn: async (action: "save" | "dismiss" | "apply") => {
       if (action === "apply") await applyPosting(posting);
       else await setPostingStatus(posting.id, action === "save" ? "saved" : "dismissed");
     },
+    onMutate: async (action) => {
+      await qcPanel.cancelQueries({ queryKey: ["postings"] });
+      const prev = qcPanel.getQueryData<Posting[]>(["postings"]);
+      const nextStatus: PostingStatus =
+        action === "apply" ? "applied" : action === "save" ? "saved" : "dismissed";
+      qcPanel.setQueryData<Posting[]>(["postings"], (old) =>
+        (old ?? []).map((p) => (p.id === posting.id ? { ...p, status: nextStatus } : p)),
+      );
+      return { prev };
+    },
+    onError: (e: Error, _a, ctx) => {
+      if (ctx?.prev) qcPanel.setQueryData(["postings"], ctx.prev);
+      toast.error(e.message);
+    },
     onSuccess: (_d, action) => {
-      onChanged();
       toast.success(
         action === "apply" ? "Moved to Applications" : action === "save" ? "Saved" : "Dismissed",
       );
     },
-    onError: (e: Error) => toast.error(e.message),
+    onSettled: () => onChanged(),
   });
 
   return (
