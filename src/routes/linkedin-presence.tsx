@@ -96,6 +96,30 @@ const TYPE_LABEL: Record<ItemType, string> = {
   reply_opportunity: "Reply opportunity",
 };
 
+const STATUS_DESCRIPTION: Record<ItemStatus, string> = {
+  idea: "Captured but not drafted or posted.",
+  drafted: "Draft exists or is in progress, but not counted as published.",
+  posted: "Counted as published in weekly stats based on Posted date.",
+  archived: "Hidden from active workflow.",
+};
+
+// Convert ISO timestamp to value usable by <input type="datetime-local"> in the user's local timezone.
+function isoToLocalInput(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// Convert a datetime-local string back to an ISO string. Empty -> null.
+function localInputToIso(local: string): string | null {
+  if (!local) return null;
+  const d = new Date(local);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
 const DAYS = [
   { v: 1, l: "Monday" },
   { v: 2, l: "Tuesday" },
