@@ -1303,10 +1303,10 @@ function LpCurrentWeek({
   week,
   onOpen,
 }: {
-  week: ReturnType<typeof currentWeekOf> & {};
+  week: WeekStat;
   onOpen: () => void;
 }) {
-  const w = week!;
+  const w = week;
   const onTrack = w.all_goals_met;
   const someActivity = w.total_activity > 0;
   const statusLabel = onTrack ? "On track" : someActivity ? "Behind" : "No activity yet";
