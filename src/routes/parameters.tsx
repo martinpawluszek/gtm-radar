@@ -571,6 +571,12 @@ function CommercialOverridesTab() {
   const [inputValue, setInputValue] = useState("");
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    setSearch("");
+    setInputValue("");
+    setError("");
+  }, []);
+
   const { data: allOverrides = [], isLoading } = useQuery({
     queryKey: ["commercial-overrides"],
     queryFn: fetchOverrides,
@@ -836,6 +842,12 @@ function ExcludedTitlesTab() {
   const [search, setSearch] = useState("");
   const [inputValue, setInputValue] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setSearch("");
+    setInputValue("");
+    setError("");
+  }, []);
 
   const { data: excludedData, isLoading } = useQuery({
     queryKey: ["excluded-titles"],
