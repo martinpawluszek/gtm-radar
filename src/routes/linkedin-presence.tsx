@@ -547,7 +547,7 @@ function RepliesTab() {
               variant="reply"
               onEdit={() => setEditing(it)}
               onChanged={refresh}
-              copyAction={{ label: "Copy comment prompt", prompt: () => buildCommentPrompt(it) }}
+              copyAction={{ successMessage: "Prompt copied.", prompt: () => buildCommentPrompt(it) }}
             />
           ))}
         </div>
