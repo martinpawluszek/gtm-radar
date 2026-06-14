@@ -14,9 +14,11 @@ import {
   ParamKey,
   ROLE_CRITERIA_SQL,
   RoleCriteria,
+  TargetTitle,
   Weights,
   sumWeights,
 } from "@/lib/roleCriteria";
+
 
 const PARAM_DESCRIPTIONS: Record<ParamKey, string> = {
   comp: "OTE ceiling for this role type",
@@ -147,12 +149,48 @@ function rubricToDb(r: RoleCriteria["rubric"]) {
   };
 }
 
+function normalizeTargetTitles(raw: unknown): TargetTitle[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      if (typeof item === "string") return { title: item };
+      if (item && typeof item === "object") {
+        const o = item as Record<string, unknown>;
+        const title = typeof o.title === "string" ? o.title : typeof o.name === "string" ? (o.name as string) : "";
+        if (!title) return null;
+        return {
+          title,
+          weight: typeof o.weight === "number" ? o.weight : undefined,
+          applied_count: typeof o.applied_count === "number" ? o.applied_count : undefined,
+          dismissed_count: typeof o.dismissed_count === "number" ? o.dismissed_count : undefined,
+        };
+      }
+      return null;
+    })
+    .filter((x): x is TargetTitle => !!x);
+}
+
+function normalizeExcludedTitles(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object") {
+        const o = item as Record<string, unknown>;
+        if (typeof o.title === "string") return o.title;
+        if (typeof o.name === "string") return o.name;
+      }
+      return "";
+    })
+    .filter(Boolean);
+}
+
 function makeDraftFrom(row: RoleCriteria | null): RoleCriteria {
   if (row) {
     const normalized = {
       ...row,
-      target_titles: Array.isArray(row.target_titles) ? row.target_titles : [],
-      excluded_titles: Array.isArray(row.excluded_titles) ? row.excluded_titles : [],
+      target_titles: normalizeTargetTitles(row.target_titles),
+      excluded_titles: normalizeExcludedTitles(row.excluded_titles),
       weights: { ...DEFAULT_CRITERIA.weights, ...(row.weights ?? {}) },
       rubric: rubricFromDb(row.rubric),
       disqualifiers: normalizeDisqualifiers(row.disqualifiers),
@@ -167,6 +205,7 @@ function makeDraftFrom(row: RoleCriteria | null): RoleCriteria {
     ...DEFAULT_CRITERIA,
   };
 }
+
 
 function RoleCriteriaPage() {
   const { data, isLoading, error, refetch } = useQuery({
@@ -345,12 +384,13 @@ function Editor({ initial, onSaved }: { initial: RoleCriteria | null; onSaved: (
       <div style={CARD}>
         <div className="grid gap-0" style={{ gridTemplateColumns: "1fr 1px 1fr" }}>
           <div className="pr-6">
-            <TitleList
+            <TargetTitleList
               title="Target Titles"
               items={draft.target_titles}
               onChange={(items) => setDraft({ ...draft, target_titles: items })}
             />
           </div>
+
           <div style={{ background: "#1E1E2E", width: 1 }} />
           <div className="pl-6">
             <TitleList
@@ -487,7 +527,53 @@ function TitleList({
   );
 }
 
-function RemovableTag({ label, onRemove }: { label: string; onRemove: () => void }) {
+function TargetTitleList({
+  title, items, onChange,
+}: { title: string; items: TargetTitle[]; onChange: (next: TargetTitle[]) => void }) {
+  const [value, setValue] = useState("");
+  const add = () => {
+    const v = value.trim();
+    if (!v) return;
+    if (items.some((i) => i.title.toLowerCase() === v.toLowerCase())) { setValue(""); return; }
+    onChange([...items, { title: v, weight: 1 }]);
+    setValue("");
+  };
+  return (
+    <div>
+      <h4 style={{ ...SECTION_LABEL, marginBottom: 8 }}>{title}</h4>
+      <div className="flex flex-wrap gap-1.5 mb-3 min-h-[28px]">
+        {items.length === 0 && (
+          <span className="text-xs" style={{ color: "#8B8B9E" }}>None</span>
+        )}
+        {items.map((t) => (
+          <RemovableTag
+            key={t.title}
+            label={t.title}
+            secondary={typeof t.weight === "number" ? `w${t.weight}` : undefined}
+            onRemove={() => onChange(items.filter((x) => x.title !== t.title))}
+          />
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <Input
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+          placeholder="Add title…"
+          className="h-8"
+          style={{ background: "#0A0A0F", border: "1px solid #1E1E2E", color: "#F0F0FF" }}
+        />
+        <Button size="sm" onClick={add} variant="outline"
+          style={{ borderColor: "rgba(0,212,255,0.4)", color: "#00D4FF", background: "transparent", height: 32 }}>
+          <Plus size={12} /> Add
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function RemovableTag({ label, secondary, onRemove }: { label: string; secondary?: string; onRemove: () => void }) {
+
   const [hover, setHover] = useState(false);
   return (
     <span
@@ -495,6 +581,10 @@ function RemovableTag({ label, onRemove }: { label: string; onRemove: () => void
       style={{ background: "#1E1E2E", color: "#F0F0FF", borderRadius: 3, fontFamily: MONO, height: 24 }}
     >
       {label}
+      {secondary && (
+        <span style={{ color: "#8B8B9E", marginLeft: 2 }}>{secondary}</span>
+      )}
+
       <button
         onClick={onRemove}
         onMouseEnter={() => setHover(true)}

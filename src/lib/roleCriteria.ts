@@ -12,11 +12,18 @@ export type Weights = Record<ParamKey, number>;
 export type Rubric = Record<ParamKey, Record<1 | 2 | 3 | 4 | 5, string>>;
 export type Bonus = { id: string; name: string; value: number };
 
+export type TargetTitle = {
+  title: string;
+  weight?: number;
+  applied_count?: number;
+  dismissed_count?: number;
+};
+
 export type RoleCriteria = {
   id: string;
   version: number;
   is_active: boolean;
-  target_titles: string[];
+  target_titles: TargetTitle[];
   excluded_titles: string[];
   weights: Weights;
   rubric: Rubric;
@@ -25,6 +32,7 @@ export type RoleCriteria = {
   created_at?: string;
   updated_at?: string;
 };
+
 
 export const DEFAULT_WEIGHTS: Weights = {
   comp: 0.2,
