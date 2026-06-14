@@ -965,7 +965,7 @@ function PostIdeaForm({
   const [saving, setSaving] = useState(false);
 
   async function save() {
-    if (!raw_input.trim()) { toast.error("raw_input is required"); return; }
+    if (!raw_input.trim()) { toast.error("Rough idea is required"); return; }
     setSaving(true);
     const payload: Record<string, unknown> = {
       item_type: "post_idea",
@@ -987,17 +987,48 @@ function PostIdeaForm({
   }
 
   return (
-    <FormShell onClose={onClose} onSave={save} saving={saving} saveLabel={initial ? "Save" : "Save idea"}>
-      <TextAreaField label="raw_input *" value={raw_input} onChange={setRaw} rows={4} />
-      <TextField label="improved_title" value={improved_title} onChange={setTitle} />
-      <TextAreaField label="angle" value={angle} onChange={setAngle} rows={2} />
+    <FormShell
+      onClose={onClose}
+      onSave={save}
+      saving={saving}
+      saveLabel={initial ? "Save" : "Save idea"}
+      subtitle={initial ? undefined : "Capture the rough thought. It does not need to be polished yet."}
+    >
+      <TextAreaField
+        label="Rough idea *"
+        value={raw_input}
+        onChange={setRaw}
+        rows={4}
+        placeholder="Write the rough thought. Example: I moved location scoring from frontend logic into backend rules."
+      />
+      <TextField
+        label="Better title"
+        value={improved_title}
+        onChange={setTitle}
+        placeholder="Optional. Example: The source of truth matters more than the prompt."
+      />
+      <TextAreaField
+        label="Angle"
+        value={angle}
+        onChange={setAngle}
+        rows={2}
+        placeholder="Optional. What makes this worth posting?"
+      />
       <SelectField
-        label="category"
+        label="Category"
         value={category}
         options={[{ value: "", label: "—" }, ...POST_CATEGORIES.map(c => ({ value: c.value, label: c.label }))]}
         onChange={(v) => setCategory(v as Category | "")}
       />
-      {initial && <TextAreaField label="final_text" value={final_text} onChange={setFinalText} rows={6} />}
+      {initial && (
+        <TextAreaField
+          label="Final post text"
+          value={final_text}
+          onChange={setFinalText}
+          rows={6}
+          placeholder="Paste the final version of the post here once it is ready."
+        />
+      )}
     </FormShell>
   );
 }
