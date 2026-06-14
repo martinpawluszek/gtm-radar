@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn as useSF } from "@tanstack/react-start";
-import { ChevronDown, Plus, X, ExternalLink } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Plus, X, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { gtmSupabase } from "@/lib/gtmSupabase";
 import { Button } from "@/components/ui/button";
@@ -306,6 +306,22 @@ function PostingsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+
+  // Reset to page 1 when filters or tabs change
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, tierFilter]);
+
+  // Reset to page 1 when page size changes
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size);
+    setPage(1);
+  };
+
   useEffect(() => {
     try {
       const id = sessionStorage.getItem("dashboard:open:postings");
@@ -328,6 +344,18 @@ function PostingsPage() {
       return true;
     });
   }, [postings, statusFilter, tierFilter, companyMap]);
+
+  // Pagination calculations
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const startIdx = (safePage - 1) * pageSize;
+  const endIdx = Math.min(startIdx + pageSize, filtered.length);
+  const paginated = filtered.slice(startIdx, endIdx);
+
+  // Clamp page if it goes out of bounds due to filter changes
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   return (
     <div className="space-y-4 min-w-0" style={{ marginTop: -8 }}>
@@ -427,7 +455,9 @@ function PostingsPage() {
           )}
         </div>
         <div className="ml-auto" style={{ color: "#8B8B9E", fontFamily: MONO, fontSize: 11 }}>
-          {filtered.length} of {postings.length}
+          {filtered.length === 0
+            ? `0 of ${postings.length.toLocaleString()}`
+            : `${(startIdx + 1).toLocaleString()}–${endIdx.toLocaleString()} of ${filtered.length.toLocaleString()}`}
         </div>
       </div>
 
@@ -449,12 +479,25 @@ function PostingsPage() {
           </p>
         </div>
       ) : (
-        <PostingsTable
-          rows={filtered}
-          companyMap={companyMap}
-          onRowClick={setSelectedId}
-          onChanged={() => qc.invalidateQueries({ queryKey: ["postings"] })}
-        />
+        <>
+          <PostingsTable
+            rows={paginated}
+            companyMap={companyMap}
+            onRowClick={setSelectedId}
+            onChanged={() => qc.invalidateQueries({ queryKey: ["postings"] })}
+          />
+          <PaginationBar
+            page={safePage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            totalItems={filtered.length}
+            startIdx={startIdx}
+            endIdx={endIdx}
+            onPageChange={setPage}
+            onPageSizeChange={handlePageSizeChange}
+          />
+        </>
       )}
 
       {/* Side panel */}
@@ -566,6 +609,151 @@ function StatusPill({ status }: { status: PostingStatus }) {
     >
       {m.label}
     </span>
+  );
+}
+
+// ---------- Pagination ----------
+function PaginationBar({
+  page,
+  totalPages,
+  pageSize,
+  pageSizeOptions,
+  totalItems,
+  startIdx,
+  endIdx,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  page: number;
+  totalPages: number;
+  pageSize: number;
+  pageSizeOptions: number[];
+  totalItems: number;
+  startIdx: number;
+  endIdx: number;
+  onPageChange: (p: number) => void;
+  onPageSizeChange: (s: number) => void;
+}) {
+  const pages: number[] = [];
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) pages.push(i);
+  } else {
+    if (page <= 4) {
+      pages.push(1, 2, 3, 4, 5, -1, totalPages);
+    } else if (page >= totalPages - 3) {
+      pages.push(1, -1, totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+    } else {
+      pages.push(1, -1, page - 1, page, page + 1, -1, totalPages);
+    }
+  }
+
+  return (
+    <div
+      className="flex items-center justify-between px-3 py-2"
+      style={{
+        background: "#111118",
+        border: "1px solid #1E1E2E",
+        borderTop: "none",
+        borderRadius: "0 0 6px 6px",
+        fontFamily: MONO,
+        fontSize: 12,
+      }}
+    >
+      <div className="flex items-center gap-2" style={{ color: "#8B8B9E" }}>
+        <span>Rows:</span>
+        <div className="flex items-center gap-1">
+          {pageSizeOptions.map((opt) => (
+            <button
+              key={opt}
+              onClick={() => onPageSizeChange(opt)}
+              className="px-2"
+              style={{
+                height: 24,
+                borderRadius: 3,
+                border: "1px solid",
+                borderColor: pageSize === opt ? "rgba(0,212,255,0.4)" : "transparent",
+                background: pageSize === opt ? "rgba(0,212,255,0.1)" : "transparent",
+                color: pageSize === opt ? "#00D4FF" : "#8B8B9E",
+                fontSize: 11,
+                fontFamily: MONO,
+              }}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ color: "#8B8B9E" }}>
+        {totalItems === 0
+          ? "0 of 0"
+          : `${(startIdx + 1).toLocaleString()}–${endIdx.toLocaleString()} of ${totalItems.toLocaleString()} postings`}
+      </div>
+
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onPageChange(page - 1)}
+          disabled={page <= 1}
+          className="inline-flex items-center justify-center"
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 4,
+            border: "1px solid #1E1E2E",
+            background: "transparent",
+            color: page <= 1 ? "#4A4A5A" : "#F0F0FF",
+            cursor: page <= 1 ? "not-allowed" : "pointer",
+          }}
+        >
+          <ChevronLeft size={14} />
+        </button>
+
+        {pages.map((p, i) =>
+          p === -1 ? (
+            <span key={`ellipsis-${i}`} className="px-1" style={{ color: "#4A4A5A" }}>
+              …
+            </span>
+          ) : (
+            <button
+              key={p}
+              onClick={() => onPageChange(p)}
+              className="inline-flex items-center justify-center"
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 4,
+                border: "1px solid",
+                borderColor: page === p ? "rgba(0,212,255,0.4)" : "#1E1E2E",
+                background: page === p ? "rgba(0,212,255,0.1)" : "transparent",
+                color: page === p ? "#00D4FF" : "#F0F0FF",
+                fontSize: 11,
+                fontFamily: MONO,
+                cursor: "pointer",
+              }}
+            >
+              {p}
+            </button>
+          ),
+        )}
+
+        <button
+          onClick={() => onPageChange(page + 1)}
+          disabled={page >= totalPages}
+          className="inline-flex items-center justify-center"
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 4,
+            border: "1px solid #1E1E2E",
+            background: "transparent",
+            color: page >= totalPages ? "#4A4A5A" : "#F0F0FF",
+            cursor: page >= totalPages ? "not-allowed" : "pointer",
+          }}
+        >
+          <ChevronRight size={14} />
+        </button>
+      </div>
+    </div>
   );
 }
 
