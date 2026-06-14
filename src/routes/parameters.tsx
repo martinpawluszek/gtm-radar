@@ -321,11 +321,27 @@ function KeywordFiltersTab() {
       return;
     }
 
-    const exists = allRules.some(
-      (r) => r.keyword.toLowerCase() === trimmed.toLowerCase(),
+    const activeMatch = allRules.find(
+      (r) => r.keyword.toLowerCase() === trimmed.toLowerCase() && r.is_active,
     );
-    if (exists) {
+    if (activeMatch) {
       setError("Keyword already exists");
+      return;
+    }
+
+    const inactiveMatch = allRules.find(
+      (r) => r.keyword.toLowerCase() === trimmed.toLowerCase() && !r.is_active,
+    );
+    if (inactiveMatch) {
+      setError("");
+      reactivateMutation.mutate(
+        { id: inactiveMatch.id, tier },
+        {
+          onSuccess: () => {
+            setInput("");
+          },
+        },
+      );
       return;
     }
 
