@@ -677,11 +677,24 @@ function CommercialOverridesTab() {
       return;
     }
 
-    const exists = allOverrides.some(
-      (o) => o.keyword.toLowerCase() === trimmed.toLowerCase(),
+    const activeMatch = allOverrides.find(
+      (o) => o.keyword.toLowerCase() === trimmed.toLowerCase() && o.is_active,
     );
-    if (exists) {
+    if (activeMatch) {
       setError("Keyword already exists");
+      return;
+    }
+
+    const inactiveMatch = allOverrides.find(
+      (o) => o.keyword.toLowerCase() === trimmed.toLowerCase() && !o.is_active,
+    );
+    if (inactiveMatch) {
+      setError("");
+      reactivateMutation.mutate(inactiveMatch.id, {
+        onSuccess: () => {
+          setInputValue("");
+        },
+      });
       return;
     }
 
