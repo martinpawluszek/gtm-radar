@@ -55,6 +55,37 @@ async function deactivateRule(id: string): Promise<void> {
   if (error) throw error;
 }
 
+type CommercialOverride = {
+  id: string;
+  keyword: string;
+  is_active: boolean;
+  created_at: string;
+};
+
+async function fetchOverrides(): Promise<CommercialOverride[]> {
+  const { data, error } = await gtmSupabase
+    .from("commercial_overrides" as never)
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as unknown as CommercialOverride[];
+}
+
+async function addOverride(keyword: string): Promise<void> {
+  const { error } = await gtmSupabase
+    .from("commercial_overrides" as never)
+    .insert({ keyword: keyword.trim(), is_active: true } as never);
+  if (error) throw error;
+}
+
+async function deactivateOverride(id: string): Promise<void> {
+  const { error } = await gtmSupabase
+    .from("commercial_overrides" as never)
+    .update({ is_active: false } as never)
+    .eq("id", id);
+  if (error) throw error;
+}
+
 // ---------- Components ----------
 function ParametersPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("keyword-filters");
@@ -116,9 +147,7 @@ function ParametersPage() {
 
       {/* Tab content */}
       {activeTab === "keyword-filters" && <KeywordFiltersTab />}
-      {activeTab === "commercial-overrides" && (
-        <PlaceholderCard text="Commercial Overrides content coming soon." />
-      )}
+      {activeTab === "commercial-overrides" && <CommercialOverridesTab />}
       {activeTab === "excluded-titles" && (
         <PlaceholderCard text="Excluded Titles content coming soon." />
       )}
@@ -477,6 +506,271 @@ function TierPanel({
             {error}
           </span>
         )}
+      </div>
+    </div>
+  );
+}
+
+function CommercialOverridesTab() {
+  const qc = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [inputValue, setInputValue] = useState("");
+  const [error, setError] = useState("");
+
+  const { data: allOverrides = [], isLoading } = useQuery({
+    queryKey: ["commercial-overrides"],
+    queryFn: fetchOverrides,
+  });
+
+  const activeOverrides = useMemo(
+    () => allOverrides.filter((o) => o.is_active),
+    [allOverrides],
+  );
+
+  const filteredOverrides = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return activeOverrides;
+    return activeOverrides.filter((o) => o.keyword.toLowerCase().includes(q));
+  }, [activeOverrides, search]);
+
+  const addMutation = useMutation({
+    mutationFn: addOverride,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["commercial-overrides"] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to add override word");
+    },
+  });
+
+  const deactivateMutation = useMutation({
+    mutationFn: deactivateOverride,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["commercial-overrides"] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to remove override word");
+    },
+  });
+
+  function handleAdd() {
+    const trimmed = inputValue.trim();
+    if (!trimmed) {
+      setError("Keyword cannot be empty");
+      return;
+    }
+
+    const exists = allOverrides.some(
+      (o) => o.keyword.toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (exists) {
+      setError("Keyword already exists");
+      return;
+    }
+
+    setError("");
+    addMutation.mutate(trimmed, {
+      onSuccess: () => {
+        setInputValue("");
+        toast.success(`Added "${trimmed}"`);
+      },
+      onError: (err: Error) => {
+        if (err.message?.includes("duplicate") || err.message?.includes("unique")) {
+          setError("Keyword already exists");
+        }
+      },
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Info box */}
+      <div
+        className="px-4 py-3 text-sm"
+        style={{
+          background: "#111118",
+          border: "1px solid #1E1E2E",
+          borderLeft: "2px solid #00D4FF",
+          borderRadius: 6,
+          color: "#F0F0FF",
+        }}
+      >
+        These words protect soft-tier blocks from being over-aggressive. If a job title hits a
+        soft-blocked keyword but also contains one of these words, it passes through to Claude.
+        Example: &apos;Enterprise Data Engineer&apos; is blocked by &apos;enterprise&apos; — but
+        &apos;Enterprise Account Executive&apos; passes because &apos;account executive&apos; is here.
+      </div>
+
+      {/* Card */}
+      <div
+        className="flex flex-col"
+        style={{
+          background: "#111118",
+          border: "1px solid #1E1E2E",
+          borderRadius: 6,
+          padding: 20,
+          gap: 16,
+        }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <h2
+            className="text-sm font-semibold tracking-tight"
+            style={{ color: "#F0F0FF", fontFamily: MONO }}
+          >
+            Override Words
+          </h2>
+          <span
+            className="text-[11px] font-medium px-2 py-0.5"
+            style={{
+              color: "#00D4FF",
+              background: "rgba(0,212,255,0.1)",
+              borderRadius: 4,
+              fontFamily: MONO,
+            }}
+          >
+            {activeOverrides.length} active
+          </span>
+        </div>
+        <p className="text-xs" style={{ color: "#8B8B9E" }}>
+          {activeOverrides.length === 1
+            ? "1 active override word"
+            : `${activeOverrides.length} active override words`}
+        </p>
+
+        {/* Search */}
+        <div
+          className="flex items-center gap-3 px-3"
+          style={{
+            background: "#0A0A0F",
+            border: "1px solid #1E1E2E",
+            borderRadius: 4,
+            height: 40,
+          }}
+        >
+          <span style={{ color: "#8B8B9E", fontFamily: MONO, fontSize: 12 }}>
+            Search
+          </span>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Filter override words..."
+            className="flex-1 bg-transparent outline-none text-sm"
+            style={{ color: "#F0F0FF", fontFamily: MONO }}
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="flex items-center justify-center"
+              style={{ width: 20, height: 20, borderRadius: 4, color: "#8B8B9E" }}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* Pill list */}
+        <div
+          className="flex flex-wrap gap-2"
+          style={{ maxHeight: 320, overflowY: "auto", minHeight: 80 }}
+        >
+          {isLoading ? (
+            <>
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton
+                  key={i}
+                  className="rounded-md"
+                  style={{ width: 80 + Math.random() * 60, height: 28 }}
+                />
+              ))}
+            </>
+          ) : filteredOverrides.length === 0 ? (
+            <div className="w-full flex items-center justify-center" style={{ minHeight: 80 }}>
+              <span className="text-xs" style={{ color: "#8B8B9E", fontFamily: MONO }}>
+                No active override words
+              </span>
+            </div>
+          ) : (
+            filteredOverrides.map((o) => (
+              <div
+                key={o.id}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-[13px]"
+                style={{
+                  background: "#0A0A0F",
+                  border: "1px solid #1E1E2E",
+                  borderRadius: 4,
+                  color: "#F0F0FF",
+                  fontFamily: MONO,
+                }}
+              >
+                <span>{o.keyword}</span>
+                <button
+                  onClick={() => deactivateMutation.mutate(o.id)}
+                  disabled={deactivateMutation.isPending}
+                  className="flex items-center justify-center ml-0.5"
+                  style={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 3,
+                    color: "#8B8B9E",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = "#EF4444";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = "#8B8B9E";
+                  }}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Add row */}
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <input
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleAdd();
+              }}
+              placeholder="Add override word..."
+              disabled={addMutation.isPending}
+              className="flex-1 px-2.5 py-1.5 text-[13px] outline-none"
+              style={{
+                background: "#0A0A0F",
+                border: "1px solid #1E1E2E",
+                borderRadius: 4,
+                color: "#F0F0FF",
+                fontFamily: MONO,
+              }}
+            />
+            <button
+              onClick={handleAdd}
+              disabled={addMutation.isPending}
+              className="px-3 py-1.5 text-[13px] font-medium transition-colors"
+              style={{
+                background: addMutation.isPending ? "#1E1E2E" : "rgba(0,212,255,0.1)",
+                border: addMutation.isPending ? "1px solid #1E1E2E" : "1px solid rgba(0,212,255,0.25)",
+                borderRadius: 4,
+                color: addMutation.isPending ? "#8B8B9E" : "#00D4FF",
+                fontFamily: MONO,
+                cursor: addMutation.isPending ? "not-allowed" : "pointer",
+              }}
+            >
+              Add
+            </button>
+          </div>
+          {error && (
+            <span className="text-xs" style={{ color: "#EF4444", fontFamily: MONO }}>
+              {error}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

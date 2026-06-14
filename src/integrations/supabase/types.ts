@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      commercial_overrides: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          keyword: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          keyword: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          keyword?: string
+        }
+        Relationships: []
+      }
       companies: {
         Row: {
           ai_score: number
