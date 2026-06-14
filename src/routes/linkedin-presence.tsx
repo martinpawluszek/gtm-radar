@@ -883,18 +883,42 @@ function DetailModal({
           </>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Field label="Created"><div style={{ color: "#8B8B9E" }}>{new Date(item.created_at).toLocaleString()}</div></Field>
-          {item.posted_at && <Field label="Posted"><div style={{ color: "#8B8B9E" }}>{new Date(item.posted_at).toLocaleString()}</div></Field>}
+          <Field label="Posted">
+            <div style={{ color: "#8B8B9E" }}>
+              {item.posted_at ? new Date(item.posted_at).toLocaleString() : "—"}
+            </div>
+          </Field>
+          <Field label="Last updated">
+            <div style={{ color: "#8B8B9E" }}>
+              {item.updated_at ? new Date(item.updated_at).toLocaleString() : "—"}
+            </div>
+          </Field>
         </div>
 
+        <div
+          className="text-[12px]"
+          style={{
+            color: "#8B8B9E",
+            background: "#0D0D14",
+            border: "1px solid #1E1E2E",
+            borderRadius: 4,
+            padding: "8px 10px",
+          }}
+        >
+          <span style={{ color: statusColor(item.status), fontFamily: MONO, marginRight: 6 }}>
+            {STATUS_LABEL[item.status]}:
+          </span>
+          {STATUS_DESCRIPTION[item.status]}
+        </div>
 
         <div className="flex flex-wrap gap-2 pt-2 border-t" style={{ borderColor: "#1E1E2E" }}>
           <Action onClick={() => setEditing(true)} disabled={busy}>Edit</Action>
           <Action onClick={() => copyText(promptFor(item))} color="#00D4FF">Copy prompt</Action>
           {item.status !== "drafted" && (
             <Action
-              onClick={() => update({ status: "drafted", posted_at: item.status === "posted" ? null : item.posted_at }, "Marked as drafted")}
+              onClick={() => update({ status: "drafted" }, "Marked as drafted")}
               disabled={busy}
             >
               {item.status === "posted" ? "Move back to drafted" : "Mark as drafted"}
@@ -902,7 +926,12 @@ function DetailModal({
           )}
           {item.status !== "posted" && (
             <Action
-              onClick={() => update({ status: "posted", posted_at: new Date().toISOString() }, "Marked as posted")}
+              onClick={() =>
+                update(
+                  { status: "posted", posted_at: item.posted_at ?? new Date().toISOString() },
+                  "Marked as posted",
+                )
+              }
               color="#10B981"
               disabled={busy}
             >
