@@ -963,11 +963,12 @@ function ItemCard({
   );
 }
 
-function Action({ children, onClick, color = "#C0C0D0" }: { children: ReactNode; onClick: () => void; color?: string }) {
+function Action({ children, onClick, color = "#C0C0D0", disabled = false }: { children: ReactNode; onClick: () => void; color?: string; disabled?: boolean }) {
   return (
     <button
       onClick={onClick}
-      className="px-2.5 py-1 text-[11px] font-medium transition-colors"
+      disabled={disabled}
+      className="px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-50"
       style={{
         color,
         background: "transparent",
