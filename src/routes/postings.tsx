@@ -1426,18 +1426,7 @@ function RowActions({
       if (action === "apply") await applyPosting(posting);
       else await setPostingStatus(posting.id, action === "save" ? "saved" : "dismissed");
     },
-    onMutate: async (action) => {
-      await qc.cancelQueries({ queryKey: ["postings"] });
-      const prev = qc.getQueryData<Posting[]>(["postings"]);
-      const nextStatus: PostingStatus =
-        action === "apply" ? "applied" : action === "save" ? "saved" : "dismissed";
-      qc.setQueryData<Posting[]>(["postings"], (old) =>
-        (old ?? []).map((p) => (p.id === posting.id ? { ...p, status: nextStatus } : p)),
-      );
-      return { prev };
-    },
-    onError: (e: Error, _a, ctx) => {
-      if (ctx?.prev) qc.setQueryData(["postings"], ctx.prev);
+    onError: (e: Error) => {
       toast.error(e.message);
     },
     onSuccess: (_d, action) => {
