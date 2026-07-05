@@ -1490,6 +1490,42 @@ function RowActions({
 
 // ---------- Detail Panel ----------
 function DetailPanel({
+  postingId,
+  companyMap,
+  onClose,
+  onChanged,
+}: {
+  postingId: string;
+  companyMap: Map<string, CompanyLite>;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const { data: posting, isLoading } = useQuery({
+    queryKey: ["posting", postingId],
+    queryFn: () => fetchPostingById(postingId),
+  });
+  if (isLoading || !posting) {
+    return (
+      <div
+        className="flex items-center justify-center"
+        style={{ height: "100vh", color: "#8B8B9E" }}
+      >
+        {isLoading ? "Loading posting…" : "Posting not found."}
+      </div>
+    );
+  }
+  const company = posting.company_id ? companyMap.get(posting.company_id) ?? null : null;
+  return (
+    <DetailPanelInner
+      posting={posting}
+      company={company}
+      onClose={onClose}
+      onChanged={onChanged}
+    />
+  );
+}
+
+function DetailPanelInner({
   posting,
   company,
   onClose,
