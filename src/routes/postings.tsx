@@ -191,7 +191,37 @@ async function fetchActiveCriteria(): Promise<RoleCriteria | null> {
 }
 
 // ---------- Prompt builder ----------
-function buildSystemPrompt(criteria: RoleCriteria, company: CompanyLite | null): string {
+const WEIGHT_LABELS: Record<string, string> = {
+  comp: "Comp Potential",
+  role_fit: "Role-Profile Fit",
+  fit: "Role-Profile Fit",
+  seniority: "Seniority Fit",
+  location: "Location",
+  competition: "Competition Level",
+};
+
+function formatWeights(weights: Record<string, number> | null | undefined): string {
+  if (!weights) return "(weights not configured)";
+  const order = ["comp", "role_fit", "seniority", "location", "competition"];
+  const parts: string[] = [];
+  for (const k of order) {
+    const v = weights[k];
+    if (typeof v === "number") {
+      parts.push(`${WEIGHT_LABELS[k] ?? k} ${Math.round(v * 100)}%`);
+    }
+  }
+  for (const [k, v] of Object.entries(weights)) {
+    if (order.includes(k)) continue;
+    if (typeof v === "number") parts.push(`${WEIGHT_LABELS[k] ?? k} ${Math.round(v * 100)}%`);
+  }
+  return parts.join(", ");
+}
+
+function buildSystemPrompt(
+  criteria: RoleCriteria,
+  company: CompanyLite | null,
+  backgroundSummary?: string | null,
+): string {
   const rubricText = PARAM_KEYS.map((k) => {
     const r = criteria.rubric?.[k === "fit" ? "role_fit" : k] ?? criteria.rubric?.[k] ?? {};
     const lines = [1, 2, 3, 4, 5].map((n) => `  ${n} — ${r[String(n)] ?? "—"}`).join("\n");
@@ -219,13 +249,18 @@ function buildSystemPrompt(criteria: RoleCriteria, company: CompanyLite | null):
     ? `Name: ${company.name}\nTier: ${company.tier}\nBrand: ${company.brand_score}/5, AI: ${company.ai_score}/5, Shot: ${company.shot_score}/5, Comp: ${company.comp_score}/5, Location: ${company.loc_score}/5\nNotes: ${company.notes ?? "(none)"}`
     : "Company not matched in database.";
 
-  return `You are scoring a job posting for Martin Pawluszek, a senior GTM and enterprise sales professional targeting roles at top AI and tech companies.
+  const bg = (backgroundSummary ?? "").trim();
+  const opener = bg
+    ? `You are scoring a job posting for a candidate with the following background:\n${bg}`
+    : `You are scoring a job posting for a senior commercial / GTM professional.`;
+
+  return `${opener}
 
 # Step 1 — Semantic Relevance Check
 Is the core work described in this JD commercial GTM, enterprise sales, business development, revenue leadership, or strategic partnerships? If NO, set disqualified=true with reason "Not a commercial GTM role" and skip parameter scoring.
 
 # Role Criteria (PRIMARY FRAMEWORK)
-Weights: Comp Potential 20%, Role-Profile Fit 25%, Seniority Fit 15%, Location 10%, Competition Level 10%.
+Weights: ${formatWeights(criteria.weights)}.
 
 Scoring rubric per parameter (1-5):
 ${rubricText}
