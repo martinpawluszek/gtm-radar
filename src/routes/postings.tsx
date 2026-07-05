@@ -21,7 +21,7 @@ export const Route = createFileRoute("/postings")({
 const MONO = "var(--font-mono)";
 
 // ---------- Types ----------
-type PostingStatus = "new" | "saved" | "dismissed" | "applied";
+type PostingStatus = "new" | "saved" | "dismissed" | "applied" | "reviewed" | "expired";
 type TierFilter = "all" | Tier;
 type CompanyFilter = "all" | string;
 
