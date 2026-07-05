@@ -8,6 +8,7 @@ import {
   Kanban,
   Users,
   Linkedin,
+  Settings,
   type LucideIcon,
 } from "lucide-react";
 
@@ -22,6 +23,7 @@ const NAV: NavItem[] = [
   { to: "/applications", label: "Applications", icon: Kanban },
   { to: "/outreach", label: "Outreach", icon: Users },
   { to: "/linkedin-presence", label: "LinkedIn Presence", icon: Linkedin },
+  { to: "/settings", label: "Settings", icon: Settings },
 ];
 
 function formatDate() {

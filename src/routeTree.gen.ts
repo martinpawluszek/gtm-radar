@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as RoleCriteriaRouteImport } from './routes/role-criteria'
 import { Route as PostingsRouteImport } from './routes/postings'
 import { Route as ParametersRouteImport } from './routes/parameters'
@@ -18,6 +19,11 @@ import { Route as CompaniesRouteImport } from './routes/companies'
 import { Route as ApplicationsRouteImport } from './routes/applications'
 import { Route as IndexRouteImport } from './routes/index'
 
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RoleCriteriaRoute = RoleCriteriaRouteImport.update({
   id: '/role-criteria',
   path: '/role-criteria',
@@ -68,6 +74,7 @@ export interface FileRoutesByFullPath {
   '/parameters': typeof ParametersRoute
   '/postings': typeof PostingsRoute
   '/role-criteria': typeof RoleCriteriaRoute
+  '/settings': typeof SettingsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -78,6 +85,7 @@ export interface FileRoutesByTo {
   '/parameters': typeof ParametersRoute
   '/postings': typeof PostingsRoute
   '/role-criteria': typeof RoleCriteriaRoute
+  '/settings': typeof SettingsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -89,6 +97,7 @@ export interface FileRoutesById {
   '/parameters': typeof ParametersRoute
   '/postings': typeof PostingsRoute
   '/role-criteria': typeof RoleCriteriaRoute
+  '/settings': typeof SettingsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -101,6 +110,7 @@ export interface FileRouteTypes {
     | '/parameters'
     | '/postings'
     | '/role-criteria'
+    | '/settings'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -111,6 +121,7 @@ export interface FileRouteTypes {
     | '/parameters'
     | '/postings'
     | '/role-criteria'
+    | '/settings'
   id:
     | '__root__'
     | '/'
@@ -121,6 +132,7 @@ export interface FileRouteTypes {
     | '/parameters'
     | '/postings'
     | '/role-criteria'
+    | '/settings'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -132,10 +144,18 @@ export interface RootRouteChildren {
   ParametersRoute: typeof ParametersRoute
   PostingsRoute: typeof PostingsRoute
   RoleCriteriaRoute: typeof RoleCriteriaRoute
+  SettingsRoute: typeof SettingsRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/role-criteria': {
       id: '/role-criteria'
       path: '/role-criteria'
@@ -204,6 +224,7 @@ const rootRouteChildren: RootRouteChildren = {
   ParametersRoute: ParametersRoute,
   PostingsRoute: PostingsRoute,
   RoleCriteriaRoute: RoleCriteriaRoute,
+  SettingsRoute: SettingsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
