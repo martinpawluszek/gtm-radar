@@ -22,7 +22,8 @@ type TabKey =
   | "commercial-overrides"
   | "excluded-titles"
   | "location"
-  | "search-patterns";
+  | "search-patterns"
+  | "scoring-prompt";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "keyword-filters", label: "Keyword Filters" },
@@ -30,7 +31,9 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "excluded-titles", label: "Excluded Titles" },
   { key: "location", label: "Location" },
   { key: "search-patterns", label: "Search Patterns" },
+  { key: "scoring-prompt", label: "Scoring Prompt" },
 ];
+
 
 
 // ---------- Types ----------
