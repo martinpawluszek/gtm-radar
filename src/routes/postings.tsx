@@ -64,6 +64,8 @@ type Posting = {
   created_at: string;
   updated_at: string;
   title_signal: string | null;
+  posted_at: string | null;
+  deadline_at: string | null;
 };
 
 type CompanyLite = {
