@@ -1462,6 +1462,19 @@ function DetailPanel({
           <div style={{ color: "#8B8B9E", fontSize: 12, fontFamily: MONO }}>
             {posting.location ?? "—"}
           </div>
+          <div style={{ color: "#6B7280", fontSize: 11, fontFamily: MONO }}>
+            Posted {relativeTime(posting.posted_at ?? posting.scraped_at ?? posting.created_at)}
+            {" · "}
+            {shortAge(posting.posted_at ?? posting.scraped_at ?? posting.created_at)}
+            {posting.deadline_at && (
+              <>
+                {" · "}
+                <span style={{ color: deadlineIndicator(posting.deadline_at).color }}>
+                  {deadlineIndicator(posting.deadline_at).text}
+                </span>
+              </>
+            )}
+          </div>
           {posting.jd_url && (
             <a
               href={posting.jd_url}
