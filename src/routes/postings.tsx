@@ -21,7 +21,7 @@ export const Route = createFileRoute("/postings")({
 const MONO = "var(--font-mono)";
 
 // ---------- Types ----------
-type PostingStatus = "new" | "saved" | "dismissed" | "applied";
+type PostingStatus = "new" | "saved" | "dismissed" | "applied" | "reviewed" | "expired";
 type TierFilter = "all" | Tier;
 type CompanyFilter = "all" | string;
 
@@ -64,6 +64,8 @@ type Posting = {
   created_at: string;
   updated_at: string;
   title_signal: string | null;
+  posted_at: string | null;
+  deadline_at: string | null;
 };
 
 type CompanyLite = {
@@ -106,6 +108,39 @@ function relativeTime(iso: string): string {
   return `${Math.floor(d / 365)}y ago`;
 }
 
+function ageDays(iso: string): number {
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+}
+
+function effectiveExpiry(p: {
+  deadline_at: string | null;
+  posted_at: string | null;
+  created_at: string;
+}, lifespanDays: number): number {
+  if (p.deadline_at) return new Date(p.deadline_at).getTime();
+  const base = new Date(p.posted_at ?? p.created_at).getTime();
+  return base + lifespanDays * 86400000;
+}
+
+function shortAge(iso: string): string {
+  const d = ageDays(iso);
+  if (d <= 0) return "today";
+  if (d < 30) return `${d}d old`;
+  const mo = Math.floor(d / 30);
+  if (mo < 12) return `${mo}mo old`;
+  return `${Math.floor(d / 365)}y old`;
+}
+
+function deadlineIndicator(deadlineIso: string): { text: string; color: string } {
+  const ms = new Date(deadlineIso).getTime() - Date.now();
+  const d = Math.ceil(ms / 86400000);
+  if (d < 0) return { text: "closed", color: "#6B7280" };
+  if (d === 0) return { text: "closes today", color: "#EF4444" };
+  if (d <= 3) return { text: `closes in ${d}d`, color: "#EF4444" };
+  if (d <= 7) return { text: `closes in ${d}d`, color: "#F59E0B" };
+  return { text: `closes in ${d}d`, color: "#8B8B9E" };
+}
+
 function scoreColor(score: number | null | undefined): string {
   if (score == null) return "#8B8B9E";
   if (score >= 20) return "#10B981";
@@ -116,9 +151,11 @@ function scoreColor(score: number | null | undefined): string {
 
 const STATUS_META: Record<PostingStatus, { label: string; color: string }> = {
   new: { label: "New", color: "#00D4FF" },
+  reviewed: { label: "Reviewed", color: "#00D4FF" },
   saved: { label: "Saved", color: "#7C3AED" },
   applied: { label: "Applied", color: "#10B981" },
   dismissed: { label: "Dismissed", color: "#8B8B9E" },
+  expired: { label: "Expired", color: "#6B7280" },
 };
 
 // ---------- Data ----------
@@ -300,8 +337,20 @@ Respond in this exact JSON format with no other text:
   "bonuses_applied": [],
   "final_score": 18.5,
   "title_signal": "matching",
-  "summary": "one sentence verdict"
-}`;
+  "summary": "one sentence verdict",
+  "deadline": null
+}
+
+For "deadline": if the job description explicitly states an application deadline or closing date, return it as an ISO date string (YYYY-MM-DD); otherwise null. Do not guess.`;
+}
+
+function parseDeadline(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const s = v.trim();
+  if (!s) return null;
+  const d = new Date(s.length === 10 ? `${s}T23:59:59Z` : s);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString();
 }
 
 function extractJson(text: string): unknown {
@@ -349,6 +398,50 @@ function PostingsPage() {
     return list.sort((a, b) => a.name.localeCompare(b.name));
   }, [postings, companyMap]);
 
+  const { data: lifespanDays = 30 } = useQuery({
+    queryKey: ["user-profile-lifespan"],
+    queryFn: async () => {
+      const { data } = await gtmSupabase
+        .from("user_profiles" as never)
+        .select("default_posting_lifespan_days")
+        .order("created_at")
+        .limit(1)
+        .maybeSingle();
+      const v = (data as { default_posting_lifespan_days?: number | null } | null)
+        ?.default_posting_lifespan_days;
+      return typeof v === "number" && v > 0 ? v : 30;
+    },
+  });
+
+  // Auto-expire on load (once per postings snapshot)
+  const [expiredRunKey, setExpiredRunKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (isLoading || postings.length === 0) return;
+    const key = `${postings.length}:${lifespanDays}`;
+    if (expiredRunKey === key) return;
+    setExpiredRunKey(key);
+    const now = Date.now();
+    const toExpire = postings.filter(
+      (p) =>
+        (p.status === "new" || p.status === "reviewed") &&
+        effectiveExpiry(p, lifespanDays) < now,
+    );
+    if (toExpire.length === 0) return;
+    const ids = toExpire.map((p) => p.id);
+    (async () => {
+      const { error } = await gtmSupabase
+        .from("job_postings" as never)
+        .update({ status: "expired", updated_at: new Date().toISOString() } as never)
+        .in("id", ids);
+      if (error) return;
+      qc.setQueryData<Posting[]>(["postings"], (old) =>
+        (old ?? []).map((p) =>
+          ids.includes(p.id) ? { ...p, status: "expired" as PostingStatus } : p,
+        ),
+      );
+    })();
+  }, [postings, lifespanDays, isLoading, expiredRunKey, qc]);
+
   const [statusFilter, setStatusFilter] = useState<"all" | PostingStatus>("all");
   const [tierFilter, setTierFilter] = useState<TierFilter>("all");
   const [tierOpen, setTierOpen] = useState(false);
@@ -392,7 +485,11 @@ function PostingsPage() {
       if (unscoredOnly) {
         if (p.status !== "new" || p.ai_composite_score != null) return false;
       }
-      if (statusFilter !== "all" && p.status !== statusFilter) return false;
+      if (statusFilter === "all") {
+        if (p.status === "expired") return false;
+      } else if (p.status !== statusFilter) {
+        return false;
+      }
       if (tierFilter !== "all") {
         const c = p.company_id ? companyMap.get(p.company_id) : null;
         if (!c || c.tier !== tierFilter) return false;
@@ -450,7 +547,7 @@ function PostingsPage() {
         }}
       >
         <div className="flex items-center gap-1">
-          {(["all", "new", "saved", "dismissed", "applied"] as const).map((s) => (
+          {(["all", "new", "saved", "dismissed", "applied", "expired"] as const).map((s) => (
             <FilterPill
               key={s}
               active={statusFilter === s}
@@ -1047,8 +1144,19 @@ function PostingRow({
       <div>
         <StatusPill status={posting.status} />
       </div>
-      <div style={{ color: "#8B8B9E", fontFamily: MONO, fontSize: 11 }}>
-        {relativeTime(posting.scraped_at ?? posting.created_at)}
+      <div style={{ color: "#8B8B9E", fontFamily: MONO, fontSize: 11, lineHeight: 1.35 }}>
+        <div>{relativeTime(posting.posted_at ?? posting.scraped_at ?? posting.created_at)}</div>
+        <div style={{ fontSize: 10, color: "#6B7280" }}>
+          {shortAge(posting.posted_at ?? posting.scraped_at ?? posting.created_at)}
+          {posting.deadline_at && (
+            <>
+              {" · "}
+              <span style={{ color: deadlineIndicator(posting.deadline_at).color }}>
+                {deadlineIndicator(posting.deadline_at).text}
+              </span>
+            </>
+          )}
+        </div>
       </div>
       <RowActions posting={posting} company={company} onChanged={onChanged} />
     </div>
@@ -1353,6 +1461,19 @@ function DetailPanel({
           </div>
           <div style={{ color: "#8B8B9E", fontSize: 12, fontFamily: MONO }}>
             {posting.location ?? "—"}
+          </div>
+          <div style={{ color: "#6B7280", fontSize: 11, fontFamily: MONO }}>
+            Posted {relativeTime(posting.posted_at ?? posting.scraped_at ?? posting.created_at)}
+            {" · "}
+            {shortAge(posting.posted_at ?? posting.scraped_at ?? posting.created_at)}
+            {posting.deadline_at && (
+              <>
+                {" · "}
+                <span style={{ color: deadlineIndicator(posting.deadline_at).color }}>
+                  {deadlineIndicator(posting.deadline_at).text}
+                </span>
+              </>
+            )}
           </div>
           {posting.jd_url && (
             <a
@@ -1850,6 +1971,7 @@ function AddPostingModal({
         final_score?: number;
         title_signal?: string;
         summary?: string;
+        deadline?: string | null;
       };
 
       const finalScore = typeof parsed.final_score === "number" ? parsed.final_score : null;
@@ -1858,18 +1980,22 @@ function AddPostingModal({
         bonuses_applied: (parsed.bonuses_applied ?? []) as AiRationale["bonuses_applied"],
         summary: parsed.summary,
       };
+      const parsedDeadline = parseDeadline(parsed.deadline);
+
+      const updatePayload: Record<string, unknown> = {
+        ai_role_score: finalScore,
+        ai_composite_score: finalScore,
+        ai_rationale: rationale,
+        disqualified: parsed.disqualified ?? false,
+        disqualifier_reason: parsed.disqualifier_reason ?? null,
+        title_signal: parsed.title_signal ?? null,
+        updated_at: new Date().toISOString(),
+      };
+      if (parsedDeadline) updatePayload.deadline_at = parsedDeadline;
 
       const { error: upErr } = await gtmSupabase
         .from("job_postings" as never)
-        .update({
-          ai_role_score: finalScore,
-          ai_composite_score: finalScore,
-          ai_rationale: rationale,
-          disqualified: parsed.disqualified ?? false,
-          disqualifier_reason: parsed.disqualifier_reason ?? null,
-          title_signal: parsed.title_signal ?? null,
-          updated_at: new Date().toISOString(),
-        } as never)
+        .update(updatePayload as never)
         .eq("id", postingId);
       if (upErr) throw upErr;
 
@@ -2237,6 +2363,7 @@ function BatchScoreDialog({
       final_score?: number;
       title_signal?: string;
       summary?: string;
+      deadline?: string | null;
     };
     const finalScore = typeof parsed.final_score === "number" ? parsed.final_score : null;
     const rationale: AiRationale = {
@@ -2245,18 +2372,21 @@ function BatchScoreDialog({
       summary: parsed.summary,
     };
     const disqualified = !!parsed.disqualified;
+    const parsedDeadline = parseDeadline(parsed.deadline);
+    const updatePayload: Record<string, unknown> = {
+      ai_role_score: finalScore,
+      ai_composite_score: finalScore,
+      ai_rationale: rationale,
+      title_signal: parsed.title_signal ?? null,
+      disqualified,
+      disqualifier_reason: parsed.disqualifier_reason ?? null,
+      status: disqualified ? "dismissed" : "new",
+      updated_at: new Date().toISOString(),
+    };
+    if (parsedDeadline && !posting.deadline_at) updatePayload.deadline_at = parsedDeadline;
     const { error } = await gtmSupabase
       .from("job_postings" as never)
-      .update({
-        ai_role_score: finalScore,
-        ai_composite_score: finalScore,
-        ai_rationale: rationale,
-        title_signal: parsed.title_signal ?? null,
-        disqualified,
-        disqualifier_reason: parsed.disqualifier_reason ?? null,
-        status: disqualified ? "dismissed" : "new",
-        updated_at: new Date().toISOString(),
-      } as never)
+      .update(updatePayload as never)
       .eq("id", posting.id);
     if (error) throw error;
   }

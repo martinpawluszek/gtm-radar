@@ -53,6 +53,7 @@ type UserProfile = {
   skills: string | null;
   weekly_posting_cap: number | null;
   agent_enabled: boolean | null;
+  default_posting_lifespan_days: number | null;
 };
 
 async function loadProfile(): Promise<UserProfile | null> {
@@ -115,6 +116,7 @@ function SettingsPage() {
           skills: form.skills,
           weekly_posting_cap: form.weekly_posting_cap,
           agent_enabled: form.agent_enabled ?? false,
+          default_posting_lifespan_days: form.default_posting_lifespan_days,
           updated_at: new Date().toISOString(),
         } as never)
         .eq("id", form.id);
@@ -261,6 +263,28 @@ function SettingsPage() {
           }}
         />
         <div style={HELP}>Safety limit — the most AI scorings allowed per week.</div>
+
+        <div style={{ height: 20 }} />
+        <label style={LABEL}>Default posting lifespan (days)</label>
+        <Input
+          type="number"
+          value={form.default_posting_lifespan_days ?? ""}
+          onChange={(e) =>
+            set(
+              "default_posting_lifespan_days",
+              e.target.value === "" ? null : Number(e.target.value),
+            )
+          }
+          style={{
+            background: "#0A0A0F",
+            border: "1px solid #1E1E2E",
+            color: "#F0F0FF",
+            maxWidth: 200,
+          }}
+        />
+        <div style={HELP}>
+          If a posting has no deadline, treat it as expired this many days after it was posted.
+        </div>
 
         <div style={{ height: 20 }} />
         <div className="flex items-center gap-3">
