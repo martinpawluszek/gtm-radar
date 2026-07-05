@@ -1958,6 +1958,7 @@ function AddPostingModal({
         final_score?: number;
         title_signal?: string;
         summary?: string;
+        deadline?: string | null;
       };
 
       const finalScore = typeof parsed.final_score === "number" ? parsed.final_score : null;
@@ -1966,18 +1967,22 @@ function AddPostingModal({
         bonuses_applied: (parsed.bonuses_applied ?? []) as AiRationale["bonuses_applied"],
         summary: parsed.summary,
       };
+      const parsedDeadline = parseDeadline(parsed.deadline);
+
+      const updatePayload: Record<string, unknown> = {
+        ai_role_score: finalScore,
+        ai_composite_score: finalScore,
+        ai_rationale: rationale,
+        disqualified: parsed.disqualified ?? false,
+        disqualifier_reason: parsed.disqualifier_reason ?? null,
+        title_signal: parsed.title_signal ?? null,
+        updated_at: new Date().toISOString(),
+      };
+      if (parsedDeadline) updatePayload.deadline_at = parsedDeadline;
 
       const { error: upErr } = await gtmSupabase
         .from("job_postings" as never)
-        .update({
-          ai_role_score: finalScore,
-          ai_composite_score: finalScore,
-          ai_rationale: rationale,
-          disqualified: parsed.disqualified ?? false,
-          disqualifier_reason: parsed.disqualifier_reason ?? null,
-          title_signal: parsed.title_signal ?? null,
-          updated_at: new Date().toISOString(),
-        } as never)
+        .update(updatePayload as never)
         .eq("id", postingId);
       if (upErr) throw upErr;
 
