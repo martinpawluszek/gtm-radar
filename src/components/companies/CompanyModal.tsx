@@ -1,5 +1,6 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { X } from "lucide-react";
+import { toast } from "sonner";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -13,8 +14,13 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
-  Company, CompanyInsert, SCORE_DIMS, SCORE_RUBRIC, TIER_META, TIER_ORDER, Tier, sourceBadge,
+  Company, CompanyInsert, SCORE_DIMS, SCORE_RUBRIC, TIER_META, TIER_ORDER, Tier, AtsType,
 } from "@/lib/companies";
+import { gtmSupabase } from "@/lib/gtmSupabase";
+
+const ATS_OPTIONS: Exclude<AtsType, null>[] = [
+  "greenhouse", "ashby", "lever", "amazon", "workday", "generic_scraper", "private", "unknown", "custom",
+];
 
 type Props = {
   open: boolean;
