@@ -2065,6 +2065,7 @@ function AddPostingModal({
         .update(updatePayload as never)
         .eq("id", postingId);
       if (upErr) throw upErr;
+      await markFeedbackUsed(feedback.ids);
 
       toast.success("Posting scored");
       onAdded();
