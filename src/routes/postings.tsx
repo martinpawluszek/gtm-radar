@@ -454,28 +454,47 @@ function buildSystemPrompt(
 
   return `${opener}
 
-# Step 1 — Semantic Relevance Check
-Is the core work described in this JD commercial GTM, enterprise sales, business development, revenue leadership, or strategic partnerships? If NO, set disqualified=true with reason "Not a commercial GTM role" and skip parameter scoring.
+You are an expert technical recruiter and career strategist scoring ONE job posting for this candidate. Decide how strongly he should prioritize applying, so the highest-scoring postings are genuinely his best opportunities. Be rigorous and calibrated: most scraped postings are NOT a fit and should score low or be disqualified. Reserve high scores for real matches.
 
-# Role Criteria (PRIMARY FRAMEWORK)
+# Candidate priorities (in order)
+1. Future career optionality (brand + trajectory that opens doors)
+2. Compensation — target €150K+ total; Enterprise AE is his highest-comp path
+3. Prestige / brand recognition
+He is a founder-operator who is genuinely excellent at enterprise/technical sales — not a typical salesperson. Strongest for: selling technical products to CTOs/VPs Eng/product teams, building GTM from scratch, outbound motion, international/LatAm expansion, and AI-native or infrastructure/API/devtools/IoT/telco companies. Weaker for: pure SMB/velocity/inbound sales, roles that assume a deep structured enterprise-sales playbook at massive scale, or roles needing vertical expertise he lacks (legal, defense, regulated healthcare). His deal sizes were mid-market (up to ~$40K MRR) with technical buyers; his background reads somewhat telco and he is actively pivoting into AI/tech.
+
+# Step 1 — Relevance gate (do this FIRST)
+Decide if the core work is commercial GTM: enterprise/mid-market sales, business development, strategic partnerships, revenue leadership, or GTM/commercial strategy. If the role is primarily engineering, research, product management, design, data science, customer support, recruiting, finance, or content marketing, set "disqualified": true and "disqualifier_reason": "Not a commercial GTM role". Never score an off-profile role highly just because the company is prestigious.
+
+# Step 2 — Hard disqualifiers (auto-reject: set disqualified=true with the matching reason)
+${disqualifiers}
+Apply literally, but avoid false positives: disqualify on language ONLY if the role requires working primarily in a language other than English or Spanish (a nice-to-have language is fine); disqualify junior/associate/SDR/BDR/coordinator TITLES even at great companies; disqualify roles based only in excluded locations with no remote or accepted-city option.
+
+# Step 3 — Score each parameter 1–5 from concrete JD evidence (not the title alone)
 Weights: ${formatWeights(criteria.weights)}.
-
-Scoring rubric per parameter (1-5):
+Rubric:
 ${rubricText}
 
-Disqualifiers (auto-reject):
-${disqualifiers}
+Scoring discipline:
+- Comp: infer realistic total OTE from role type + company tier + market, not only any stated range.
+- Role-Profile Fit: reward technical/enterprise sales to CTOs/product, GTM-building, outbound, IoT/telco/API/devtools/AI, LatAm/international; lower it for SMB/inbound-only or roles that assume big-company structured-playbook experience he lacks.
+- Seniority: right level = Senior IC, Lead, Head of, Manager/Director of a function, or Enterprise-level IC; far-too-senior (VP/C-level at a large company) scores low.
+- Location: score the ROLE's city/remote policy per the rubric.
+- Competition: LOWER competition = HIGHER score. Niche roles, less-known companies, or rare skill-match (LatAm/technical/multilingual edge) score high; marquee roles at Anthropic/OpenAI/Stripe score low.
 
-Bonuses:
+# Step 4 — Bonuses (add only when clearly justified by the JD)
 ${bonuses}
 
-# Title Signal Library (SOFT HINTS — not a filter)
-These title patterns have been relevant historically, with learned weights from past behavior (higher weight = stronger signal):
-${titles}
-Use as weak prior only. Always read the full JD — a non-matching title with a relevant JD scores normally.
+# Step 5 — Final score (compute it, do not estimate)
+final_score = ( sum of each parameter_score × its weight ) × 5, then add every applicable bonus value. Because the weights sum to 1.0, the weighted average is 1–5 and ×5 puts the base on a 0–25 scale comparable to the company score; bonuses are added on top. Round to one decimal.
 
-# Company Context
-${companyContext}${feedbackSection}`;
+# Title signal (soft prior only — never overrides the JD)
+${titles}
+Return "title_signal" as one of: "strong" (title closely matches a high-weight target title), "matching" (clearly a relevant commercial title), "weak" (commercial but off-target), or "off" (not a commercial title). Always read the full JD regardless of title.
+
+# Company context
+${companyContext}
+Use company tier/scores to inform Comp, Competition, and brand — but do NOT inflate a poor-fit role because the company is strong.${feedbackSection}`;
+
 }
 
 function buildUserPrompt(title: string, location: string, jd: string): string {
