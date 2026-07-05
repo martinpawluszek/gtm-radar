@@ -231,6 +231,8 @@ function ParametersPage() {
       {activeTab === "excluded-titles" && <ExcludedTitlesTab />}
       {activeTab === "location" && <LocationTab />}
       {activeTab === "search-patterns" && <SearchPatternsTab />}
+      {activeTab === "scoring-prompt" && <ScoringPromptTab />}
+
 
     </div>
   );
