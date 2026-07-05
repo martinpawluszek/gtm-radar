@@ -51,10 +51,14 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
   const [tagInput, setTagInput] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const [detecting, setDetecting] = useState(false);
+  const [detectResult, setDetectResult] = useState<{ note: string; confidence: "high" | "medium" | "none" } | null>(null);
+
   useEffect(() => {
     if (!open) return;
     setForm(initial ? { ...(initial as CompanyInsert), is_active: (initial as Company).is_active !== false } : { ...emptyForm });
     setTagInput("");
+    setDetectResult(null);
   }, [open, initial]);
 
   const set = <K extends keyof CompanyInsert>(k: K, v: CompanyInsert[K]) =>
