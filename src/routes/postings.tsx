@@ -531,10 +531,7 @@ function extractJson(text: string): unknown {
 // ---------- Page ----------
 function PostingsPage() {
   const qc = useQueryClient();
-  const { data: postings = [], isLoading } = useQuery({
-    queryKey: ["postings"],
-    queryFn: fetchPostings,
-  });
+
   const { data: companies = [] } = useQuery({
     queryKey: ["companies-lite-postings"],
     queryFn: fetchCompanies,
@@ -545,19 +542,6 @@ function PostingsPage() {
     companies.forEach((c) => m.set(c.id, c));
     return m;
   }, [companies]);
-
-  const companiesWithPostings = useMemo(() => {
-    const seen = new Set<string>();
-    const list: { id: string; name: string }[] = [];
-    for (const p of postings) {
-      const c = p.company_id ? companyMap.get(p.company_id) : null;
-      if (c && !seen.has(c.id)) {
-        seen.add(c.id);
-        list.push({ id: c.id, name: c.name });
-      }
-    }
-    return list.sort((a, b) => a.name.localeCompare(b.name));
-  }, [postings, companyMap]);
 
   const { data: lifespanDays = 30 } = useQuery({
     queryKey: ["user-profile-lifespan"],
@@ -574,36 +558,8 @@ function PostingsPage() {
     },
   });
 
-  // Auto-expire on load (once per postings snapshot)
-  const [expiredRunKey, setExpiredRunKey] = useState<string | null>(null);
-  useEffect(() => {
-    if (isLoading || postings.length === 0) return;
-    const key = `${postings.length}:${lifespanDays}`;
-    if (expiredRunKey === key) return;
-    setExpiredRunKey(key);
-    const now = Date.now();
-    const toExpire = postings.filter(
-      (p) =>
-        (p.status === "new" || p.status === "reviewed") &&
-        effectiveExpiry(p, lifespanDays) < now,
-    );
-    if (toExpire.length === 0) return;
-    const ids = toExpire.map((p) => p.id);
-    (async () => {
-      const { error } = await gtmSupabase
-        .from("job_postings" as never)
-        .update({ status: "expired", updated_at: new Date().toISOString() } as never)
-        .in("id", ids);
-      if (error) return;
-      qc.setQueryData<Posting[]>(["postings"], (old) =>
-        (old ?? []).map((p) =>
-          ids.includes(p.id) ? { ...p, status: "expired" as PostingStatus } : p,
-        ),
-      );
-    })();
-  }, [postings, lifespanDays, isLoading, expiredRunKey, qc]);
-
-  const [statusFilter, setStatusFilter] = useState<"all" | PostingStatus>("all");
+  // Filters — default view is "New"
+  const [statusFilter, setStatusFilter] = useState<PostingStatus>("new");
   const [tierFilter, setTierFilter] = useState<TierFilter>("all");
   const [tierOpen, setTierOpen] = useState(false);
   const [companyFilter, setCompanyFilter] = useState<CompanyFilter>("all");
@@ -613,21 +569,93 @@ function PostingsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
-  // Pagination state
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
-  // Reset to page 1 when filters or tabs change
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, tierFilter, companyFilter, unscoredOnly]);
+  }, [statusFilter, tierFilter, companyFilter, unscoredOnly, pageSize]);
 
-  // Reset to page 1 when page size changes
-  const handlePageSizeChange = (size: number) => {
-    setPageSize(size);
-    setPage(1);
+  const tierCompanyIds = useMemo(() => {
+    if (tierFilter === "all") return null;
+    return companies.filter((c) => c.tier === tierFilter).map((c) => c.id);
+  }, [companies, tierFilter]);
+
+  const companiesForFilter = useMemo(() => {
+    const base =
+      tierFilter === "all" ? companies : companies.filter((c) => c.tier === tierFilter);
+    return [...base].sort((a, b) => a.name.localeCompare(b.name));
+  }, [companies, tierFilter]);
+
+  const listFilters: ListFilters = {
+    status: statusFilter,
+    tier: tierFilter,
+    companyId: companyFilter,
+    unscoredOnly,
   };
+
+  const { data: pageData, isLoading, isFetching } = useQuery({
+    queryKey: [
+      "postings",
+      { statusFilter, tierFilter, companyFilter, unscoredOnly, page, pageSize },
+    ],
+    queryFn: () => fetchPostingsPage(listFilters, tierCompanyIds, page, pageSize),
+    placeholderData: (prev) => prev,
+  });
+  const rows = pageData?.rows ?? [];
+  const total = pageData?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const startIdx = total === 0 ? 0 : (page - 1) * pageSize;
+  const endIdx = Math.min(startIdx + pageSize, total);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const { data: counts } = useQuery({
+    queryKey: ["postings-counts"],
+    queryFn: fetchPostingCounts,
+    staleTime: 30_000,
+  });
+
+  const { data: unscoredForButton = 0 } = useQuery({
+    queryKey: ["postings-unscored-count", { tierFilter, companyFilter }],
+    queryFn: () => fetchUnscoredCountFiltered(tierCompanyIds, companyFilter),
+    staleTime: 15_000,
+  });
+
+  // Auto-expire once per mount (server-side)
+  const [expiredRan, setExpiredRan] = useState(false);
+  useEffect(() => {
+    if (expiredRan || !lifespanDays) return;
+    setExpiredRan(true);
+    (async () => {
+      try {
+        const now = new Date().toISOString();
+        const cutoff = new Date(Date.now() - lifespanDays * 86400000).toISOString();
+        await gtmSupabase
+          .from("job_postings" as never)
+          .update({ status: "expired", updated_at: now } as never)
+          .in("status", ["new", "reviewed"])
+          .not("deadline_at", "is", null)
+          .lt("deadline_at", now);
+        await gtmSupabase
+          .from("job_postings" as never)
+          .update({ status: "expired", updated_at: now } as never)
+          .in("status", ["new", "reviewed"])
+          .is("deadline_at", null)
+          .or(
+            `posted_at.lt.${cutoff},and(posted_at.is.null,created_at.lt.${cutoff})`,
+          );
+        qc.invalidateQueries({ queryKey: ["postings"] });
+        qc.invalidateQueries({ queryKey: ["postings-counts"] });
+        qc.invalidateQueries({ queryKey: ["postings-unscored-count"] });
+      } catch {
+        // best effort
+      }
+    })();
+  }, [lifespanDays, expiredRan, qc]);
 
   useEffect(() => {
     try {
@@ -639,43 +667,27 @@ function PostingsPage() {
     } catch {}
   }, []);
 
-  const selected = postings.find((p) => p.id === selectedId) ?? null;
+  const invalidateAll = () => {
+    qc.invalidateQueries({ queryKey: ["postings"] });
+    qc.invalidateQueries({ queryKey: ["postings-counts"] });
+    qc.invalidateQueries({ queryKey: ["postings-unscored-count"] });
+    if (selectedId) qc.invalidateQueries({ queryKey: ["posting", selectedId] });
+  };
 
-  const filtered = useMemo(() => {
-    return postings.filter((p) => {
-      if (unscoredOnly) {
-        if (p.status !== "new" || p.ai_composite_score != null) return false;
-      }
-      if (statusFilter === "all") {
-        if (p.status === "expired") return false;
-      } else if (p.status !== statusFilter) {
-        return false;
-      }
-      if (tierFilter !== "all") {
-        const c = p.company_id ? companyMap.get(p.company_id) : null;
-        if (!c || c.tier !== tierFilter) return false;
-      }
-      if (companyFilter !== "all" && p.company_id !== companyFilter) return false;
-      return true;
-    });
-  }, [postings, statusFilter, tierFilter, companyMap, companyFilter, unscoredOnly]);
-
-  const filteredUnscored = useMemo(
-    () => filtered.filter((p) => p.status === "new" && p.ai_composite_score == null),
-    [filtered],
-  );
-
-  // Pagination calculations
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const startIdx = (safePage - 1) * pageSize;
-  const endIdx = Math.min(startIdx + pageSize, filtered.length);
-  const paginated = filtered.slice(startIdx, endIdx);
-
-  // Clamp page if it goes out of bounds due to filter changes
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+  const emptyMessage =
+    unscoredOnly && statusFilter === "new"
+      ? "No unscored postings right now. New leads arrive from the daily agent."
+      : statusFilter === "dismissed"
+        ? "Nothing dismissed."
+        : statusFilter === "saved"
+          ? "Nothing saved yet."
+          : statusFilter === "applied"
+            ? "Nothing applied yet."
+            : statusFilter === "expired"
+              ? "Nothing expired."
+              : statusFilter === "new"
+                ? "No new postings right now."
+                : "No postings match these filters.";
 
   return (
     <div className="space-y-4 min-w-0" style={{ marginTop: -8 }}>
@@ -687,6 +699,14 @@ function PostingsPage() {
           </h2>
           <p style={{ color: "#8B8B9E", fontSize: 12 }}>
             AI-scored job postings. Review, give feedback, move to pipeline.
+            {counts && (
+              <span style={{ marginLeft: 8, fontFamily: MONO }}>
+                · New:{" "}
+                <b style={{ color: "#00D4FF" }}>{counts.newCount.toLocaleString()}</b> ·
+                Unscored:{" "}
+                <b style={{ color: "#F59E0B" }}>{counts.unscoredCount.toLocaleString()}</b>
+              </span>
+            )}
           </p>
         </div>
         <Button
@@ -708,15 +728,16 @@ function PostingsPage() {
         }}
       >
         <div className="flex items-center gap-1">
-          {(["all", "new", "saved", "dismissed", "applied", "expired"] as const).map((s) => (
+          {(["new", "saved", "applied", "dismissed", "expired"] as const).map((s) => (
             <FilterPill
               key={s}
               active={statusFilter === s}
               onClick={() => {
                 setStatusFilter(s);
                 setCompanyFilter("all");
+                if (s !== "new") setUnscoredOnly(false);
               }}
-              label={s === "all" ? "All" : STATUS_META[s].label}
+              label={STATUS_META[s].label}
             />
           ))}
         </div>
@@ -763,13 +784,6 @@ function PostingsPage() {
                     borderRadius: 3,
                     background: tierFilter === t ? "rgba(0,212,255,0.1)" : "transparent",
                   }}
-                  onMouseEnter={(e) => {
-                    if (tierFilter !== t)
-                      e.currentTarget.style.background = "rgba(0,212,255,0.06)";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (tierFilter !== t) e.currentTarget.style.background = "transparent";
-                  }}
                 >
                   {t === "all" ? "All Tiers" : TIER_META[t].label}
                 </button>
@@ -793,7 +807,9 @@ function PostingsPage() {
           >
             {companyFilter === "all"
               ? "All Companies"
-              : companiesWithPostings.find((c) => c.id === companyFilter)?.name ?? "All Companies"}
+              : companiesForFilter.find((c) => c.id === companyFilter)?.name ??
+                companyMap.get(companyFilter)?.name ??
+                "All Companies"}
             <ChevronDown size={12} />
           </button>
           {companyOpen && (
@@ -803,13 +819,12 @@ function PostingsPage() {
                 background: "#111118",
                 border: "1px solid #1E1E2E",
                 borderRadius: 6,
-                minWidth: 180,
+                minWidth: 220,
                 maxHeight: 300,
                 overflowY: "auto",
               }}
             >
               <button
-                key="all"
                 onClick={() => {
                   setCompanyFilter("all");
                   setCompanyOpen(false);
@@ -822,17 +837,10 @@ function PostingsPage() {
                   borderRadius: 3,
                   background: companyFilter === "all" ? "rgba(0,212,255,0.1)" : "transparent",
                 }}
-                onMouseEnter={(e) => {
-                  if (companyFilter !== "all")
-                    e.currentTarget.style.background = "rgba(0,212,255,0.06)";
-                }}
-                onMouseLeave={(e) => {
-                  if (companyFilter !== "all") e.currentTarget.style.background = "transparent";
-                }}
               >
                 All Companies
               </button>
-              {companiesWithPostings.map((c) => (
+              {companiesForFilter.map((c) => (
                 <button
                   key={c.id}
                   onClick={() => {
@@ -847,13 +855,6 @@ function PostingsPage() {
                     borderRadius: 3,
                     background: companyFilter === c.id ? "rgba(0,212,255,0.1)" : "transparent",
                   }}
-                  onMouseEnter={(e) => {
-                    if (companyFilter !== c.id)
-                      e.currentTarget.style.background = "rgba(0,212,255,0.06)";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (companyFilter !== c.id) e.currentTarget.style.background = "transparent";
-                  }}
                 >
                   {c.name}
                 </button>
@@ -863,7 +864,8 @@ function PostingsPage() {
         </div>
         <div style={{ width: 1, height: 20, background: "#1E1E2E" }} />
         <button
-          onClick={() => setUnscoredOnly((v) => !v)}
+          onClick={() => statusFilter === "new" && setUnscoredOnly((v) => !v)}
+          disabled={statusFilter !== "new"}
           className="flex items-center gap-1.5 px-2.5"
           style={{
             height: 28,
@@ -873,36 +875,50 @@ function PostingsPage() {
             color: unscoredOnly ? "#F59E0B" : "#F0F0FF",
             fontSize: 12,
             fontFamily: MONO,
+            opacity: statusFilter === "new" ? 1 : 0.4,
+            cursor: statusFilter === "new" ? "pointer" : "not-allowed",
           }}
         >
           Unscored
         </button>
         <Button
           onClick={() => setBatchOpen(true)}
-          disabled={filteredUnscored.length === 0}
+          disabled={unscoredForButton === 0}
           className="h-7"
           style={{
-            background: filteredUnscored.length === 0 ? "#1E1E2E" : "#00D4FF",
-            color: filteredUnscored.length === 0 ? "#8B8B9E" : "#0A0A0F",
+            background: unscoredForButton === 0 ? "#1E1E2E" : "#00D4FF",
+            color: unscoredForButton === 0 ? "#8B8B9E" : "#0A0A0F",
             fontFamily: MONO,
             fontSize: 12,
           }}
         >
-          <Sparkles size={13} /> Score {filteredUnscored.length} with AI
+          <Sparkles size={13} /> Score {unscoredForButton.toLocaleString()} with AI
         </Button>
         <div className="ml-auto" style={{ color: "#8B8B9E", fontFamily: MONO, fontSize: 11 }}>
-          {filtered.length === 0
-            ? `0 of ${postings.length.toLocaleString()}`
-            : `${(startIdx + 1).toLocaleString()}–${endIdx.toLocaleString()} of ${filtered.length.toLocaleString()}`}
+          {isFetching && !isLoading && <span style={{ marginRight: 8 }}>updating…</span>}
+          {total === 0
+            ? "0"
+            : `${(startIdx + 1).toLocaleString()}–${endIdx.toLocaleString()} of ${total.toLocaleString()}`}
         </div>
       </div>
 
       {/* Table */}
       {isLoading ? (
-        <div style={{ color: "#8B8B9E" }}>Loading…</div>
-      ) : postings.length === 0 ? (
         <div
           className="flex items-center justify-center"
+          style={{
+            height: 240,
+            background: "#111118",
+            border: "1px solid #1E1E2E",
+            borderRadius: 6,
+            color: "#8B8B9E",
+          }}
+        >
+          Loading postings…
+        </div>
+      ) : total === 0 ? (
+        <div
+          className="flex items-center justify-center px-6 text-center"
           style={{
             height: 240,
             background: "#111118",
@@ -911,33 +927,36 @@ function PostingsPage() {
           }}
         >
           <p className="text-sm" style={{ color: "#8B8B9E" }}>
-            No postings yet. Click &apos;Add Posting&apos; to score your first role.
+            {emptyMessage}
           </p>
         </div>
       ) : (
         <>
           <PostingsTable
-            rows={paginated}
+            rows={rows}
             companyMap={companyMap}
             onRowClick={setSelectedId}
-            onChanged={() => qc.invalidateQueries({ queryKey: ["postings"] })}
+            onChanged={invalidateAll}
           />
           <PaginationBar
-            page={safePage}
+            page={page}
             totalPages={totalPages}
             pageSize={pageSize}
             pageSizeOptions={PAGE_SIZE_OPTIONS}
-            totalItems={filtered.length}
+            totalItems={total}
             startIdx={startIdx}
             endIdx={endIdx}
             onPageChange={setPage}
-            onPageSizeChange={handlePageSizeChange}
+            onPageSizeChange={(s) => {
+              setPageSize(s);
+              setPage(1);
+            }}
           />
         </>
       )}
 
       {/* Side panel */}
-      <Sheet open={!!selected} onOpenChange={(o) => !o && setSelectedId(null)}>
+      <Sheet open={!!selectedId} onOpenChange={(o) => !o && setSelectedId(null)}>
         <SheetContent
           side="right"
           className="p-0"
@@ -949,12 +968,12 @@ function PostingsPage() {
             maxWidth: "100vw",
           }}
         >
-          {selected && (
+          {selectedId && (
             <DetailPanel
-              posting={selected}
-              company={selected.company_id ? companyMap.get(selected.company_id) ?? null : null}
+              postingId={selectedId}
+              companyMap={companyMap}
               onClose={() => setSelectedId(null)}
-              onChanged={() => qc.invalidateQueries({ queryKey: ["postings"] })}
+              onChanged={invalidateAll}
             />
           )}
         </SheetContent>
@@ -966,7 +985,7 @@ function PostingsPage() {
         onOpenChange={setAddOpen}
         companies={companies}
         onAdded={() => {
-          qc.invalidateQueries({ queryKey: ["postings"] });
+          invalidateAll();
           qc.invalidateQueries({ queryKey: ["job-posting-locations"] });
         }}
       />
@@ -975,9 +994,11 @@ function PostingsPage() {
       <BatchScoreDialog
         open={batchOpen}
         onOpenChange={setBatchOpen}
-        targets={filteredUnscored}
+        tierCompanyIds={tierCompanyIds}
+        companyFilter={companyFilter}
         companyMap={companyMap}
-        onDone={() => qc.invalidateQueries({ queryKey: ["postings"] })}
+        expectedCount={unscoredForButton}
+        onDone={invalidateAll}
       />
     </div>
   );
