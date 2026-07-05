@@ -1,8 +1,51 @@
 import type { Database } from "@/integrations/supabase/types";
 
-export type Company = Database["public"]["Tables"]["companies"]["Row"];
-export type CompanyInsert = Database["public"]["Tables"]["companies"]["Insert"];
+type BaseCompany = Database["public"]["Tables"]["companies"]["Row"];
+type BaseInsert = Database["public"]["Tables"]["companies"]["Insert"];
+
+export type AtsType =
+  | "greenhouse"
+  | "ashby"
+  | "lever"
+  | "amazon"
+  | "workday"
+  | "generic_scraper"
+  | "unknown"
+  | "private"
+  | "custom"
+  | null;
+
+export type Company = BaseCompany & {
+  is_active?: boolean | null;
+  ats_type?: AtsType;
+  ats_slug?: string | null;
+};
+
+export type CompanyInsert = BaseInsert & {
+  is_active?: boolean | null;
+  ats_type?: AtsType;
+  ats_slug?: string | null;
+};
 export type Tier = "god" | "t1" | "t2" | "t3" | "excluded";
+
+const KNOWN_ATS: Record<string, string> = {
+  greenhouse: "Greenhouse",
+  ashby: "Ashby",
+  lever: "Lever",
+  amazon: "Amazon",
+  workday: "Workday",
+};
+
+export type SourceBadge = {
+  label: string;
+  variant: "connected" | "warning" | "muted";
+};
+
+export function sourceBadge(ats: AtsType | undefined): SourceBadge {
+  if (ats && KNOWN_ATS[ats]) return { label: `Via ${KNOWN_ATS[ats]}`, variant: "connected" };
+  if (ats === "generic_scraper") return { label: "Needs scraper", variant: "warning" };
+  return { label: "Not configured", variant: "muted" };
+}
 
 export const TIER_ORDER: Tier[] = ["god", "t1", "t2", "t3", "excluded"];
 
