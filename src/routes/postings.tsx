@@ -254,10 +254,71 @@ function formatWeights(weights: Record<string, number> | null | undefined): stri
   return parts.join(", ");
 }
 
+type FeedbackContext = { text: string; ids: string[] };
+
+async function fetchFeedbackContext(): Promise<FeedbackContext> {
+  const { data, error } = await gtmSupabase
+    .from("feedback_log" as never)
+    .select("id,posting_title,ai_score,martin_score,martin_overrides,comment,created_at")
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (error || !data) return { text: "", ids: [] };
+  const rows = data as unknown as Array<{
+    id: string;
+    posting_title: string | null;
+    ai_score: number | null;
+    martin_score: number | null;
+    martin_overrides: Record<string, { score: number; reason: string }> | null;
+    comment: string | null;
+  }>;
+  const overrideLines: string[] = [];
+  const overallLines: string[] = [];
+  const ids: string[] = [];
+  for (const r of rows) {
+    ids.push(r.id);
+    const title = (r.posting_title ?? "untitled").replace(/"/g, "'");
+    if (r.martin_overrides && Object.keys(r.martin_overrides).length > 0) {
+      for (const [param, v] of Object.entries(r.martin_overrides)) {
+        const label = PARAM_LABEL[param as ParamKey] ?? param;
+        const reason = (v.reason ?? "").trim().slice(0, 220);
+        overrideLines.push(
+          `- "${title}": AI scored ${label} differently; user corrected ${label} to ${v.score}.${reason ? ` Reason: ${reason}` : ""}`,
+        );
+      }
+    } else if (r.martin_score != null) {
+      const cmt = (r.comment ?? "").trim().slice(0, 200);
+      const ai = r.ai_score != null ? r.ai_score.toFixed(1) : "—";
+      overallLines.push(
+        `- "${title}": AI scored ${ai}, user rated it ${r.martin_score}/5.${cmt ? ` ${cmt}` : ""}`,
+      );
+    }
+  }
+  const parts: string[] = [];
+  if (overrideLines.length) parts.push("Parameter-level corrections:\n" + overrideLines.join("\n"));
+  if (overallLines.length) parts.push("Overall ratings:\n" + overallLines.join("\n"));
+  let text = parts.join("\n\n");
+  const MAX = 3500;
+  if (text.length > MAX) text = text.slice(0, MAX) + "\n…(truncated)";
+  return { text, ids };
+}
+
+async function markFeedbackUsed(ids: string[]) {
+  if (ids.length === 0) return;
+  try {
+    await gtmSupabase
+      .from("feedback_log" as never)
+      .update({ used_in_prompt: true } as never)
+      .in("id", ids);
+  } catch {
+    // best effort
+  }
+}
+
 function buildSystemPrompt(
   criteria: RoleCriteria,
   company: CompanyLite | null,
   backgroundSummary?: string | null,
+  feedbackContext?: string,
 ): string {
   const rubricText = PARAM_KEYS.map((k) => {
     const r = criteria.rubric?.[k === "fit" ? "role_fit" : k] ?? criteria.rubric?.[k] ?? {};
@@ -291,6 +352,11 @@ function buildSystemPrompt(
     ? `You are scoring a job posting for a candidate with the following background:\n${bg}`
     : `You are scoring a job posting for a senior commercial / GTM professional.`;
 
+  const fb = (feedbackContext ?? "").trim();
+  const feedbackSection = fb
+    ? `\n\n# Calibration from the user's past feedback (secondary signal — tendencies, NOT hard rules; the Role Criteria above remain the primary framework)\n${fb}\nUse these to calibrate borderline judgments; do not let them override the Role Criteria.`
+    : "";
+
   return `${opener}
 
 # Step 1 — Semantic Relevance Check
@@ -314,7 +380,7 @@ ${titles}
 Use as weak prior only. Always read the full JD — a non-matching title with a relevant JD scores normally.
 
 # Company Context
-${companyContext}`;
+${companyContext}${feedbackSection}`;
 }
 
 function buildUserPrompt(title: string, location: string, jd: string): string {
@@ -1959,7 +2025,8 @@ function AddPostingModal({
         .maybeSingle();
       const backgroundSummary =
         (profile as { background_summary?: string | null } | null)?.background_summary ?? null;
-      const system = buildSystemPrompt(criteria, company, backgroundSummary);
+      const feedback = await fetchFeedbackContext();
+      const system = buildSystemPrompt(criteria, company, backgroundSummary, feedback.text);
       const user = buildUserPrompt(title.trim(), normalizeLocationInput(location), jdFull);
 
       const res = await score({ data: { system, user } });
@@ -1998,6 +2065,7 @@ function AddPostingModal({
         .update(updatePayload as never)
         .eq("id", postingId);
       if (upErr) throw upErr;
+      await markFeedbackUsed(feedback.ids);
 
       toast.success("Posting scored");
       onAdded();
@@ -2350,9 +2418,10 @@ function BatchScoreDialog({
     posting: Posting,
     criteria: RoleCriteria,
     backgroundSummary: string | null,
+    feedbackText: string,
   ) {
     const company = posting.company_id ? companyMap.get(posting.company_id) ?? null : null;
-    const system = buildSystemPrompt(criteria, company, backgroundSummary);
+    const system = buildSystemPrompt(criteria, company, backgroundSummary, feedbackText);
     const user = buildUserPrompt(posting.title, posting.location ?? "", posting.jd_full ?? "");
     const res = await score({ data: { system, user } });
     const parsed = extractJson(res.text) as {
@@ -2399,6 +2468,7 @@ function BatchScoreDialog({
 
     let criteria: RoleCriteria | null = null;
     let backgroundSummary: string | null = null;
+    let feedback: FeedbackContext = { text: "", ids: [] };
     try {
       criteria = await fetchActiveCriteria();
       if (!criteria) throw new Error("No active role_criteria row found");
@@ -2410,6 +2480,7 @@ function BatchScoreDialog({
         .maybeSingle();
       backgroundSummary =
         (profile as { background_summary?: string | null } | null)?.background_summary ?? null;
+      feedback = await fetchFeedbackContext();
     } catch (e) {
       toast.error(`Setup failed: ${(e as Error).message}`);
       setPhase("confirm");
@@ -2422,12 +2493,12 @@ function BatchScoreDialog({
       const p = targets[i];
       setProgress(i + 1);
       try {
-        await runOne(p, criteria, backgroundSummary);
+        await runOne(p, criteria, backgroundSummary, feedback.text);
         ok++;
         setSucceeded(ok);
       } catch {
         try {
-          await runOne(p, criteria, backgroundSummary);
+          await runOne(p, criteria, backgroundSummary, feedback.text);
           ok++;
           setSucceeded(ok);
         } catch {
@@ -2437,6 +2508,7 @@ function BatchScoreDialog({
       }
     }
 
+    if (ok > 0) await markFeedbackUsed(feedback.ids);
     if (bad === 0) toast.success(`Scored ${ok} posting${ok === 1 ? "" : "s"}`);
     else toast.message(`Scored ${ok}, ${bad} failed`);
     onDone();
