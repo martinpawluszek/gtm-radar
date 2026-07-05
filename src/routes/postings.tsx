@@ -2470,17 +2470,23 @@ function Spinner() {
 }
 
 // ---------- Batch Score Dialog ----------
+const BATCH_MAX = 300;
+
 function BatchScoreDialog({
   open,
   onOpenChange,
-  targets,
+  tierCompanyIds,
+  companyFilter,
   companyMap,
+  expectedCount,
   onDone,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  targets: Posting[];
+  tierCompanyIds: string[] | null;
+  companyFilter: CompanyFilter;
   companyMap: Map<string, CompanyLite>;
+  expectedCount: number;
   onDone: () => void;
 }) {
   const score = useSF(scoreJobPosting);
@@ -2491,13 +2497,11 @@ function BatchScoreDialog({
   const [weeklyCap, setWeeklyCap] = useState<number | null>(null);
   const [scoredThisWeek, setScoredThisWeek] = useState<number>(0);
   const [loadingMeta, setLoadingMeta] = useState(false);
+  const [targets, setTargets] = useState<Posting[]>([]);
+  const [runTotal, setRunTotal] = useState(0);
 
-  const total = targets.length;
-  const roughCost = (total * 0.01).toFixed(2);
-  const missingJd = useMemo(
-    () => targets.filter((t) => !t.jd_full || t.jd_full.trim().length === 0).length,
-    [targets],
-  );
+  const plannedBatch = Math.min(expectedCount, BATCH_MAX);
+  const roughCost = (plannedBatch * 0.01).toFixed(2);
 
   useEffect(() => {
     if (!open) {
@@ -2505,6 +2509,8 @@ function BatchScoreDialog({
       setProgress(0);
       setFailed(0);
       setSucceeded(0);
+      setTargets([]);
+      setRunTotal(0);
       return;
     }
     let cancelled = false;
@@ -2529,7 +2535,7 @@ function BatchScoreDialog({
         );
         setScoredThisWeek(count ?? 0);
       } catch {
-        // ignore — just skip cap awareness
+        // ignore
       } finally {
         if (!cancelled) setLoadingMeta(false);
       }
@@ -2540,7 +2546,7 @@ function BatchScoreDialog({
   }, [open]);
 
   const overCap =
-    weeklyCap != null && weeklyCap > 0 && scoredThisWeek + total > weeklyCap;
+    weeklyCap != null && weeklyCap > 0 && scoredThisWeek + plannedBatch > weeklyCap;
 
   async function runOne(
     posting: Posting,
@@ -2597,7 +2603,16 @@ function BatchScoreDialog({
     let criteria: RoleCriteria | null = null;
     let backgroundSummary: string | null = null;
     let feedback: FeedbackContext = { text: "", ids: [] };
+    let fetched: Posting[] = [];
     try {
+      fetched = await fetchUnscoredTargets(tierCompanyIds, companyFilter, BATCH_MAX);
+      setTargets(fetched);
+      setRunTotal(fetched.length);
+      if (fetched.length === 0) {
+        toast.message("No unscored postings match the current filter.");
+        setPhase("done");
+        return;
+      }
       criteria = await fetchActiveCriteria();
       if (!criteria) throw new Error("No active role_criteria row found");
       const { data: profile } = await gtmSupabase
@@ -2617,8 +2632,8 @@ function BatchScoreDialog({
 
     let ok = 0;
     let bad = 0;
-    for (let i = 0; i < targets.length; i++) {
-      const p = targets[i];
+    for (let i = 0; i < fetched.length; i++) {
+      const p = fetched[i];
       setProgress(i + 1);
       try {
         await runOne(p, criteria, backgroundSummary, feedback.text);
@@ -2643,7 +2658,11 @@ function BatchScoreDialog({
     setPhase("done");
   }
 
-  const pct = total === 0 ? 0 : Math.round((progress / total) * 100);
+  const missingJd = useMemo(
+    () => targets.filter((t) => !t.jd_full || t.jd_full.trim().length === 0).length,
+    [targets],
+  );
+  const pct = runTotal === 0 ? 0 : Math.round((progress / runTotal) * 100);
 
   return (
     <Dialog
@@ -2674,16 +2693,18 @@ function BatchScoreDialog({
         {phase === "confirm" && (
           <div className="flex flex-col gap-3" style={{ fontSize: 13 }}>
             <div>
-              About to score <b>{total}</b> posting{total === 1 ? "" : "s"} with Claude.
+              About to score <b>{plannedBatch.toLocaleString()}</b> posting
+              {plannedBatch === 1 ? "" : "s"} with Claude.
+              {expectedCount > BATCH_MAX && (
+                <span style={{ color: "#8B8B9E" }}>
+                  {" "}
+                  ({expectedCount.toLocaleString()} unscored total; capped per run at {BATCH_MAX})
+                </span>
+              )}
             </div>
             <div style={{ color: "#8B8B9E", fontSize: 12 }}>
               Uses Claude API credits — rough estimate: <b>~${roughCost}</b> ($0.01 per posting).
             </div>
-            {missingJd > 0 && (
-              <div style={{ color: "#8B8B9E", fontSize: 12 }}>
-                {missingJd} of these have no job description and may score less precisely.
-              </div>
-            )}
             {loadingMeta ? (
               <div style={{ color: "#8B8B9E", fontSize: 12 }}>Checking weekly cap…</div>
             ) : weeklyCap != null && weeklyCap > 0 ? (
@@ -2701,8 +2722,8 @@ function BatchScoreDialog({
                 <div>
                   Scored in last 7 days: <b>{scoredThisWeek}</b> / cap <b>{weeklyCap}</b>.{" "}
                   {overCap
-                    ? `Running this batch (${total}) would exceed your weekly cap. You can proceed — it's a soft ceiling.`
-                    : `After this batch: ${scoredThisWeek + total} / ${weeklyCap}.`}
+                    ? `Running this batch (${plannedBatch}) would exceed your weekly cap. You can proceed — it's a soft ceiling.`
+                    : `After this batch: ${scoredThisWeek + plannedBatch} / ${weeklyCap}.`}
                 </div>
               </div>
             ) : null}
@@ -2717,10 +2738,10 @@ function BatchScoreDialog({
               </Button>
               <Button
                 onClick={run}
-                disabled={total === 0}
+                disabled={plannedBatch === 0}
                 style={{ background: "#00D4FF", color: "#0A0A0F" }}
               >
-                <Sparkles size={13} /> Score {total} with AI
+                <Sparkles size={13} /> Score {plannedBatch.toLocaleString()} with AI
               </Button>
             </div>
           </div>
@@ -2729,7 +2750,7 @@ function BatchScoreDialog({
         {phase === "running" && (
           <div className="flex flex-col gap-3" style={{ fontSize: 13 }}>
             <div style={{ fontFamily: MONO }}>
-              Scoring {Math.min(progress, total)} of {total}…
+              Scoring {Math.min(progress, runTotal)} of {runTotal}…
             </div>
             <div
               style={{
@@ -2750,6 +2771,11 @@ function BatchScoreDialog({
             </div>
             <div style={{ color: "#8B8B9E", fontSize: 12, fontFamily: MONO }}>
               {succeeded} ok · {failed} failed
+              {missingJd > 0 && (
+                <span style={{ marginLeft: 8 }}>
+                  · {missingJd} without JD (scored on title/company only)
+                </span>
+              )}
             </div>
           </div>
         )}
