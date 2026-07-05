@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { gtmSupabase, gtmSupabaseInfo } from "@/lib/gtmSupabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -159,6 +160,36 @@ function CompaniesPage() {
     onSuccess: () => toast.success("Company deleted"),
   });
 
+  const bulkTierActive = useMutation({
+    mutationFn: async ({ tier, next }: { tier: Tier; next: boolean }) => {
+      const { error } = await gtmSupabase
+        .from("companies")
+        .update({ is_active: next } as never)
+        .eq("tier", tier);
+      if (error) throw error;
+    },
+    onMutate: async ({ tier, next }) => {
+      await qc.cancelQueries({ queryKey: ["companies"] });
+      const prev = qc.getQueryData<CompaniesQueryDebug>(["companies"]);
+      if (prev) {
+        qc.setQueryData<CompaniesQueryDebug>(["companies"], {
+          ...prev,
+          data: prev.data.map((c) => (c.tier === tier ? { ...c, is_active: next } : c)),
+        });
+      }
+      return { prev };
+    },
+    onError: (e: Error, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(["companies"], ctx.prev);
+      toast.error(e.message);
+    },
+    onSuccess: (_d, { tier, next }) => {
+      qc.invalidateQueries({ queryKey: ["companies"] });
+      toast.success(`${TIER_META[tier].label} ${next ? "resumed" : "paused"}`);
+    },
+  });
+
+
   const filtered = useMemo(() => {
     const list = companies;
     const q = search.trim().toLowerCase();
@@ -195,6 +226,18 @@ function CompaniesPage() {
     for (const c of sorted) map[c.tier].push(c);
     return map;
   }, [sorted]);
+
+  const tierActiveState = useMemo(() => {
+    const map: Record<Tier, { total: number; on: number }> = {
+      god: { total: 0, on: 0 }, t1: { total: 0, on: 0 }, t2: { total: 0, on: 0 },
+      t3: { total: 0, on: 0 }, excluded: { total: 0, on: 0 },
+    };
+    for (const c of companies) {
+      map[c.tier].total += 1;
+      if (c.is_active !== false) map[c.tier].on += 1;
+    }
+    return map;
+  }, [companies]);
 
   const total = companies.length;
   const allTags = useMemo(() => {
@@ -357,11 +400,17 @@ function CompaniesPage() {
             if (list.length === 0) return null;
             const meta = TIER_META[t];
             const isCollapsed = !!collapsed[t];
+            const tierState = tierActiveState[t];
+            const allOn = tierState.total > 0 && tierState.on === tierState.total;
+            const mixed = tierState.on > 0 && tierState.on < tierState.total;
             return (
               <section key={t}>
-                <button
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setCollapsed((p) => ({ ...p, [t]: !p[t] }))}
-                  className="w-full flex items-center justify-between"
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setCollapsed((p) => ({ ...p, [t]: !p[t] })); }}
+                  className="w-full flex items-center justify-between cursor-pointer select-none"
                   style={{
                     height: 36,
                     paddingLeft: 16,
@@ -371,6 +420,34 @@ function CompaniesPage() {
                   }}
                 >
                   <div className="flex items-center gap-2">
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      className="flex items-center gap-1.5"
+                    >
+                      <Switch
+                        checked={allOn}
+                        onCheckedChange={(v) => bulkTierActive.mutate({ tier: t, next: v })}
+                        disabled={tierState.total === 0}
+                        aria-label={`Toggle all ${meta.label}`}
+                      />
+                      {mixed && (
+                        <span
+                          style={{
+                            color: "#F59E0B",
+                            fontFamily: "var(--font-mono)",
+                            fontSize: 9,
+                            letterSpacing: "0.08em",
+                            padding: "1px 4px",
+                            border: "1px solid rgba(245,158,11,0.30)",
+                            background: "rgba(245,158,11,0.10)",
+                            borderRadius: 3,
+                          }}
+                        >
+                          MIXED
+                        </span>
+                      )}
+                    </div>
                     <span
                       className="font-bold uppercase"
                       style={{
@@ -385,6 +462,9 @@ function CompaniesPage() {
                     <span style={{ color: "#8B8B9E", fontFamily: "var(--font-mono)", fontSize: 11 }}>
                       {list.length}
                     </span>
+                    <span style={{ color: "#8B8B9E", fontFamily: "var(--font-mono)", fontSize: 10 }}>
+                      · {tierState.on}/{tierState.total} on
+                    </span>
                   </div>
                   <ChevronDown
                     size={14}
@@ -394,7 +474,7 @@ function CompaniesPage() {
                       transition: "transform 150ms",
                     }}
                   />
-                </button>
+                </div>
                 {!isCollapsed && (
                   <div>
                     {list.map((c) => <CompanyRow key={c.id} company={c} onEdit={openEdit} />)}
