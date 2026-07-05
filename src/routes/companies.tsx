@@ -160,6 +160,36 @@ function CompaniesPage() {
     onSuccess: () => toast.success("Company deleted"),
   });
 
+  const bulkTierActive = useMutation({
+    mutationFn: async ({ tier, next }: { tier: Tier; next: boolean }) => {
+      const { error } = await gtmSupabase
+        .from("companies")
+        .update({ is_active: next } as never)
+        .eq("tier", tier);
+      if (error) throw error;
+    },
+    onMutate: async ({ tier, next }) => {
+      await qc.cancelQueries({ queryKey: ["companies"] });
+      const prev = qc.getQueryData<CompaniesQueryDebug>(["companies"]);
+      if (prev) {
+        qc.setQueryData<CompaniesQueryDebug>(["companies"], {
+          ...prev,
+          data: prev.data.map((c) => (c.tier === tier ? { ...c, is_active: next } : c)),
+        });
+      }
+      return { prev };
+    },
+    onError: (e: Error, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(["companies"], ctx.prev);
+      toast.error(e.message);
+    },
+    onSuccess: (_d, { tier, next }) => {
+      qc.invalidateQueries({ queryKey: ["companies"] });
+      toast.success(`${TIER_META[tier].label} ${next ? "resumed" : "paused"}`);
+    },
+  });
+
+
   const filtered = useMemo(() => {
     const list = companies;
     const q = search.trim().toLowerCase();
