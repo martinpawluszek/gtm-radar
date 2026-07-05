@@ -354,6 +354,8 @@ function PostingsPage() {
   const [tierOpen, setTierOpen] = useState(false);
   const [companyFilter, setCompanyFilter] = useState<CompanyFilter>("all");
   const [companyOpen, setCompanyOpen] = useState(false);
+  const [unscoredOnly, setUnscoredOnly] = useState(false);
+  const [batchOpen, setBatchOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
