@@ -538,7 +538,21 @@ function buildSystemPrompt(
     ? `\n\n# Calibration from the user's past feedback (secondary signal — tendencies, NOT hard rules; the Role Criteria above remain the primary framework)\n${fb}\nUse these to calibrate borderline judgments; do not let them override the Role Criteria.`
     : "";
 
+  if (criteria.use_custom && criteria.system_template && criteria.system_template.trim()) {
+    return applyTemplate(criteria.system_template, {
+      background: opener,
+      weights: formatWeights(criteria.weights),
+      rubric: rubricText,
+      disqualifiers,
+      bonuses,
+      titles,
+      company: companyContext,
+      feedback: feedbackSection,
+    });
+  }
+
   return `${opener}
+
 
 You are an expert technical recruiter and career strategist scoring ONE job posting for this candidate. Decide how strongly he should prioritize applying, so the highest-scoring postings are genuinely his best opportunities. Be rigorous and calibrated: most scraped postings are NOT a fit and should score low or be disqualified. Reserve high scores for real matches.
 
