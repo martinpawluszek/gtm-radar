@@ -159,14 +159,109 @@ const STATUS_META: Record<PostingStatus, { label: string; color: string }> = {
 };
 
 // ---------- Data ----------
-async function fetchPostings(): Promise<Posting[]> {
+type ListFilters = {
+  status: PostingStatus;
+  tier: TierFilter;
+  companyId: CompanyFilter;
+  unscoredOnly: boolean;
+};
+
+const LIST_COLUMNS =
+  "id,company_id,title,location,source,scraped_at,ai_company_score,ai_role_score,ai_composite_score,ai_rationale,disqualified,disqualifier_reason,martin_feedback_score,martin_feedback_comment,martin_feedback_overrides,title_signal,posted_at,deadline_at,status,created_at,updated_at";
+
+async function fetchPostingsPage(
+  filters: ListFilters,
+  tierCompanyIds: string[] | null,
+  page: number,
+  pageSize: number,
+): Promise<{ rows: Posting[]; total: number }> {
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  let q = gtmSupabase
+    .from("job_postings" as never)
+    .select(LIST_COLUMNS, { count: "exact" })
+    .eq("status", filters.status);
+  if (filters.unscoredOnly && filters.status === "new") {
+    q = q.is("ai_composite_score", null);
+  }
+  if (filters.tier !== "all") {
+    if (!tierCompanyIds || tierCompanyIds.length === 0) return { rows: [], total: 0 };
+    q = q.in("company_id", tierCompanyIds);
+  }
+  if (filters.companyId !== "all") {
+    q = q.eq("company_id", filters.companyId);
+  }
+  q = q
+    .order("ai_composite_score", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+  const { data, error, count } = await q;
+  if (error) throw error;
+  return { rows: (data ?? []) as unknown as Posting[], total: count ?? 0 };
+}
+
+async function fetchPostingCounts(): Promise<{ newCount: number; unscoredCount: number }> {
+  const [a, b] = await Promise.all([
+    gtmSupabase
+      .from("job_postings" as never)
+      .select("id", { count: "exact", head: true })
+      .eq("status", "new"),
+    gtmSupabase
+      .from("job_postings" as never)
+      .select("id", { count: "exact", head: true })
+      .eq("status", "new")
+      .is("ai_composite_score", null),
+  ]);
+  return { newCount: a.count ?? 0, unscoredCount: b.count ?? 0 };
+}
+
+async function fetchUnscoredCountFiltered(
+  tierCompanyIds: string[] | null,
+  companyId: CompanyFilter,
+): Promise<number> {
+  let q = gtmSupabase
+    .from("job_postings" as never)
+    .select("id", { count: "exact", head: true })
+    .eq("status", "new")
+    .is("ai_composite_score", null);
+  if (tierCompanyIds) {
+    if (tierCompanyIds.length === 0) return 0;
+    q = q.in("company_id", tierCompanyIds);
+  }
+  if (companyId !== "all") q = q.eq("company_id", companyId);
+  const { count } = await q;
+  return count ?? 0;
+}
+
+async function fetchUnscoredTargets(
+  tierCompanyIds: string[] | null,
+  companyId: CompanyFilter,
+  max: number,
+): Promise<Posting[]> {
+  let q = gtmSupabase
+    .from("job_postings" as never)
+    .select("id,company_id,title,location,jd_full,deadline_at,status")
+    .eq("status", "new")
+    .is("ai_composite_score", null);
+  if (tierCompanyIds) {
+    if (tierCompanyIds.length === 0) return [];
+    q = q.in("company_id", tierCompanyIds);
+  }
+  if (companyId !== "all") q = q.eq("company_id", companyId);
+  q = q.order("created_at", { ascending: false }).limit(max);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []) as unknown as Posting[];
+}
+
+async function fetchPostingById(id: string): Promise<Posting | null> {
   const { data, error } = await gtmSupabase
     .from("job_postings" as never)
     .select("*")
-    .order("ai_composite_score", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false });
+    .eq("id", id)
+    .maybeSingle();
   if (error) throw error;
-  return (data ?? []) as unknown as Posting[];
+  return (data as unknown as Posting) ?? null;
 }
 
 async function fetchCompanies(): Promise<CompanyLite[]> {
@@ -436,10 +531,7 @@ function extractJson(text: string): unknown {
 // ---------- Page ----------
 function PostingsPage() {
   const qc = useQueryClient();
-  const { data: postings = [], isLoading } = useQuery({
-    queryKey: ["postings"],
-    queryFn: fetchPostings,
-  });
+
   const { data: companies = [] } = useQuery({
     queryKey: ["companies-lite-postings"],
     queryFn: fetchCompanies,
@@ -450,19 +542,6 @@ function PostingsPage() {
     companies.forEach((c) => m.set(c.id, c));
     return m;
   }, [companies]);
-
-  const companiesWithPostings = useMemo(() => {
-    const seen = new Set<string>();
-    const list: { id: string; name: string }[] = [];
-    for (const p of postings) {
-      const c = p.company_id ? companyMap.get(p.company_id) : null;
-      if (c && !seen.has(c.id)) {
-        seen.add(c.id);
-        list.push({ id: c.id, name: c.name });
-      }
-    }
-    return list.sort((a, b) => a.name.localeCompare(b.name));
-  }, [postings, companyMap]);
 
   const { data: lifespanDays = 30 } = useQuery({
     queryKey: ["user-profile-lifespan"],
@@ -479,36 +558,8 @@ function PostingsPage() {
     },
   });
 
-  // Auto-expire on load (once per postings snapshot)
-  const [expiredRunKey, setExpiredRunKey] = useState<string | null>(null);
-  useEffect(() => {
-    if (isLoading || postings.length === 0) return;
-    const key = `${postings.length}:${lifespanDays}`;
-    if (expiredRunKey === key) return;
-    setExpiredRunKey(key);
-    const now = Date.now();
-    const toExpire = postings.filter(
-      (p) =>
-        (p.status === "new" || p.status === "reviewed") &&
-        effectiveExpiry(p, lifespanDays) < now,
-    );
-    if (toExpire.length === 0) return;
-    const ids = toExpire.map((p) => p.id);
-    (async () => {
-      const { error } = await gtmSupabase
-        .from("job_postings" as never)
-        .update({ status: "expired", updated_at: new Date().toISOString() } as never)
-        .in("id", ids);
-      if (error) return;
-      qc.setQueryData<Posting[]>(["postings"], (old) =>
-        (old ?? []).map((p) =>
-          ids.includes(p.id) ? { ...p, status: "expired" as PostingStatus } : p,
-        ),
-      );
-    })();
-  }, [postings, lifespanDays, isLoading, expiredRunKey, qc]);
-
-  const [statusFilter, setStatusFilter] = useState<"all" | PostingStatus>("all");
+  // Filters — default view is "New"
+  const [statusFilter, setStatusFilter] = useState<PostingStatus>("new");
   const [tierFilter, setTierFilter] = useState<TierFilter>("all");
   const [tierOpen, setTierOpen] = useState(false);
   const [companyFilter, setCompanyFilter] = useState<CompanyFilter>("all");
@@ -518,21 +569,93 @@ function PostingsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
-  // Pagination state
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
-  // Reset to page 1 when filters or tabs change
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, tierFilter, companyFilter, unscoredOnly]);
+  }, [statusFilter, tierFilter, companyFilter, unscoredOnly, pageSize]);
 
-  // Reset to page 1 when page size changes
-  const handlePageSizeChange = (size: number) => {
-    setPageSize(size);
-    setPage(1);
+  const tierCompanyIds = useMemo(() => {
+    if (tierFilter === "all") return null;
+    return companies.filter((c) => c.tier === tierFilter).map((c) => c.id);
+  }, [companies, tierFilter]);
+
+  const companiesForFilter = useMemo(() => {
+    const base =
+      tierFilter === "all" ? companies : companies.filter((c) => c.tier === tierFilter);
+    return [...base].sort((a, b) => a.name.localeCompare(b.name));
+  }, [companies, tierFilter]);
+
+  const listFilters: ListFilters = {
+    status: statusFilter,
+    tier: tierFilter,
+    companyId: companyFilter,
+    unscoredOnly,
   };
+
+  const { data: pageData, isLoading, isFetching } = useQuery({
+    queryKey: [
+      "postings",
+      { statusFilter, tierFilter, companyFilter, unscoredOnly, page, pageSize },
+    ],
+    queryFn: () => fetchPostingsPage(listFilters, tierCompanyIds, page, pageSize),
+    placeholderData: (prev) => prev,
+  });
+  const rows = pageData?.rows ?? [];
+  const total = pageData?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const startIdx = total === 0 ? 0 : (page - 1) * pageSize;
+  const endIdx = Math.min(startIdx + pageSize, total);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const { data: counts } = useQuery({
+    queryKey: ["postings-counts"],
+    queryFn: fetchPostingCounts,
+    staleTime: 30_000,
+  });
+
+  const { data: unscoredForButton = 0 } = useQuery({
+    queryKey: ["postings-unscored-count", { tierFilter, companyFilter }],
+    queryFn: () => fetchUnscoredCountFiltered(tierCompanyIds, companyFilter),
+    staleTime: 15_000,
+  });
+
+  // Auto-expire once per mount (server-side)
+  const [expiredRan, setExpiredRan] = useState(false);
+  useEffect(() => {
+    if (expiredRan || !lifespanDays) return;
+    setExpiredRan(true);
+    (async () => {
+      try {
+        const now = new Date().toISOString();
+        const cutoff = new Date(Date.now() - lifespanDays * 86400000).toISOString();
+        await gtmSupabase
+          .from("job_postings" as never)
+          .update({ status: "expired", updated_at: now } as never)
+          .in("status", ["new", "reviewed"])
+          .not("deadline_at", "is", null)
+          .lt("deadline_at", now);
+        await gtmSupabase
+          .from("job_postings" as never)
+          .update({ status: "expired", updated_at: now } as never)
+          .in("status", ["new", "reviewed"])
+          .is("deadline_at", null)
+          .or(
+            `posted_at.lt.${cutoff},and(posted_at.is.null,created_at.lt.${cutoff})`,
+          );
+        qc.invalidateQueries({ queryKey: ["postings"] });
+        qc.invalidateQueries({ queryKey: ["postings-counts"] });
+        qc.invalidateQueries({ queryKey: ["postings-unscored-count"] });
+      } catch {
+        // best effort
+      }
+    })();
+  }, [lifespanDays, expiredRan, qc]);
 
   useEffect(() => {
     try {
@@ -544,43 +667,27 @@ function PostingsPage() {
     } catch {}
   }, []);
 
-  const selected = postings.find((p) => p.id === selectedId) ?? null;
+  const invalidateAll = () => {
+    qc.invalidateQueries({ queryKey: ["postings"] });
+    qc.invalidateQueries({ queryKey: ["postings-counts"] });
+    qc.invalidateQueries({ queryKey: ["postings-unscored-count"] });
+    if (selectedId) qc.invalidateQueries({ queryKey: ["posting", selectedId] });
+  };
 
-  const filtered = useMemo(() => {
-    return postings.filter((p) => {
-      if (unscoredOnly) {
-        if (p.status !== "new" || p.ai_composite_score != null) return false;
-      }
-      if (statusFilter === "all") {
-        if (p.status === "expired") return false;
-      } else if (p.status !== statusFilter) {
-        return false;
-      }
-      if (tierFilter !== "all") {
-        const c = p.company_id ? companyMap.get(p.company_id) : null;
-        if (!c || c.tier !== tierFilter) return false;
-      }
-      if (companyFilter !== "all" && p.company_id !== companyFilter) return false;
-      return true;
-    });
-  }, [postings, statusFilter, tierFilter, companyMap, companyFilter, unscoredOnly]);
-
-  const filteredUnscored = useMemo(
-    () => filtered.filter((p) => p.status === "new" && p.ai_composite_score == null),
-    [filtered],
-  );
-
-  // Pagination calculations
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const startIdx = (safePage - 1) * pageSize;
-  const endIdx = Math.min(startIdx + pageSize, filtered.length);
-  const paginated = filtered.slice(startIdx, endIdx);
-
-  // Clamp page if it goes out of bounds due to filter changes
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+  const emptyMessage =
+    unscoredOnly && statusFilter === "new"
+      ? "No unscored postings right now. New leads arrive from the daily agent."
+      : statusFilter === "dismissed"
+        ? "Nothing dismissed."
+        : statusFilter === "saved"
+          ? "Nothing saved yet."
+          : statusFilter === "applied"
+            ? "Nothing applied yet."
+            : statusFilter === "expired"
+              ? "Nothing expired."
+              : statusFilter === "new"
+                ? "No new postings right now."
+                : "No postings match these filters.";
 
   return (
     <div className="space-y-4 min-w-0" style={{ marginTop: -8 }}>
@@ -592,6 +699,14 @@ function PostingsPage() {
           </h2>
           <p style={{ color: "#8B8B9E", fontSize: 12 }}>
             AI-scored job postings. Review, give feedback, move to pipeline.
+            {counts && (
+              <span style={{ marginLeft: 8, fontFamily: MONO }}>
+                · New:{" "}
+                <b style={{ color: "#00D4FF" }}>{counts.newCount.toLocaleString()}</b> ·
+                Unscored:{" "}
+                <b style={{ color: "#F59E0B" }}>{counts.unscoredCount.toLocaleString()}</b>
+              </span>
+            )}
           </p>
         </div>
         <Button
@@ -613,15 +728,16 @@ function PostingsPage() {
         }}
       >
         <div className="flex items-center gap-1">
-          {(["all", "new", "saved", "dismissed", "applied", "expired"] as const).map((s) => (
+          {(["new", "saved", "applied", "dismissed", "expired"] as const).map((s) => (
             <FilterPill
               key={s}
               active={statusFilter === s}
               onClick={() => {
                 setStatusFilter(s);
                 setCompanyFilter("all");
+                if (s !== "new") setUnscoredOnly(false);
               }}
-              label={s === "all" ? "All" : STATUS_META[s].label}
+              label={STATUS_META[s].label}
             />
           ))}
         </div>
@@ -668,13 +784,6 @@ function PostingsPage() {
                     borderRadius: 3,
                     background: tierFilter === t ? "rgba(0,212,255,0.1)" : "transparent",
                   }}
-                  onMouseEnter={(e) => {
-                    if (tierFilter !== t)
-                      e.currentTarget.style.background = "rgba(0,212,255,0.06)";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (tierFilter !== t) e.currentTarget.style.background = "transparent";
-                  }}
                 >
                   {t === "all" ? "All Tiers" : TIER_META[t].label}
                 </button>
@@ -698,7 +807,9 @@ function PostingsPage() {
           >
             {companyFilter === "all"
               ? "All Companies"
-              : companiesWithPostings.find((c) => c.id === companyFilter)?.name ?? "All Companies"}
+              : companiesForFilter.find((c) => c.id === companyFilter)?.name ??
+                companyMap.get(companyFilter)?.name ??
+                "All Companies"}
             <ChevronDown size={12} />
           </button>
           {companyOpen && (
@@ -708,13 +819,12 @@ function PostingsPage() {
                 background: "#111118",
                 border: "1px solid #1E1E2E",
                 borderRadius: 6,
-                minWidth: 180,
+                minWidth: 220,
                 maxHeight: 300,
                 overflowY: "auto",
               }}
             >
               <button
-                key="all"
                 onClick={() => {
                   setCompanyFilter("all");
                   setCompanyOpen(false);
@@ -727,17 +837,10 @@ function PostingsPage() {
                   borderRadius: 3,
                   background: companyFilter === "all" ? "rgba(0,212,255,0.1)" : "transparent",
                 }}
-                onMouseEnter={(e) => {
-                  if (companyFilter !== "all")
-                    e.currentTarget.style.background = "rgba(0,212,255,0.06)";
-                }}
-                onMouseLeave={(e) => {
-                  if (companyFilter !== "all") e.currentTarget.style.background = "transparent";
-                }}
               >
                 All Companies
               </button>
-              {companiesWithPostings.map((c) => (
+              {companiesForFilter.map((c) => (
                 <button
                   key={c.id}
                   onClick={() => {
@@ -752,13 +855,6 @@ function PostingsPage() {
                     borderRadius: 3,
                     background: companyFilter === c.id ? "rgba(0,212,255,0.1)" : "transparent",
                   }}
-                  onMouseEnter={(e) => {
-                    if (companyFilter !== c.id)
-                      e.currentTarget.style.background = "rgba(0,212,255,0.06)";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (companyFilter !== c.id) e.currentTarget.style.background = "transparent";
-                  }}
                 >
                   {c.name}
                 </button>
@@ -768,7 +864,8 @@ function PostingsPage() {
         </div>
         <div style={{ width: 1, height: 20, background: "#1E1E2E" }} />
         <button
-          onClick={() => setUnscoredOnly((v) => !v)}
+          onClick={() => statusFilter === "new" && setUnscoredOnly((v) => !v)}
+          disabled={statusFilter !== "new"}
           className="flex items-center gap-1.5 px-2.5"
           style={{
             height: 28,
@@ -778,36 +875,50 @@ function PostingsPage() {
             color: unscoredOnly ? "#F59E0B" : "#F0F0FF",
             fontSize: 12,
             fontFamily: MONO,
+            opacity: statusFilter === "new" ? 1 : 0.4,
+            cursor: statusFilter === "new" ? "pointer" : "not-allowed",
           }}
         >
           Unscored
         </button>
         <Button
           onClick={() => setBatchOpen(true)}
-          disabled={filteredUnscored.length === 0}
+          disabled={unscoredForButton === 0}
           className="h-7"
           style={{
-            background: filteredUnscored.length === 0 ? "#1E1E2E" : "#00D4FF",
-            color: filteredUnscored.length === 0 ? "#8B8B9E" : "#0A0A0F",
+            background: unscoredForButton === 0 ? "#1E1E2E" : "#00D4FF",
+            color: unscoredForButton === 0 ? "#8B8B9E" : "#0A0A0F",
             fontFamily: MONO,
             fontSize: 12,
           }}
         >
-          <Sparkles size={13} /> Score {filteredUnscored.length} with AI
+          <Sparkles size={13} /> Score {unscoredForButton.toLocaleString()} with AI
         </Button>
         <div className="ml-auto" style={{ color: "#8B8B9E", fontFamily: MONO, fontSize: 11 }}>
-          {filtered.length === 0
-            ? `0 of ${postings.length.toLocaleString()}`
-            : `${(startIdx + 1).toLocaleString()}–${endIdx.toLocaleString()} of ${filtered.length.toLocaleString()}`}
+          {isFetching && !isLoading && <span style={{ marginRight: 8 }}>updating…</span>}
+          {total === 0
+            ? "0"
+            : `${(startIdx + 1).toLocaleString()}–${endIdx.toLocaleString()} of ${total.toLocaleString()}`}
         </div>
       </div>
 
       {/* Table */}
       {isLoading ? (
-        <div style={{ color: "#8B8B9E" }}>Loading…</div>
-      ) : postings.length === 0 ? (
         <div
           className="flex items-center justify-center"
+          style={{
+            height: 240,
+            background: "#111118",
+            border: "1px solid #1E1E2E",
+            borderRadius: 6,
+            color: "#8B8B9E",
+          }}
+        >
+          Loading postings…
+        </div>
+      ) : total === 0 ? (
+        <div
+          className="flex items-center justify-center px-6 text-center"
           style={{
             height: 240,
             background: "#111118",
@@ -816,33 +927,36 @@ function PostingsPage() {
           }}
         >
           <p className="text-sm" style={{ color: "#8B8B9E" }}>
-            No postings yet. Click &apos;Add Posting&apos; to score your first role.
+            {emptyMessage}
           </p>
         </div>
       ) : (
         <>
           <PostingsTable
-            rows={paginated}
+            rows={rows}
             companyMap={companyMap}
             onRowClick={setSelectedId}
-            onChanged={() => qc.invalidateQueries({ queryKey: ["postings"] })}
+            onChanged={invalidateAll}
           />
           <PaginationBar
-            page={safePage}
+            page={page}
             totalPages={totalPages}
             pageSize={pageSize}
             pageSizeOptions={PAGE_SIZE_OPTIONS}
-            totalItems={filtered.length}
+            totalItems={total}
             startIdx={startIdx}
             endIdx={endIdx}
             onPageChange={setPage}
-            onPageSizeChange={handlePageSizeChange}
+            onPageSizeChange={(s) => {
+              setPageSize(s);
+              setPage(1);
+            }}
           />
         </>
       )}
 
       {/* Side panel */}
-      <Sheet open={!!selected} onOpenChange={(o) => !o && setSelectedId(null)}>
+      <Sheet open={!!selectedId} onOpenChange={(o) => !o && setSelectedId(null)}>
         <SheetContent
           side="right"
           className="p-0"
@@ -854,12 +968,12 @@ function PostingsPage() {
             maxWidth: "100vw",
           }}
         >
-          {selected && (
+          {selectedId && (
             <DetailPanel
-              posting={selected}
-              company={selected.company_id ? companyMap.get(selected.company_id) ?? null : null}
+              postingId={selectedId}
+              companyMap={companyMap}
               onClose={() => setSelectedId(null)}
-              onChanged={() => qc.invalidateQueries({ queryKey: ["postings"] })}
+              onChanged={invalidateAll}
             />
           )}
         </SheetContent>
@@ -871,7 +985,7 @@ function PostingsPage() {
         onOpenChange={setAddOpen}
         companies={companies}
         onAdded={() => {
-          qc.invalidateQueries({ queryKey: ["postings"] });
+          invalidateAll();
           qc.invalidateQueries({ queryKey: ["job-posting-locations"] });
         }}
       />
@@ -880,9 +994,11 @@ function PostingsPage() {
       <BatchScoreDialog
         open={batchOpen}
         onOpenChange={setBatchOpen}
-        targets={filteredUnscored}
+        tierCompanyIds={tierCompanyIds}
+        companyFilter={companyFilter}
         companyMap={companyMap}
-        onDone={() => qc.invalidateQueries({ queryKey: ["postings"] })}
+        expectedCount={unscoredForButton}
+        onDone={invalidateAll}
       />
     </div>
   );
@@ -1304,24 +1420,12 @@ function RowActions({
   company: CompanyLite | null;
   onChanged: () => void;
 }) {
-  const qc = useQueryClient();
   const m = useMutation({
     mutationFn: async (action: "save" | "dismiss" | "apply") => {
       if (action === "apply") await applyPosting(posting);
       else await setPostingStatus(posting.id, action === "save" ? "saved" : "dismissed");
     },
-    onMutate: async (action) => {
-      await qc.cancelQueries({ queryKey: ["postings"] });
-      const prev = qc.getQueryData<Posting[]>(["postings"]);
-      const nextStatus: PostingStatus =
-        action === "apply" ? "applied" : action === "save" ? "saved" : "dismissed";
-      qc.setQueryData<Posting[]>(["postings"], (old) =>
-        (old ?? []).map((p) => (p.id === posting.id ? { ...p, status: nextStatus } : p)),
-      );
-      return { prev };
-    },
-    onError: (e: Error, _a, ctx) => {
-      if (ctx?.prev) qc.setQueryData(["postings"], ctx.prev);
+    onError: (e: Error) => {
       toast.error(e.message);
     },
     onSuccess: (_d, action) => {
@@ -1386,6 +1490,42 @@ function RowActions({
 
 // ---------- Detail Panel ----------
 function DetailPanel({
+  postingId,
+  companyMap,
+  onClose,
+  onChanged,
+}: {
+  postingId: string;
+  companyMap: Map<string, CompanyLite>;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const { data: posting, isLoading } = useQuery({
+    queryKey: ["posting", postingId],
+    queryFn: () => fetchPostingById(postingId),
+  });
+  if (isLoading || !posting) {
+    return (
+      <div
+        className="flex items-center justify-center"
+        style={{ height: "100vh", color: "#8B8B9E" }}
+      >
+        {isLoading ? "Loading posting…" : "Posting not found."}
+      </div>
+    );
+  }
+  const company = posting.company_id ? companyMap.get(posting.company_id) ?? null : null;
+  return (
+    <DetailPanelInner
+      posting={posting}
+      company={company}
+      onClose={onClose}
+      onChanged={onChanged}
+    />
+  );
+}
+
+function DetailPanelInner({
   posting,
   company,
   onClose,
@@ -1480,24 +1620,12 @@ function DetailPanel({
     }
   }
 
-  const qcPanel = useQueryClient();
   const actionMut = useMutation({
     mutationFn: async (action: "save" | "dismiss" | "apply") => {
       if (action === "apply") await applyPosting(posting);
       else await setPostingStatus(posting.id, action === "save" ? "saved" : "dismissed");
     },
-    onMutate: async (action) => {
-      await qcPanel.cancelQueries({ queryKey: ["postings"] });
-      const prev = qcPanel.getQueryData<Posting[]>(["postings"]);
-      const nextStatus: PostingStatus =
-        action === "apply" ? "applied" : action === "save" ? "saved" : "dismissed";
-      qcPanel.setQueryData<Posting[]>(["postings"], (old) =>
-        (old ?? []).map((p) => (p.id === posting.id ? { ...p, status: nextStatus } : p)),
-      );
-      return { prev };
-    },
-    onError: (e: Error, _a, ctx) => {
-      if (ctx?.prev) qcPanel.setQueryData(["postings"], ctx.prev);
+    onError: (e: Error) => {
       toast.error(e.message);
     },
     onSuccess: (_d, action) => {
@@ -2342,17 +2470,23 @@ function Spinner() {
 }
 
 // ---------- Batch Score Dialog ----------
+const BATCH_MAX = 300;
+
 function BatchScoreDialog({
   open,
   onOpenChange,
-  targets,
+  tierCompanyIds,
+  companyFilter,
   companyMap,
+  expectedCount,
   onDone,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  targets: Posting[];
+  tierCompanyIds: string[] | null;
+  companyFilter: CompanyFilter;
   companyMap: Map<string, CompanyLite>;
+  expectedCount: number;
   onDone: () => void;
 }) {
   const score = useSF(scoreJobPosting);
@@ -2363,13 +2497,11 @@ function BatchScoreDialog({
   const [weeklyCap, setWeeklyCap] = useState<number | null>(null);
   const [scoredThisWeek, setScoredThisWeek] = useState<number>(0);
   const [loadingMeta, setLoadingMeta] = useState(false);
+  const [targets, setTargets] = useState<Posting[]>([]);
+  const [runTotal, setRunTotal] = useState(0);
 
-  const total = targets.length;
-  const roughCost = (total * 0.01).toFixed(2);
-  const missingJd = useMemo(
-    () => targets.filter((t) => !t.jd_full || t.jd_full.trim().length === 0).length,
-    [targets],
-  );
+  const plannedBatch = Math.min(expectedCount, BATCH_MAX);
+  const roughCost = (plannedBatch * 0.01).toFixed(2);
 
   useEffect(() => {
     if (!open) {
@@ -2377,6 +2509,8 @@ function BatchScoreDialog({
       setProgress(0);
       setFailed(0);
       setSucceeded(0);
+      setTargets([]);
+      setRunTotal(0);
       return;
     }
     let cancelled = false;
@@ -2401,7 +2535,7 @@ function BatchScoreDialog({
         );
         setScoredThisWeek(count ?? 0);
       } catch {
-        // ignore — just skip cap awareness
+        // ignore
       } finally {
         if (!cancelled) setLoadingMeta(false);
       }
@@ -2412,7 +2546,7 @@ function BatchScoreDialog({
   }, [open]);
 
   const overCap =
-    weeklyCap != null && weeklyCap > 0 && scoredThisWeek + total > weeklyCap;
+    weeklyCap != null && weeklyCap > 0 && scoredThisWeek + plannedBatch > weeklyCap;
 
   async function runOne(
     posting: Posting,
@@ -2469,7 +2603,16 @@ function BatchScoreDialog({
     let criteria: RoleCriteria | null = null;
     let backgroundSummary: string | null = null;
     let feedback: FeedbackContext = { text: "", ids: [] };
+    let fetched: Posting[] = [];
     try {
+      fetched = await fetchUnscoredTargets(tierCompanyIds, companyFilter, BATCH_MAX);
+      setTargets(fetched);
+      setRunTotal(fetched.length);
+      if (fetched.length === 0) {
+        toast.message("No unscored postings match the current filter.");
+        setPhase("done");
+        return;
+      }
       criteria = await fetchActiveCriteria();
       if (!criteria) throw new Error("No active role_criteria row found");
       const { data: profile } = await gtmSupabase
@@ -2489,8 +2632,8 @@ function BatchScoreDialog({
 
     let ok = 0;
     let bad = 0;
-    for (let i = 0; i < targets.length; i++) {
-      const p = targets[i];
+    for (let i = 0; i < fetched.length; i++) {
+      const p = fetched[i];
       setProgress(i + 1);
       try {
         await runOne(p, criteria, backgroundSummary, feedback.text);
@@ -2515,7 +2658,11 @@ function BatchScoreDialog({
     setPhase("done");
   }
 
-  const pct = total === 0 ? 0 : Math.round((progress / total) * 100);
+  const missingJd = useMemo(
+    () => targets.filter((t) => !t.jd_full || t.jd_full.trim().length === 0).length,
+    [targets],
+  );
+  const pct = runTotal === 0 ? 0 : Math.round((progress / runTotal) * 100);
 
   return (
     <Dialog
@@ -2546,16 +2693,18 @@ function BatchScoreDialog({
         {phase === "confirm" && (
           <div className="flex flex-col gap-3" style={{ fontSize: 13 }}>
             <div>
-              About to score <b>{total}</b> posting{total === 1 ? "" : "s"} with Claude.
+              About to score <b>{plannedBatch.toLocaleString()}</b> posting
+              {plannedBatch === 1 ? "" : "s"} with Claude.
+              {expectedCount > BATCH_MAX && (
+                <span style={{ color: "#8B8B9E" }}>
+                  {" "}
+                  ({expectedCount.toLocaleString()} unscored total; capped per run at {BATCH_MAX})
+                </span>
+              )}
             </div>
             <div style={{ color: "#8B8B9E", fontSize: 12 }}>
               Uses Claude API credits — rough estimate: <b>~${roughCost}</b> ($0.01 per posting).
             </div>
-            {missingJd > 0 && (
-              <div style={{ color: "#8B8B9E", fontSize: 12 }}>
-                {missingJd} of these have no job description and may score less precisely.
-              </div>
-            )}
             {loadingMeta ? (
               <div style={{ color: "#8B8B9E", fontSize: 12 }}>Checking weekly cap…</div>
             ) : weeklyCap != null && weeklyCap > 0 ? (
@@ -2573,8 +2722,8 @@ function BatchScoreDialog({
                 <div>
                   Scored in last 7 days: <b>{scoredThisWeek}</b> / cap <b>{weeklyCap}</b>.{" "}
                   {overCap
-                    ? `Running this batch (${total}) would exceed your weekly cap. You can proceed — it's a soft ceiling.`
-                    : `After this batch: ${scoredThisWeek + total} / ${weeklyCap}.`}
+                    ? `Running this batch (${plannedBatch}) would exceed your weekly cap. You can proceed — it's a soft ceiling.`
+                    : `After this batch: ${scoredThisWeek + plannedBatch} / ${weeklyCap}.`}
                 </div>
               </div>
             ) : null}
@@ -2589,10 +2738,10 @@ function BatchScoreDialog({
               </Button>
               <Button
                 onClick={run}
-                disabled={total === 0}
+                disabled={plannedBatch === 0}
                 style={{ background: "#00D4FF", color: "#0A0A0F" }}
               >
-                <Sparkles size={13} /> Score {total} with AI
+                <Sparkles size={13} /> Score {plannedBatch.toLocaleString()} with AI
               </Button>
             </div>
           </div>
@@ -2601,7 +2750,7 @@ function BatchScoreDialog({
         {phase === "running" && (
           <div className="flex flex-col gap-3" style={{ fontSize: 13 }}>
             <div style={{ fontFamily: MONO }}>
-              Scoring {Math.min(progress, total)} of {total}…
+              Scoring {Math.min(progress, runTotal)} of {runTotal}…
             </div>
             <div
               style={{
@@ -2622,6 +2771,11 @@ function BatchScoreDialog({
             </div>
             <div style={{ color: "#8B8B9E", fontSize: 12, fontFamily: MONO }}>
               {succeeded} ok · {failed} failed
+              {missingJd > 0 && (
+                <span style={{ marginLeft: 8 }}>
+                  · {missingJd} without JD (scored on title/company only)
+                </span>
+              )}
             </div>
           </div>
         )}
