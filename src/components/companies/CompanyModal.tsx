@@ -146,6 +146,58 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
             </div>
           )}
 
+          {/* Active + Source */}
+          <div className="col-span-2 space-y-3 mt-2 pt-3" style={{ borderTop: "1px solid #1E1E2E" }}>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-[13px]">Active — receiving job postings</Label>
+                <p className="text-[11px]" style={{ color: "#8B8B9E" }}>
+                  Pause to stop pulling new job postings from this company.
+                </p>
+              </div>
+              <Switch
+                checked={form.is_active !== false}
+                onCheckedChange={(v) => set("is_active", v)}
+              />
+            </div>
+            <div>
+              <Label className="text-[13px]">Source</Label>
+              {(() => {
+                const c = initial as Company | null | undefined;
+                const ats = c?.ats_type ?? null;
+                const slug = c?.ats_slug ?? null;
+                const b = sourceBadge(ats);
+                if (!ats && !slug) {
+                  return (
+                    <p className="text-[12px] mt-1" style={{ color: "#8B8B9E", fontFamily: "var(--font-mono)" }}>
+                      Not configured yet
+                    </p>
+                  );
+                }
+                const chipStyle =
+                  b.variant === "warning"
+                    ? { color: "#F59E0B", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)" }
+                    : b.variant === "connected"
+                    ? { color: "#00D4FF", background: "rgba(0,212,255,0.10)", border: "1px solid rgba(0,212,255,0.30)" }
+                    : { color: "#8B8B9E", background: "#1E1E2E", border: "1px solid #1E1E2E" };
+                return (
+                  <div className="flex items-center gap-2 mt-1" style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>
+                    <span style={{ ...chipStyle, padding: "2px 6px", borderRadius: 3, fontSize: 10 }}>
+                      {b.label}
+                    </span>
+                    <span style={{ color: "#8B8B9E" }}>
+                      type: <span style={{ color: "#F0F0FF" }}>{ats ?? "—"}</span>
+                    </span>
+                    <span style={{ color: "#8B8B9E" }}>
+                      slug: <span style={{ color: "#F0F0FF" }}>{slug ?? "—"}</span>
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+
+
           <div className="col-span-2 space-y-3 mt-2 pt-3" style={{ borderTop: "1px solid #1E1E2E" }}>
             <div className="text-xs uppercase tracking-wider" style={{ color: "#8B8B9E", fontFamily: "var(--font-mono)" }}>
               Scores
