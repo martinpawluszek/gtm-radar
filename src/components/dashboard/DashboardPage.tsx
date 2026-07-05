@@ -535,10 +535,7 @@ export function DashboardPage() {
   }, [feedback]);
 
   // ---------- Section 6b: Top opportunities ----------
-  const topOpps = postings
-    .filter((p) => p.status === "new")
-    .sort((a, b) => (b.ai_composite_score ?? 0) - (a.ai_composite_score ?? 0))
-    .slice(0, 5);
+  const topOpps = topPostings.slice(0, 5);
 
   // ---------- mutations for top opps ----------
   const applyMut = useMutation({
