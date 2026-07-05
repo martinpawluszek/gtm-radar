@@ -7,6 +7,8 @@ import { gtmSupabase } from "@/lib/gtmSupabase";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LocationTab } from "@/components/parameters/LocationTab";
 import { SearchPatternsTab } from "@/components/parameters/SearchPatternsTab";
+import { ScoringPromptTab } from "@/components/parameters/ScoringPromptTab";
+
 
 const MONO = "var(--font-mono)";
 
