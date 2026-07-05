@@ -159,14 +159,109 @@ const STATUS_META: Record<PostingStatus, { label: string; color: string }> = {
 };
 
 // ---------- Data ----------
-async function fetchPostings(): Promise<Posting[]> {
+type ListFilters = {
+  status: PostingStatus;
+  tier: TierFilter;
+  companyId: CompanyFilter;
+  unscoredOnly: boolean;
+};
+
+const LIST_COLUMNS =
+  "id,company_id,title,location,source,scraped_at,ai_company_score,ai_role_score,ai_composite_score,ai_rationale,disqualified,disqualifier_reason,martin_feedback_score,martin_feedback_comment,martin_feedback_overrides,title_signal,posted_at,deadline_at,status,created_at,updated_at";
+
+async function fetchPostingsPage(
+  filters: ListFilters,
+  tierCompanyIds: string[] | null,
+  page: number,
+  pageSize: number,
+): Promise<{ rows: Posting[]; total: number }> {
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  let q = gtmSupabase
+    .from("job_postings" as never)
+    .select(LIST_COLUMNS, { count: "exact" })
+    .eq("status", filters.status);
+  if (filters.unscoredOnly && filters.status === "new") {
+    q = q.is("ai_composite_score", null);
+  }
+  if (filters.tier !== "all") {
+    if (!tierCompanyIds || tierCompanyIds.length === 0) return { rows: [], total: 0 };
+    q = q.in("company_id", tierCompanyIds);
+  }
+  if (filters.companyId !== "all") {
+    q = q.eq("company_id", filters.companyId);
+  }
+  q = q
+    .order("ai_composite_score", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+  const { data, error, count } = await q;
+  if (error) throw error;
+  return { rows: (data ?? []) as unknown as Posting[], total: count ?? 0 };
+}
+
+async function fetchPostingCounts(): Promise<{ newCount: number; unscoredCount: number }> {
+  const [a, b] = await Promise.all([
+    gtmSupabase
+      .from("job_postings" as never)
+      .select("id", { count: "exact", head: true })
+      .eq("status", "new"),
+    gtmSupabase
+      .from("job_postings" as never)
+      .select("id", { count: "exact", head: true })
+      .eq("status", "new")
+      .is("ai_composite_score", null),
+  ]);
+  return { newCount: a.count ?? 0, unscoredCount: b.count ?? 0 };
+}
+
+async function fetchUnscoredCountFiltered(
+  tierCompanyIds: string[] | null,
+  companyId: CompanyFilter,
+): Promise<number> {
+  let q = gtmSupabase
+    .from("job_postings" as never)
+    .select("id", { count: "exact", head: true })
+    .eq("status", "new")
+    .is("ai_composite_score", null);
+  if (tierCompanyIds) {
+    if (tierCompanyIds.length === 0) return 0;
+    q = q.in("company_id", tierCompanyIds);
+  }
+  if (companyId !== "all") q = q.eq("company_id", companyId);
+  const { count } = await q;
+  return count ?? 0;
+}
+
+async function fetchUnscoredTargets(
+  tierCompanyIds: string[] | null,
+  companyId: CompanyFilter,
+  max: number,
+): Promise<Posting[]> {
+  let q = gtmSupabase
+    .from("job_postings" as never)
+    .select("id,company_id,title,location,jd_full,deadline_at,status")
+    .eq("status", "new")
+    .is("ai_composite_score", null);
+  if (tierCompanyIds) {
+    if (tierCompanyIds.length === 0) return [];
+    q = q.in("company_id", tierCompanyIds);
+  }
+  if (companyId !== "all") q = q.eq("company_id", companyId);
+  q = q.order("created_at", { ascending: false }).limit(max);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []) as unknown as Posting[];
+}
+
+async function fetchPostingById(id: string): Promise<Posting | null> {
   const { data, error } = await gtmSupabase
     .from("job_postings" as never)
     .select("*")
-    .order("ai_composite_score", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false });
+    .eq("id", id)
+    .maybeSingle();
   if (error) throw error;
-  return (data ?? []) as unknown as Posting[];
+  return (data as unknown as Posting) ?? null;
 }
 
 async function fetchCompanies(): Promise<CompanyLite[]> {
