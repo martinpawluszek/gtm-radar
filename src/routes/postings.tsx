@@ -2717,7 +2717,7 @@ function BatchScoreDialog({
   ) {
     const company = posting.company_id ? companyMap.get(posting.company_id) ?? null : null;
     const system = buildSystemPrompt(criteria, company, backgroundSummary, feedbackText);
-    const user = buildUserPrompt(posting.title, posting.location ?? "", posting.jd_full ?? "");
+    const user = buildUserPrompt(posting.title, posting.location ?? "", posting.jd_full ?? "", criteria);
     const res = await score({ data: { system, user } });
     const parsed = extractJson(res.text) as {
       disqualified?: boolean;
