@@ -2418,9 +2418,10 @@ function BatchScoreDialog({
     posting: Posting,
     criteria: RoleCriteria,
     backgroundSummary: string | null,
+    feedbackText: string,
   ) {
     const company = posting.company_id ? companyMap.get(posting.company_id) ?? null : null;
-    const system = buildSystemPrompt(criteria, company, backgroundSummary);
+    const system = buildSystemPrompt(criteria, company, backgroundSummary, feedbackText);
     const user = buildUserPrompt(posting.title, posting.location ?? "", posting.jd_full ?? "");
     const res = await score({ data: { system, user } });
     const parsed = extractJson(res.text) as {
@@ -2467,6 +2468,7 @@ function BatchScoreDialog({
 
     let criteria: RoleCriteria | null = null;
     let backgroundSummary: string | null = null;
+    let feedback: FeedbackContext = { text: "", ids: [] };
     try {
       criteria = await fetchActiveCriteria();
       if (!criteria) throw new Error("No active role_criteria row found");
@@ -2478,6 +2480,7 @@ function BatchScoreDialog({
         .maybeSingle();
       backgroundSummary =
         (profile as { background_summary?: string | null } | null)?.background_summary ?? null;
+      feedback = await fetchFeedbackContext();
     } catch (e) {
       toast.error(`Setup failed: ${(e as Error).message}`);
       setPhase("confirm");
@@ -2490,12 +2493,12 @@ function BatchScoreDialog({
       const p = targets[i];
       setProgress(i + 1);
       try {
-        await runOne(p, criteria, backgroundSummary);
+        await runOne(p, criteria, backgroundSummary, feedback.text);
         ok++;
         setSucceeded(ok);
       } catch {
         try {
-          await runOne(p, criteria, backgroundSummary);
+          await runOne(p, criteria, backgroundSummary, feedback.text);
           ok++;
           setSucceeded(ok);
         } catch {
@@ -2505,6 +2508,7 @@ function BatchScoreDialog({
       }
     }
 
+    if (ok > 0) await markFeedbackUsed(feedback.ids);
     if (bad === 0) toast.success(`Scored ${ok} posting${ok === 1 ? "" : "s"}`);
     else toast.message(`Scored ${ok}, ${bad} failed`);
     onDone();
