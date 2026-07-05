@@ -561,7 +561,9 @@ export function DashboardPage() {
     },
     onSuccess: () => {
       toast.success("Moved to Applications");
-      qc.invalidateQueries({ queryKey: ["dash:postings"] });
+      qc.invalidateQueries({ queryKey: ["dash:postings-top"] });
+      qc.invalidateQueries({ queryKey: ["dash:postings-week"] });
+      qc.invalidateQueries({ queryKey: ["dash:postings-scorer"] });
       qc.invalidateQueries({ queryKey: ["dash:applications"] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -578,7 +580,7 @@ export function DashboardPage() {
     },
     onSuccess: () => {
       toast.success("Dismissed");
-      qc.invalidateQueries({ queryKey: ["dash:postings"] });
+      qc.invalidateQueries({ queryKey: ["dash:postings-top"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
