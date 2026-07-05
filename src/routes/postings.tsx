@@ -88,7 +88,11 @@ type RoleCriteria = {
   disqualifiers: string[];
   bonuses: Array<{ id: string; name: string; value: number }>;
   target_titles: TitleEntry[];
+  system_template?: string | null;
+  user_template?: string | null;
+  use_custom?: boolean | null;
 };
+
 
 // ---------- Helpers ----------
 function relativeTime(iso: string): string {
