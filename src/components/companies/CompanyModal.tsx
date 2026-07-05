@@ -37,6 +37,7 @@ const emptyForm: CompanyInsert = {
   location_score: 3,
   tags: [],
   excluded_reason: "",
+  is_active: true,
 };
 
 export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: Props) {
