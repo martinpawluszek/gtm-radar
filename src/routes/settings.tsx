@@ -265,6 +265,28 @@ function SettingsPage() {
         <div style={HELP}>Safety limit — the most AI scorings allowed per week.</div>
 
         <div style={{ height: 20 }} />
+        <label style={LABEL}>Default posting lifespan (days)</label>
+        <Input
+          type="number"
+          value={form.default_posting_lifespan_days ?? ""}
+          onChange={(e) =>
+            set(
+              "default_posting_lifespan_days",
+              e.target.value === "" ? null : Number(e.target.value),
+            )
+          }
+          style={{
+            background: "#0A0A0F",
+            border: "1px solid #1E1E2E",
+            color: "#F0F0FF",
+            maxWidth: 200,
+          }}
+        />
+        <div style={HELP}>
+          If a posting has no deadline, treat it as expired this many days after it was posted.
+        </div>
+
+        <div style={{ height: 20 }} />
         <div className="flex items-center gap-3">
           <Switch
             checked={!!form.agent_enabled}
