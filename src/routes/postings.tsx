@@ -352,6 +352,11 @@ function buildSystemPrompt(
     ? `You are scoring a job posting for a candidate with the following background:\n${bg}`
     : `You are scoring a job posting for a senior commercial / GTM professional.`;
 
+  const fb = (feedbackContext ?? "").trim();
+  const feedbackSection = fb
+    ? `\n\n# Calibration from the user's past feedback (secondary signal — tendencies, NOT hard rules; the Role Criteria above remain the primary framework)\n${fb}\nUse these to calibrate borderline judgments; do not let them override the Role Criteria.`
+    : "";
+
   return `${opener}
 
 # Step 1 — Semantic Relevance Check
