@@ -473,7 +473,11 @@ function PostingsPage() {
       if (unscoredOnly) {
         if (p.status !== "new" || p.ai_composite_score != null) return false;
       }
-      if (statusFilter !== "all" && p.status !== statusFilter) return false;
+      if (statusFilter === "all") {
+        if (p.status === "expired") return false;
+      } else if (p.status !== statusFilter) {
+        return false;
+      }
       if (tierFilter !== "all") {
         const c = p.company_id ? companyMap.get(p.company_id) : null;
         if (!c || c.tier !== tierFilter) return false;
