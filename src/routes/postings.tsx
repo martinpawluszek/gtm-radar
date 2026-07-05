@@ -389,6 +389,9 @@ function PostingsPage() {
 
   const filtered = useMemo(() => {
     return postings.filter((p) => {
+      if (unscoredOnly) {
+        if (p.status !== "new" || p.ai_composite_score != null) return false;
+      }
       if (statusFilter !== "all" && p.status !== statusFilter) return false;
       if (tierFilter !== "all") {
         const c = p.company_id ? companyMap.get(p.company_id) : null;
@@ -397,7 +400,12 @@ function PostingsPage() {
       if (companyFilter !== "all" && p.company_id !== companyFilter) return false;
       return true;
     });
-  }, [postings, statusFilter, tierFilter, companyMap, companyFilter]);
+  }, [postings, statusFilter, tierFilter, companyMap, companyFilter, unscoredOnly]);
+
+  const filteredUnscored = useMemo(
+    () => filtered.filter((p) => p.status === "new" && p.ai_composite_score == null),
+    [filtered],
+  );
 
   // Pagination calculations
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
