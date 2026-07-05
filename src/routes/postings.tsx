@@ -1420,7 +1420,6 @@ function RowActions({
   company: CompanyLite | null;
   onChanged: () => void;
 }) {
-  const qc = useQueryClient();
   const m = useMutation({
     mutationFn: async (action: "save" | "dismiss" | "apply") => {
       if (action === "apply") await applyPosting(posting);
