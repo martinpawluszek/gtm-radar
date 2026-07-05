@@ -47,7 +47,7 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
 
   useEffect(() => {
     if (!open) return;
-    setForm(initial ? { ...(initial as CompanyInsert) } : { ...emptyForm });
+    setForm(initial ? { ...(initial as CompanyInsert), is_active: (initial as Company).is_active !== false } : { ...emptyForm });
     setTagInput("");
   }, [open, initial]);
 
