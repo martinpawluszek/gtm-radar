@@ -90,6 +90,33 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
     onOpenChange(false);
   };
 
+  const handleDetect = async () => {
+    if (!form.name?.trim()) return;
+    setDetecting(true);
+    setDetectResult(null);
+    try {
+      const { data, error } = await gtmSupabase.functions.invoke("detect-ats", {
+        body: { name: form.name.trim(), careers_url: form.careers_url || undefined },
+      });
+      if (error) throw error;
+      if (!data || (data as { error?: string }).error) {
+        throw new Error((data as { error?: string })?.error ?? "Detection failed");
+      }
+      const r = data as { ats_type: string; ats_slug: string | null; confidence: "high" | "medium" | "none"; note: string };
+      setForm((p) => ({
+        ...p,
+        ats_type: r.ats_type as AtsType,
+        ats_slug: r.ats_slug,
+        ...(r.ats_type === "generic_scraper" ? { is_active: false } : {}),
+      }));
+      setDetectResult({ note: r.note, confidence: r.confidence });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Detect source failed");
+    } finally {
+      setDetecting(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
