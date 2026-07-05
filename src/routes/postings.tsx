@@ -1782,7 +1782,15 @@ function AddPostingModal({
       // Build prompts
       const criteria = await fetchActiveCriteria();
       if (!criteria) throw new Error("No active role_criteria row found");
-      const system = buildSystemPrompt(criteria, company);
+      const { data: profile } = await gtmSupabase
+        .from("user_profiles" as never)
+        .select("background_summary")
+        .order("created_at")
+        .limit(1)
+        .maybeSingle();
+      const backgroundSummary =
+        (profile as { background_summary?: string | null } | null)?.background_summary ?? null;
+      const system = buildSystemPrompt(criteria, company, backgroundSummary);
       const user = buildUserPrompt(title.trim(), normalizeLocationInput(location), jdFull);
 
       const res = await score({ data: { system, user } });
