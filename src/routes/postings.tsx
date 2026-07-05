@@ -88,7 +88,11 @@ type RoleCriteria = {
   disqualifiers: string[];
   bonuses: Array<{ id: string; name: string; value: number }>;
   target_titles: TitleEntry[];
+  system_template?: string | null;
+  user_template?: string | null;
+  use_custom?: boolean | null;
 };
+
 
 // ---------- Helpers ----------
 function relativeTime(iso: string): string {
@@ -409,7 +413,89 @@ async function markFeedbackUsed(ids: string[]) {
   }
 }
 
+export const DEFAULT_SYSTEM_TEMPLATE = `{{background}}
+
+You are an expert technical recruiter and career strategist scoring ONE job posting for this candidate. Decide how strongly he should prioritize applying, so the highest-scoring postings are genuinely his best opportunities. Be rigorous and calibrated: most scraped postings are NOT a fit and should score low or be disqualified. Reserve high scores for real matches.
+
+# Candidate priorities (in order)
+1. Future career optionality (brand + trajectory that opens doors)
+2. Compensation — target €150K+ total; Enterprise AE is his highest-comp path
+3. Prestige / brand recognition
+He is a founder-operator who is genuinely excellent at enterprise/technical sales — not a typical salesperson. Strongest for: selling technical products to CTOs/VPs Eng/product teams, building GTM from scratch, outbound motion, international/LatAm expansion, and AI-native or infrastructure/API/devtools/IoT/telco companies. Weaker for: pure SMB/velocity/inbound sales, roles that assume a deep structured enterprise-sales playbook at massive scale, or roles needing vertical expertise he lacks (legal, defense, regulated healthcare). His deal sizes were mid-market (up to ~$40K MRR) with technical buyers; his background reads somewhat telco and he is actively pivoting into AI/tech.
+
+# Step 1 — Relevance gate (do this FIRST)
+Decide if the core work is commercial GTM: enterprise/mid-market sales, business development, strategic partnerships, revenue leadership, or GTM/commercial strategy. If the role is primarily engineering, research, product management, design, data science, customer support, recruiting, finance, or content marketing, set "disqualified": true and "disqualifier_reason": "Not a commercial GTM role". Never score an off-profile role highly just because the company is prestigious.
+
+# Step 2 — Hard disqualifiers (auto-reject: set disqualified=true with the matching reason)
+{{disqualifiers}}
+Apply literally, but avoid false positives: disqualify on language ONLY if the role requires working primarily in a language other than English or Spanish (a nice-to-have language is fine); disqualify junior/associate/SDR/BDR/coordinator TITLES even at great companies; disqualify roles based only in excluded locations with no remote or accepted-city option.
+
+# Step 3 — Score each parameter 1–5 from concrete JD evidence (not the title alone)
+Weights: {{weights}}.
+Rubric:
+{{rubric}}
+
+Scoring discipline:
+- Comp: infer realistic total OTE from role type + company tier + market, not only any stated range.
+- Role-Profile Fit: reward technical/enterprise sales to CTOs/product, GTM-building, outbound, IoT/telco/API/devtools/AI, LatAm/international; lower it for SMB/inbound-only or roles that assume big-company structured-playbook experience he lacks.
+- Seniority: right level = Senior IC, Lead, Head of, Manager/Director of a function, or Enterprise-level IC; far-too-senior (VP/C-level at a large company) scores low.
+- Location: score the ROLE's city/remote policy per the rubric.
+- Competition: LOWER competition = HIGHER score. Niche roles, less-known companies, or rare skill-match (LatAm/technical/multilingual edge) score high; marquee roles at Anthropic/OpenAI/Stripe score low.
+
+# Step 4 — Bonuses (add only when clearly justified by the JD)
+{{bonuses}}
+
+# Step 5 — Final score (compute it, do not estimate)
+final_score = ( sum of each parameter_score × its weight ) × 5, then add every applicable bonus value. Because the weights sum to 1.0, the weighted average is 1–5 and ×5 puts the base on a 0–25 scale comparable to the company score; bonuses are added on top. Round to one decimal.
+
+# Title signal (soft prior only — never overrides the JD)
+{{titles}}
+Return "title_signal" as one of: "strong" (title closely matches a high-weight target title), "matching" (clearly a relevant commercial title), "weak" (commercial but off-target), or "off" (not a commercial title). Always read the full JD regardless of title.
+
+# Company context
+{{company}}
+Use company tier/scores to inform Comp, Competition, and brand — but do NOT inflate a poor-fit role because the company is strong.{{feedback}}`;
+
+export const DEFAULT_USER_TEMPLATE = `Score this job posting for the candidate.
+
+Title: {{title}}
+Location: {{location}}
+Job Description:
+{{jd}}
+
+Work through the 5 steps internally, then respond with ONLY this JSON (no prose before or after, no markdown fences):
+{
+  "disqualified": false,
+  "disqualifier_reason": null,
+  "parameter_scores": {
+    "comp": {"score": 4, "rationale": "<=15 words citing JD evidence"},
+    "fit": {"score": 4, "rationale": "<=15 words"},
+    "seniority": {"score": 4, "rationale": "<=15 words"},
+    "location": {"score": 4, "rationale": "<=15 words"},
+    "competition": {"score": 4, "rationale": "<=15 words"}
+  },
+  "bonuses_applied": [{"name": "exact bonus name", "value": 0.5}],
+  "final_score": 18.5,
+  "title_signal": "matching",
+  "summary": "one-sentence verdict: the single most important reason to apply or skip",
+  "deadline": null
+}
+
+Rules:
+- parameter_scores keys must be exactly comp, fit, seniority, location, competition; each score an integer 1-5.
+- If disqualified is true, still fill parameter_scores with your best estimate and compute final_score normally, but summary must state the disqualifier.
+- bonuses_applied lists only bonuses you actually applied, each with its exact name and numeric value from the bonus list; use [] if none.
+- final_score must equal the Step 5 computation, rounded to one decimal.
+- For "deadline": only if the JD explicitly states an application deadline/closing date, return ISO YYYY-MM-DD; otherwise null. Do not guess.`;
+
+export function applyTemplate(tpl: string, vars: Record<string, string>): string {
+  let out = tpl;
+  for (const [k, v] of Object.entries(vars)) out = out.split(`{{${k}}}`).join(v ?? "");
+  return out;
+}
+
 function buildSystemPrompt(
+
   criteria: RoleCriteria,
   company: CompanyLite | null,
   backgroundSummary?: string | null,
@@ -452,7 +538,21 @@ function buildSystemPrompt(
     ? `\n\n# Calibration from the user's past feedback (secondary signal — tendencies, NOT hard rules; the Role Criteria above remain the primary framework)\n${fb}\nUse these to calibrate borderline judgments; do not let them override the Role Criteria.`
     : "";
 
+  if (criteria.use_custom && criteria.system_template && criteria.system_template.trim()) {
+    return applyTemplate(criteria.system_template, {
+      background: opener,
+      weights: formatWeights(criteria.weights),
+      rubric: rubricText,
+      disqualifiers,
+      bonuses,
+      titles,
+      company: companyContext,
+      feedback: feedbackSection,
+    });
+  }
+
   return `${opener}
+
 
 You are an expert technical recruiter and career strategist scoring ONE job posting for this candidate. Decide how strongly he should prioritize applying, so the highest-scoring postings are genuinely his best opportunities. Be rigorous and calibrated: most scraped postings are NOT a fit and should score low or be disqualified. Reserve high scores for real matches.
 
@@ -497,8 +597,12 @@ Use company tier/scores to inform Comp, Competition, and brand — but do NOT in
 
 }
 
-function buildUserPrompt(title: string, location: string, jd: string): string {
+function buildUserPrompt(title: string, location: string, jd: string, criteria?: RoleCriteria): string {
+  if (criteria?.use_custom && criteria.user_template && criteria.user_template.trim()) {
+    return applyTemplate(criteria.user_template, { title, location, jd });
+  }
   return `Score this job posting for the candidate.
+
 
 Title: ${title}
 Location: ${location}
@@ -2206,7 +2310,7 @@ function AddPostingModal({
         (profile as { background_summary?: string | null } | null)?.background_summary ?? null;
       const feedback = await fetchFeedbackContext();
       const system = buildSystemPrompt(criteria, company, backgroundSummary, feedback.text);
-      const user = buildUserPrompt(title.trim(), normalizeLocationInput(location), jdFull);
+      const user = buildUserPrompt(title.trim(), normalizeLocationInput(location), jdFull, criteria);
 
       const res = await score({ data: { system, user } });
       const parsed = extractJson(res.text) as {
@@ -2613,7 +2717,7 @@ function BatchScoreDialog({
   ) {
     const company = posting.company_id ? companyMap.get(posting.company_id) ?? null : null;
     const system = buildSystemPrompt(criteria, company, backgroundSummary, feedbackText);
-    const user = buildUserPrompt(posting.title, posting.location ?? "", posting.jd_full ?? "");
+    const user = buildUserPrompt(posting.title, posting.location ?? "", posting.jd_full ?? "", criteria);
     const res = await score({ data: { system, user } });
     const parsed = extractJson(res.text) as {
       disqualified?: boolean;

@@ -7,6 +7,8 @@ import { gtmSupabase } from "@/lib/gtmSupabase";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LocationTab } from "@/components/parameters/LocationTab";
 import { SearchPatternsTab } from "@/components/parameters/SearchPatternsTab";
+import { ScoringPromptTab } from "@/components/parameters/ScoringPromptTab";
+
 
 const MONO = "var(--font-mono)";
 
@@ -20,7 +22,8 @@ type TabKey =
   | "commercial-overrides"
   | "excluded-titles"
   | "location"
-  | "search-patterns";
+  | "search-patterns"
+  | "scoring-prompt";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "keyword-filters", label: "Keyword Filters" },
@@ -28,7 +31,9 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "excluded-titles", label: "Excluded Titles" },
   { key: "location", label: "Location" },
   { key: "search-patterns", label: "Search Patterns" },
+  { key: "scoring-prompt", label: "Scoring Prompt" },
 ];
+
 
 
 // ---------- Types ----------
@@ -154,7 +159,7 @@ function ParametersPage() {
 
   function tabLabel(key: TabKey): string {
     const base = TABS.find((t) => t.key === key)?.label ?? key;
-    if (key === "location" || key === "search-patterns") return base;
+    if (key === "location" || key === "search-patterns" || key === "scoring-prompt") return base;
     const count =
       key === "keyword-filters"
         ? keywordCount
@@ -226,6 +231,8 @@ function ParametersPage() {
       {activeTab === "excluded-titles" && <ExcludedTitlesTab />}
       {activeTab === "location" && <LocationTab />}
       {activeTab === "search-patterns" && <SearchPatternsTab />}
+      {activeTab === "scoring-prompt" && <ScoringPromptTab />}
+
 
     </div>
   );
