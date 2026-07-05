@@ -118,9 +118,11 @@ function scoreColor(score: number | null | undefined): string {
 
 const STATUS_META: Record<PostingStatus, { label: string; color: string }> = {
   new: { label: "New", color: "#00D4FF" },
+  reviewed: { label: "Reviewed", color: "#00D4FF" },
   saved: { label: "Saved", color: "#7C3AED" },
   applied: { label: "Applied", color: "#10B981" },
   dismissed: { label: "Dismissed", color: "#8B8B9E" },
+  expired: { label: "Expired", color: "#6B7280" },
 };
 
 // ---------- Data ----------
