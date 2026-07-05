@@ -348,9 +348,8 @@ export function DashboardPage() {
     const d = daysSince(a.applied_at);
     return d >= 14 && d <= 20;
   });
-  const highScoreUnactioned = postings
-    .filter((p) => p.status === "new" && (p.ai_composite_score ?? 0) >= 16)
-    .sort((a, b) => (b.ai_composite_score ?? 0) - (a.ai_composite_score ?? 0))
+  const highScoreUnactioned = topPostings
+    .filter((p) => (p.ai_composite_score ?? 0) >= 16)
     .slice(0, 5);
   const newSuggested = targets.filter((t) => t.status === "suggested");
   const warmGoingCold = targets.filter((t) => {
@@ -363,16 +362,8 @@ export function DashboardPage() {
     aboutToGhost.length || highScoreUnactioned.length || newSuggested.length || warmGoingCold.length;
 
   // ---------- Section 2: Agent Activity ----------
-  const agentPostings = postings.filter((p) => p.source && p.source !== "manual");
-  const lastPostingRun = agentPostings.reduce<string | null>((acc, p) => {
-    const t = p.scraped_at;
-    if (!t) return acc;
-    return !acc || new Date(t) > new Date(acc) ? t : acc;
-  }, null);
-  const lastPostingRunDay = lastPostingRun ? lastPostingRun.slice(0, 10) : null;
-  const postingsThisRun = lastPostingRunDay
-    ? agentPostings.filter((p) => (p.scraped_at ?? "").slice(0, 10) === lastPostingRunDay).length
-    : 0;
+  const lastPostingRun = scorerRun.lastRun;
+  const postingsThisRun = scorerRun.thisRunCount;
 
   const agentTargets = targets.filter((t) => t.source === "agent_talent_scout");
   const lastScoutRun = agentTargets.reduce<string | null>((acc, t) => {
