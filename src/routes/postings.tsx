@@ -603,6 +603,35 @@ function PostingsPage() {
             </div>
           )}
         </div>
+        <div style={{ width: 1, height: 20, background: "#1E1E2E" }} />
+        <button
+          onClick={() => setUnscoredOnly((v) => !v)}
+          className="flex items-center gap-1.5 px-2.5"
+          style={{
+            height: 28,
+            background: unscoredOnly ? "rgba(245,158,11,0.12)" : "#0A0A0F",
+            border: `1px solid ${unscoredOnly ? "rgba(245,158,11,0.4)" : "#1E1E2E"}`,
+            borderRadius: 4,
+            color: unscoredOnly ? "#F59E0B" : "#F0F0FF",
+            fontSize: 12,
+            fontFamily: MONO,
+          }}
+        >
+          Unscored
+        </button>
+        <Button
+          onClick={() => setBatchOpen(true)}
+          disabled={filteredUnscored.length === 0}
+          className="h-7"
+          style={{
+            background: filteredUnscored.length === 0 ? "#1E1E2E" : "#00D4FF",
+            color: filteredUnscored.length === 0 ? "#8B8B9E" : "#0A0A0F",
+            fontFamily: MONO,
+            fontSize: 12,
+          }}
+        >
+          <Sparkles size={13} /> Score {filteredUnscored.length} with AI
+        </Button>
         <div className="ml-auto" style={{ color: "#8B8B9E", fontFamily: MONO, fontSize: 11 }}>
           {filtered.length === 0
             ? `0 of ${postings.length.toLocaleString()}`
