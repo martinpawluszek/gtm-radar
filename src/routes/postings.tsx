@@ -2625,7 +2625,13 @@ function BatchScoreDialog({
       summary?: string;
       deadline?: string | null;
     };
-    const finalScore = typeof parsed.final_score === "number" ? parsed.final_score : null;
+    const finalScore = computeFinalScore(
+      parsed.parameter_scores,
+      parsed.bonuses_applied as Array<{ value?: number }> | undefined,
+      criteria.weights,
+      typeof parsed.final_score === "number" ? parsed.final_score : null,
+    );
+
     const rationale: AiRationale = {
       parameter_scores: parsed.parameter_scores,
       bonuses_applied: (parsed.bonuses_applied ?? []) as AiRationale["bonuses_applied"],
