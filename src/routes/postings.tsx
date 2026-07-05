@@ -597,8 +597,12 @@ Use company tier/scores to inform Comp, Competition, and brand — but do NOT in
 
 }
 
-function buildUserPrompt(title: string, location: string, jd: string): string {
+function buildUserPrompt(title: string, location: string, jd: string, criteria?: RoleCriteria): string {
+  if (criteria?.use_custom && criteria.user_template && criteria.user_template.trim()) {
+    return applyTemplate(criteria.user_template, { title, location, jd });
+  }
   return `Score this job posting for the candidate.
+
 
 Title: ${title}
 Location: ${location}
