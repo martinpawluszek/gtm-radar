@@ -2350,6 +2350,7 @@ function BatchScoreDialog({
       final_score?: number;
       title_signal?: string;
       summary?: string;
+      deadline?: string | null;
     };
     const finalScore = typeof parsed.final_score === "number" ? parsed.final_score : null;
     const rationale: AiRationale = {
@@ -2358,18 +2359,21 @@ function BatchScoreDialog({
       summary: parsed.summary,
     };
     const disqualified = !!parsed.disqualified;
+    const parsedDeadline = parseDeadline(parsed.deadline);
+    const updatePayload: Record<string, unknown> = {
+      ai_role_score: finalScore,
+      ai_composite_score: finalScore,
+      ai_rationale: rationale,
+      title_signal: parsed.title_signal ?? null,
+      disqualified,
+      disqualifier_reason: parsed.disqualifier_reason ?? null,
+      status: disqualified ? "dismissed" : "new",
+      updated_at: new Date().toISOString(),
+    };
+    if (parsedDeadline && !posting.deadline_at) updatePayload.deadline_at = parsedDeadline;
     const { error } = await gtmSupabase
       .from("job_postings" as never)
-      .update({
-        ai_role_score: finalScore,
-        ai_composite_score: finalScore,
-        ai_rationale: rationale,
-        title_signal: parsed.title_signal ?? null,
-        disqualified,
-        disqualifier_reason: parsed.disqualifier_reason ?? null,
-        status: disqualified ? "dismissed" : "new",
-        updated_at: new Date().toISOString(),
-      } as never)
+      .update(updatePayload as never)
       .eq("id", posting.id);
     if (error) throw error;
   }
