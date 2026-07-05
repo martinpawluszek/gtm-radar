@@ -254,10 +254,71 @@ function formatWeights(weights: Record<string, number> | null | undefined): stri
   return parts.join(", ");
 }
 
+type FeedbackContext = { text: string; ids: string[] };
+
+async function fetchFeedbackContext(): Promise<FeedbackContext> {
+  const { data, error } = await gtmSupabase
+    .from("feedback_log" as never)
+    .select("id,posting_title,ai_score,martin_score,martin_overrides,comment,created_at")
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (error || !data) return { text: "", ids: [] };
+  const rows = data as unknown as Array<{
+    id: string;
+    posting_title: string | null;
+    ai_score: number | null;
+    martin_score: number | null;
+    martin_overrides: Record<string, { score: number; reason: string }> | null;
+    comment: string | null;
+  }>;
+  const overrideLines: string[] = [];
+  const overallLines: string[] = [];
+  const ids: string[] = [];
+  for (const r of rows) {
+    ids.push(r.id);
+    const title = (r.posting_title ?? "untitled").replace(/"/g, "'");
+    if (r.martin_overrides && Object.keys(r.martin_overrides).length > 0) {
+      for (const [param, v] of Object.entries(r.martin_overrides)) {
+        const label = PARAM_LABEL[param as ParamKey] ?? param;
+        const reason = (v.reason ?? "").trim().slice(0, 220);
+        overrideLines.push(
+          `- "${title}": AI scored ${label} differently; user corrected ${label} to ${v.score}.${reason ? ` Reason: ${reason}` : ""}`,
+        );
+      }
+    } else if (r.martin_score != null) {
+      const cmt = (r.comment ?? "").trim().slice(0, 200);
+      const ai = r.ai_score != null ? r.ai_score.toFixed(1) : "—";
+      overallLines.push(
+        `- "${title}": AI scored ${ai}, user rated it ${r.martin_score}/5.${cmt ? ` ${cmt}` : ""}`,
+      );
+    }
+  }
+  const parts: string[] = [];
+  if (overrideLines.length) parts.push("Parameter-level corrections:\n" + overrideLines.join("\n"));
+  if (overallLines.length) parts.push("Overall ratings:\n" + overallLines.join("\n"));
+  let text = parts.join("\n\n");
+  const MAX = 3500;
+  if (text.length > MAX) text = text.slice(0, MAX) + "\n…(truncated)";
+  return { text, ids };
+}
+
+async function markFeedbackUsed(ids: string[]) {
+  if (ids.length === 0) return;
+  try {
+    await gtmSupabase
+      .from("feedback_log" as never)
+      .update({ used_in_prompt: true } as never)
+      .in("id", ids);
+  } catch {
+    // best effort
+  }
+}
+
 function buildSystemPrompt(
   criteria: RoleCriteria,
   company: CompanyLite | null,
   backgroundSummary?: string | null,
+  feedbackContext?: string,
 ): string {
   const rubricText = PARAM_KEYS.map((k) => {
     const r = criteria.rubric?.[k === "fit" ? "role_fit" : k] ?? criteria.rubric?.[k] ?? {};
