@@ -1,11 +1,71 @@
 import { Pencil, ExternalLink, Briefcase } from "lucide-react";
-import { Company, SCORE_DIMS, TIER_META, totalScore } from "@/lib/companies";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
+import { gtmSupabase } from "@/lib/gtmSupabase";
+import { Company, SCORE_DIMS, TIER_META, totalScore, sourceBadge } from "@/lib/companies";
+
+function SourceBadgeChip({ ats }: { ats: Company["ats_type"] }) {
+  const b = sourceBadge(ats);
+  const styles =
+    b.variant === "warning"
+      ? { color: "#F59E0B", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)" }
+      : b.variant === "connected"
+      ? { color: "#00D4FF", background: "rgba(0,212,255,0.10)", border: "1px solid rgba(0,212,255,0.30)" }
+      : { color: "#8B8B9E", background: "#1E1E2E", border: "1px solid #1E1E2E" };
+  return (
+    <span
+      className="whitespace-nowrap"
+      title={ats ?? "not configured"}
+      style={{
+        ...styles,
+        fontSize: 10,
+        padding: "2px 6px",
+        borderRadius: 3,
+        fontFamily: "var(--font-mono)",
+      }}
+    >
+      {b.label}
+    </span>
+  );
+}
 
 export function CompanyRow({ company, onEdit }: { company: Company; onEdit: (c: Company) => void }) {
   const tier = TIER_META[company.tier];
   const total = totalScore(company);
   const visibleTags = company.tags.slice(0, 3);
   const overflow = company.tags.length - visibleTags.length;
+  const isActive = company.is_active !== false;
+
+  const qc = useQueryClient();
+  const toggleActive = useMutation({
+    mutationFn: async (next: boolean) => {
+      const { error } = await gtmSupabase
+        .from("companies")
+        .update({ is_active: next } as never)
+        .eq("id", company.id);
+      if (error) throw error;
+    },
+    onMutate: async (next) => {
+      await qc.cancelQueries({ queryKey: ["companies"] });
+      const prev = qc.getQueryData<{ data: Company[] } & Record<string, unknown>>(["companies"]);
+      if (prev?.data) {
+        qc.setQueryData(["companies"], {
+          ...prev,
+          data: prev.data.map((c) => (c.id === company.id ? { ...c, is_active: next } : c)),
+        });
+      }
+      return { prev };
+    },
+    onError: (e: Error, _next, ctx) => {
+      if (ctx?.prev) qc.setQueryData(["companies"], ctx.prev);
+      toast.error(`Could not update: ${e.message}`);
+    },
+    onSuccess: (_d, next) => {
+      toast.success(next ? "Resumed" : "Paused");
+      qc.invalidateQueries({ queryKey: ["companies"] });
+    },
+  });
 
   return (
     <div
@@ -15,14 +75,41 @@ export function CompanyRow({ company, onEdit }: { company: Company; onEdit: (c: 
         paddingLeft: 16,
         paddingRight: 16,
         borderBottom: "1px solid #1E1E2E",
+        opacity: isActive ? 1 : 0.5,
       }}
     >
+      {/* Active toggle */}
+      <div style={{ width: 36 }} className="flex justify-center">
+        <Switch
+          checked={isActive}
+          onCheckedChange={(v) => toggleActive.mutate(v)}
+          aria-label={isActive ? "Pause company" : "Resume company"}
+          title={isActive ? "Active — pause getting postings" : "Paused — resume getting postings"}
+        />
+      </div>
+
       {/* Name */}
       <div
-        className="font-bold truncate"
+        className="font-bold truncate flex items-center gap-2"
         style={{ width: 200, color: "#F0F0FF", fontSize: 14 }}
       >
-        {company.name}
+        <span className="truncate">{company.name}</span>
+        {!isActive && (
+          <span
+            style={{
+              fontSize: 9,
+              color: "#F59E0B",
+              background: "rgba(245,158,11,0.10)",
+              border: "1px solid rgba(245,158,11,0.30)",
+              padding: "1px 5px",
+              borderRadius: 3,
+              fontFamily: "var(--font-mono)",
+              letterSpacing: "0.08em",
+            }}
+          >
+            PAUSED
+          </span>
+        )}
       </div>
 
       {/* Tier badge */}
@@ -42,6 +129,11 @@ export function CompanyRow({ company, onEdit }: { company: Company; onEdit: (c: 
         >
           {tier.short}
         </span>
+      </div>
+
+      {/* Source badge */}
+      <div className="flex-shrink-0">
+        <SourceBadgeChip ats={company.ats_type} />
       </div>
 
       {/* Score bars */}
