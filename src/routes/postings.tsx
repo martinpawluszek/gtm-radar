@@ -344,6 +344,15 @@ Respond in this exact JSON format with no other text:
 For "deadline": if the job description explicitly states an application deadline or closing date, return it as an ISO date string (YYYY-MM-DD); otherwise null. Do not guess.`;
 }
 
+function parseDeadline(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const s = v.trim();
+  if (!s) return null;
+  const d = new Date(s.length === 10 ? `${s}T23:59:59Z` : s);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
 function extractJson(text: string): unknown {
   const trimmed = text.trim().replace(/^```json\s*/i, "").replace(/```$/g, "").trim();
   try {
