@@ -53,6 +53,7 @@ type UserProfile = {
   skills: string | null;
   weekly_posting_cap: number | null;
   agent_enabled: boolean | null;
+  default_posting_lifespan_days: number | null;
 };
 
 async function loadProfile(): Promise<UserProfile | null> {
