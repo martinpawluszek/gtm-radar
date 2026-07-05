@@ -116,6 +116,7 @@ function SettingsPage() {
           skills: form.skills,
           weekly_posting_cap: form.weekly_posting_cap,
           agent_enabled: form.agent_enabled ?? false,
+          default_posting_lifespan_days: form.default_posting_lifespan_days,
           updated_at: new Date().toISOString(),
         } as never)
         .eq("id", form.id);
