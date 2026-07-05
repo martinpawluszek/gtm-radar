@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn as useSF } from "@tanstack/react-start";
-import { ChevronDown, ChevronLeft, ChevronRight, Plus, X, ExternalLink } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Plus, X, ExternalLink, Sparkles, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { gtmSupabase } from "@/lib/gtmSupabase";
 import { Button } from "@/components/ui/button";
@@ -354,6 +354,8 @@ function PostingsPage() {
   const [tierOpen, setTierOpen] = useState(false);
   const [companyFilter, setCompanyFilter] = useState<CompanyFilter>("all");
   const [companyOpen, setCompanyOpen] = useState(false);
+  const [unscoredOnly, setUnscoredOnly] = useState(false);
+  const [batchOpen, setBatchOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
@@ -365,7 +367,7 @@ function PostingsPage() {
   // Reset to page 1 when filters or tabs change
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, tierFilter, companyFilter]);
+  }, [statusFilter, tierFilter, companyFilter, unscoredOnly]);
 
   // Reset to page 1 when page size changes
   const handlePageSizeChange = (size: number) => {
@@ -387,6 +389,9 @@ function PostingsPage() {
 
   const filtered = useMemo(() => {
     return postings.filter((p) => {
+      if (unscoredOnly) {
+        if (p.status !== "new" || p.ai_composite_score != null) return false;
+      }
       if (statusFilter !== "all" && p.status !== statusFilter) return false;
       if (tierFilter !== "all") {
         const c = p.company_id ? companyMap.get(p.company_id) : null;
@@ -395,7 +400,12 @@ function PostingsPage() {
       if (companyFilter !== "all" && p.company_id !== companyFilter) return false;
       return true;
     });
-  }, [postings, statusFilter, tierFilter, companyMap, companyFilter]);
+  }, [postings, statusFilter, tierFilter, companyMap, companyFilter, unscoredOnly]);
+
+  const filteredUnscored = useMemo(
+    () => filtered.filter((p) => p.status === "new" && p.ai_composite_score == null),
+    [filtered],
+  );
 
   // Pagination calculations
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -593,6 +603,35 @@ function PostingsPage() {
             </div>
           )}
         </div>
+        <div style={{ width: 1, height: 20, background: "#1E1E2E" }} />
+        <button
+          onClick={() => setUnscoredOnly((v) => !v)}
+          className="flex items-center gap-1.5 px-2.5"
+          style={{
+            height: 28,
+            background: unscoredOnly ? "rgba(245,158,11,0.12)" : "#0A0A0F",
+            border: `1px solid ${unscoredOnly ? "rgba(245,158,11,0.4)" : "#1E1E2E"}`,
+            borderRadius: 4,
+            color: unscoredOnly ? "#F59E0B" : "#F0F0FF",
+            fontSize: 12,
+            fontFamily: MONO,
+          }}
+        >
+          Unscored
+        </button>
+        <Button
+          onClick={() => setBatchOpen(true)}
+          disabled={filteredUnscored.length === 0}
+          className="h-7"
+          style={{
+            background: filteredUnscored.length === 0 ? "#1E1E2E" : "#00D4FF",
+            color: filteredUnscored.length === 0 ? "#8B8B9E" : "#0A0A0F",
+            fontFamily: MONO,
+            fontSize: 12,
+          }}
+        >
+          <Sparkles size={13} /> Score {filteredUnscored.length} with AI
+        </Button>
         <div className="ml-auto" style={{ color: "#8B8B9E", fontFamily: MONO, fontSize: 11 }}>
           {filtered.length === 0
             ? `0 of ${postings.length.toLocaleString()}`
@@ -672,6 +711,15 @@ function PostingsPage() {
           qc.invalidateQueries({ queryKey: ["postings"] });
           qc.invalidateQueries({ queryKey: ["job-posting-locations"] });
         }}
+      />
+
+      {/* Batch score dialog */}
+      <BatchScoreDialog
+        open={batchOpen}
+        onOpenChange={setBatchOpen}
+        targets={filteredUnscored}
+        companyMap={companyMap}
+        onDone={() => qc.invalidateQueries({ queryKey: ["postings"] })}
       />
     </div>
   );
@@ -2096,5 +2144,309 @@ function Spinner() {
         animation: "spin 0.7s linear infinite",
       }}
     />
+  );
+}
+
+// ---------- Batch Score Dialog ----------
+function BatchScoreDialog({
+  open,
+  onOpenChange,
+  targets,
+  companyMap,
+  onDone,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  targets: Posting[];
+  companyMap: Map<string, CompanyLite>;
+  onDone: () => void;
+}) {
+  const score = useSF(scoreJobPosting);
+  const [phase, setPhase] = useState<"confirm" | "running" | "done">("confirm");
+  const [progress, setProgress] = useState(0);
+  const [failed, setFailed] = useState(0);
+  const [succeeded, setSucceeded] = useState(0);
+  const [weeklyCap, setWeeklyCap] = useState<number | null>(null);
+  const [scoredThisWeek, setScoredThisWeek] = useState<number>(0);
+  const [loadingMeta, setLoadingMeta] = useState(false);
+
+  const total = targets.length;
+  const roughCost = (total * 0.01).toFixed(2);
+  const missingJd = useMemo(
+    () => targets.filter((t) => !t.jd_full || t.jd_full.trim().length === 0).length,
+    [targets],
+  );
+
+  useEffect(() => {
+    if (!open) {
+      setPhase("confirm");
+      setProgress(0);
+      setFailed(0);
+      setSucceeded(0);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setLoadingMeta(true);
+      try {
+        const { data: profile } = await gtmSupabase
+          .from("user_profiles" as never)
+          .select("weekly_posting_cap")
+          .order("created_at")
+          .limit(1)
+          .maybeSingle();
+        const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const { count } = await gtmSupabase
+          .from("job_postings" as never)
+          .select("id", { count: "exact", head: true })
+          .not("ai_composite_score", "is", null)
+          .gte("updated_at", since);
+        if (cancelled) return;
+        setWeeklyCap(
+          (profile as { weekly_posting_cap?: number | null } | null)?.weekly_posting_cap ?? null,
+        );
+        setScoredThisWeek(count ?? 0);
+      } catch {
+        // ignore — just skip cap awareness
+      } finally {
+        if (!cancelled) setLoadingMeta(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const overCap =
+    weeklyCap != null && weeklyCap > 0 && scoredThisWeek + total > weeklyCap;
+
+  async function runOne(
+    posting: Posting,
+    criteria: RoleCriteria,
+    backgroundSummary: string | null,
+  ) {
+    const company = posting.company_id ? companyMap.get(posting.company_id) ?? null : null;
+    const system = buildSystemPrompt(criteria, company, backgroundSummary);
+    const user = buildUserPrompt(posting.title, posting.location ?? "", posting.jd_full ?? "");
+    const res = await score({ data: { system, user } });
+    const parsed = extractJson(res.text) as {
+      disqualified?: boolean;
+      disqualifier_reason?: string | null;
+      parameter_scores?: Record<string, ParameterScore>;
+      bonuses_applied?: unknown[];
+      final_score?: number;
+      title_signal?: string;
+      summary?: string;
+    };
+    const finalScore = typeof parsed.final_score === "number" ? parsed.final_score : null;
+    const rationale: AiRationale = {
+      parameter_scores: parsed.parameter_scores,
+      bonuses_applied: (parsed.bonuses_applied ?? []) as AiRationale["bonuses_applied"],
+      summary: parsed.summary,
+    };
+    const disqualified = !!parsed.disqualified;
+    const { error } = await gtmSupabase
+      .from("job_postings" as never)
+      .update({
+        ai_role_score: finalScore,
+        ai_composite_score: finalScore,
+        ai_rationale: rationale,
+        title_signal: parsed.title_signal ?? null,
+        disqualified,
+        disqualifier_reason: parsed.disqualifier_reason ?? null,
+        status: disqualified ? "dismissed" : "new",
+        updated_at: new Date().toISOString(),
+      } as never)
+      .eq("id", posting.id);
+    if (error) throw error;
+  }
+
+  async function run() {
+    setPhase("running");
+    setProgress(0);
+    setSucceeded(0);
+    setFailed(0);
+
+    let criteria: RoleCriteria | null = null;
+    let backgroundSummary: string | null = null;
+    try {
+      criteria = await fetchActiveCriteria();
+      if (!criteria) throw new Error("No active role_criteria row found");
+      const { data: profile } = await gtmSupabase
+        .from("user_profiles" as never)
+        .select("background_summary")
+        .order("created_at")
+        .limit(1)
+        .maybeSingle();
+      backgroundSummary =
+        (profile as { background_summary?: string | null } | null)?.background_summary ?? null;
+    } catch (e) {
+      toast.error(`Setup failed: ${(e as Error).message}`);
+      setPhase("confirm");
+      return;
+    }
+
+    let ok = 0;
+    let bad = 0;
+    for (let i = 0; i < targets.length; i++) {
+      const p = targets[i];
+      setProgress(i + 1);
+      try {
+        await runOne(p, criteria, backgroundSummary);
+        ok++;
+        setSucceeded(ok);
+      } catch {
+        try {
+          await runOne(p, criteria, backgroundSummary);
+          ok++;
+          setSucceeded(ok);
+        } catch {
+          bad++;
+          setFailed(bad);
+        }
+      }
+    }
+
+    if (bad === 0) toast.success(`Scored ${ok} posting${ok === 1 ? "" : "s"}`);
+    else toast.message(`Scored ${ok}, ${bad} failed`);
+    onDone();
+    setPhase("done");
+  }
+
+  const pct = total === 0 ? 0 : Math.round((progress / total) * 100);
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (phase === "running") return;
+        onOpenChange(v);
+      }}
+    >
+      <DialogContent
+        style={{
+          background: "#111118",
+          border: "1px solid #1E1E2E",
+          color: "#F0F0FF",
+          maxWidth: 480,
+        }}
+      >
+        <DialogHeader>
+          <DialogTitle style={{ fontFamily: MONO, color: "#F0F0FF" }}>
+            {phase === "confirm"
+              ? "Score postings with AI"
+              : phase === "running"
+                ? "Scoring…"
+                : "Batch complete"}
+          </DialogTitle>
+        </DialogHeader>
+
+        {phase === "confirm" && (
+          <div className="flex flex-col gap-3" style={{ fontSize: 13 }}>
+            <div>
+              About to score <b>{total}</b> posting{total === 1 ? "" : "s"} with Claude.
+            </div>
+            <div style={{ color: "#8B8B9E", fontSize: 12 }}>
+              Uses Claude API credits — rough estimate: <b>~${roughCost}</b> ($0.01 per posting).
+            </div>
+            {missingJd > 0 && (
+              <div style={{ color: "#8B8B9E", fontSize: 12 }}>
+                {missingJd} of these have no job description and may score less precisely.
+              </div>
+            )}
+            {loadingMeta ? (
+              <div style={{ color: "#8B8B9E", fontSize: 12 }}>Checking weekly cap…</div>
+            ) : weeklyCap != null && weeklyCap > 0 ? (
+              <div
+                className="flex items-start gap-2 px-3 py-2"
+                style={{
+                  background: overCap ? "rgba(245,158,11,0.08)" : "rgba(255,255,255,0.03)",
+                  border: `1px solid ${overCap ? "rgba(245,158,11,0.4)" : "#1E1E2E"}`,
+                  borderRadius: 4,
+                  color: overCap ? "#F59E0B" : "#8B8B9E",
+                  fontSize: 12,
+                }}
+              >
+                {overCap && <AlertTriangle size={14} style={{ marginTop: 1 }} />}
+                <div>
+                  Scored in last 7 days: <b>{scoredThisWeek}</b> / cap <b>{weeklyCap}</b>.{" "}
+                  {overCap
+                    ? `Running this batch (${total}) would exceed your weekly cap. You can proceed — it's a soft ceiling.`
+                    : `After this batch: ${scoredThisWeek + total} / ${weeklyCap}.`}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="flex justify-end gap-2 mt-2">
+              <Button
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                style={{ background: "#0A0A0F", border: "1px solid #1E1E2E", color: "#F0F0FF" }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={run}
+                disabled={total === 0}
+                style={{ background: "#00D4FF", color: "#0A0A0F" }}
+              >
+                <Sparkles size={13} /> Score {total} with AI
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {phase === "running" && (
+          <div className="flex flex-col gap-3" style={{ fontSize: 13 }}>
+            <div style={{ fontFamily: MONO }}>
+              Scoring {Math.min(progress, total)} of {total}…
+            </div>
+            <div
+              style={{
+                height: 6,
+                background: "#1E1E2E",
+                borderRadius: 3,
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  height: "100%",
+                  width: `${pct}%`,
+                  background: "#00D4FF",
+                  transition: "width 200ms linear",
+                }}
+              />
+            </div>
+            <div style={{ color: "#8B8B9E", fontSize: 12, fontFamily: MONO }}>
+              {succeeded} ok · {failed} failed
+            </div>
+          </div>
+        )}
+
+        {phase === "done" && (
+          <div className="flex flex-col gap-3" style={{ fontSize: 13 }}>
+            <div>
+              Scored <b style={{ color: "#10B981" }}>{succeeded}</b>
+              {failed > 0 && (
+                <>
+                  {" "}
+                  · <b style={{ color: "#EF4444" }}>{failed}</b> failed
+                </>
+              )}
+              .
+            </div>
+            <div className="flex justify-end">
+              <Button
+                onClick={() => onOpenChange(false)}
+                style={{ background: "#00D4FF", color: "#0A0A0F" }}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
