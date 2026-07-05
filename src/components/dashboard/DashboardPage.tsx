@@ -247,7 +247,6 @@ export function DashboardPage() {
   const queries = useQueries({
     queries: [
       { queryKey: ["dash:applications"], queryFn: () => safeSelect<ApplicationRow>("applications", (b) => b) },
-      { queryKey: ["dash:postings"], queryFn: () => safeSelect<PostingRow>("job_postings", (b) => b) },
       { queryKey: ["dash:companies"], queryFn: () => safeSelect<CompanyRow>("companies", (b) => b.select("id,name,tier")) },
       { queryKey: ["dash:targets"], queryFn: () => safeSelect<TargetRow>("outreach_targets", (b) => b) },
       { queryKey: ["dash:activity"], queryFn: () => safeSelect<ActivityRow>("outreach_activity", (b) => b) },
@@ -256,14 +255,78 @@ export function DashboardPage() {
     ],
   });
 
-  const [appsQ, postingsQ, companiesQ, targetsQ, activityQ, historyQ, feedbackQ] = queries;
+  const [appsQ, companiesQ, targetsQ, activityQ, historyQ, feedbackQ] = queries;
   const apps = (appsQ.data ?? []) as ApplicationRow[];
-  const postings = (postingsQ.data ?? []) as PostingRow[];
   const companies = (companiesQ.data ?? []) as CompanyRow[];
   const targets = (targetsQ.data ?? []) as TargetRow[];
   const activity = (activityQ.data ?? []) as ActivityRow[];
   const history = (historyQ.data ?? []) as HistoryRow[];
   const feedback = (feedbackQ.data ?? []) as FeedbackRow[];
+
+  // ---------- targeted job_postings queries (server-side; avoids 1k row cap) ----------
+  const postingsWeekQ = useQuery({
+    queryKey: ["dash:postings-week"],
+    queryFn: async () => {
+      const nowMs = Date.now();
+      const d7 = new Date(nowMs - 7 * 86400000).toISOString();
+      const d14 = new Date(nowMs - 14 * 86400000).toISOString();
+      const curr = await gtmSupabase
+        .from("job_postings" as never)
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", d7);
+      const prev = await gtmSupabase
+        .from("job_postings" as never)
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", d14)
+        .lt("created_at", d7);
+      return { curr: curr.count ?? 0, prev: prev.count ?? 0 };
+    },
+  });
+
+  const topPostingsQ = useQuery({
+    queryKey: ["dash:postings-top"],
+    queryFn: async () => {
+      const { data, error } = await gtmSupabase
+        .from("job_postings" as never)
+        .select("id,company_id,title,status,ai_composite_score,created_at,source,scraped_at")
+        .eq("status", "new")
+        .not("ai_composite_score", "is", null)
+        .order("ai_composite_score", { ascending: false, nullsFirst: false })
+        .limit(10);
+      if (error) {
+        console.warn("[dashboard] top postings:", error.message);
+        return [] as PostingRow[];
+      }
+      return (data ?? []) as unknown as PostingRow[];
+    },
+  });
+
+  const scorerRunQ = useQuery({
+    queryKey: ["dash:postings-scorer"],
+    queryFn: async () => {
+      const { data, error } = await gtmSupabase
+        .from("job_postings" as never)
+        .select("scraped_at")
+        .neq("source", "manual")
+        .not("scraped_at", "is", null)
+        .order("scraped_at", { ascending: false })
+        .limit(1);
+      const rows = (data ?? []) as unknown as Array<{ scraped_at: string | null }>;
+      if (error || !rows.length) return { lastRun: null as string | null, thisRunCount: 0 };
+      const lastRun = rows[0]?.scraped_at ?? null;
+      if (!lastRun) return { lastRun: null, thisRunCount: 0 };
+      const dayStart = new Date(lastRun.slice(0, 10) + "T00:00:00.000Z").toISOString();
+      const c = await gtmSupabase
+        .from("job_postings" as never)
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", dayStart);
+      return { lastRun, thisRunCount: c.count ?? 0 };
+    },
+  });
+
+  const topPostings = (topPostingsQ.data ?? []) as PostingRow[];
+  const weekPostings = postingsWeekQ.data ?? { curr: 0, prev: 0 };
+  const scorerRun = scorerRunQ.data ?? { lastRun: null as string | null, thisRunCount: 0 };
 
   const companyMap = useMemo(() => {
     const m = new Map<string, CompanyRow>();
@@ -286,9 +349,8 @@ export function DashboardPage() {
     const d = daysSince(a.applied_at);
     return d >= 14 && d <= 20;
   });
-  const highScoreUnactioned = postings
-    .filter((p) => p.status === "new" && (p.ai_composite_score ?? 0) >= 16)
-    .sort((a, b) => (b.ai_composite_score ?? 0) - (a.ai_composite_score ?? 0))
+  const highScoreUnactioned = topPostings
+    .filter((p) => (p.ai_composite_score ?? 0) >= 16)
     .slice(0, 5);
   const newSuggested = targets.filter((t) => t.status === "suggested");
   const warmGoingCold = targets.filter((t) => {
@@ -301,16 +363,8 @@ export function DashboardPage() {
     aboutToGhost.length || highScoreUnactioned.length || newSuggested.length || warmGoingCold.length;
 
   // ---------- Section 2: Agent Activity ----------
-  const agentPostings = postings.filter((p) => p.source && p.source !== "manual");
-  const lastPostingRun = agentPostings.reduce<string | null>((acc, p) => {
-    const t = p.scraped_at;
-    if (!t) return acc;
-    return !acc || new Date(t) > new Date(acc) ? t : acc;
-  }, null);
-  const lastPostingRunDay = lastPostingRun ? lastPostingRun.slice(0, 10) : null;
-  const postingsThisRun = lastPostingRunDay
-    ? agentPostings.filter((p) => (p.scraped_at ?? "").slice(0, 10) === lastPostingRunDay).length
-    : 0;
+  const lastPostingRun = scorerRun.lastRun;
+  const postingsThisRun = scorerRun.thisRunCount;
 
   const agentTargets = targets.filter((t) => t.source === "agent_talent_scout");
   const lastScoutRun = agentTargets.reduce<string | null>((acc, t) => {
@@ -385,8 +439,8 @@ export function DashboardPage() {
   const inPrev7Win = (iso: string | null) => inPrev7(iso);
 
   const wk = {
-    postingsCurr: postings.filter((p) => inLast7(p.created_at)).length,
-    postingsPrev: postings.filter((p) => inPrev7(p.created_at)).length,
+    postingsCurr: weekPostings.curr,
+    postingsPrev: weekPostings.prev,
     appsCurr: apps.filter((a) => inLast7(a.applied_at)).length,
     appsPrev: apps.filter((a) => inPrev7(a.applied_at)).length,
     outreachCurr: activity.filter((a) => inLast7(a.occurred_at)).length,
@@ -482,10 +536,7 @@ export function DashboardPage() {
   }, [feedback]);
 
   // ---------- Section 6b: Top opportunities ----------
-  const topOpps = postings
-    .filter((p) => p.status === "new")
-    .sort((a, b) => (b.ai_composite_score ?? 0) - (a.ai_composite_score ?? 0))
-    .slice(0, 5);
+  const topOpps = topPostings.slice(0, 5);
 
   // ---------- mutations for top opps ----------
   const applyMut = useMutation({
@@ -510,7 +561,9 @@ export function DashboardPage() {
     },
     onSuccess: () => {
       toast.success("Moved to Applications");
-      qc.invalidateQueries({ queryKey: ["dash:postings"] });
+      qc.invalidateQueries({ queryKey: ["dash:postings-top"] });
+      qc.invalidateQueries({ queryKey: ["dash:postings-week"] });
+      qc.invalidateQueries({ queryKey: ["dash:postings-scorer"] });
       qc.invalidateQueries({ queryKey: ["dash:applications"] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -527,7 +580,7 @@ export function DashboardPage() {
     },
     onSuccess: () => {
       toast.success("Dismissed");
-      qc.invalidateQueries({ queryKey: ["dash:postings"] });
+      qc.invalidateQueries({ queryKey: ["dash:postings-top"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
