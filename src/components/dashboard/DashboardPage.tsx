@@ -438,8 +438,8 @@ export function DashboardPage() {
   const inPrev7Win = (iso: string | null) => inPrev7(iso);
 
   const wk = {
-    postingsCurr: postings.filter((p) => inLast7(p.created_at)).length,
-    postingsPrev: postings.filter((p) => inPrev7(p.created_at)).length,
+    postingsCurr: weekPostings.curr,
+    postingsPrev: weekPostings.prev,
     appsCurr: apps.filter((a) => inLast7(a.applied_at)).length,
     appsPrev: apps.filter((a) => inPrev7(a.applied_at)).length,
     outreachCurr: activity.filter((a) => inLast7(a.occurred_at)).length,
