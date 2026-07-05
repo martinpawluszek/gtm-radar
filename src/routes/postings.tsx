@@ -535,7 +535,7 @@ function PostingsPage() {
         }}
       >
         <div className="flex items-center gap-1">
-          {(["all", "new", "saved", "dismissed", "applied"] as const).map((s) => (
+          {(["all", "new", "saved", "dismissed", "applied", "expired"] as const).map((s) => (
             <FilterPill
               key={s}
               active={statusFilter === s}
