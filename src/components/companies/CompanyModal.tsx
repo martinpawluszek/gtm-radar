@@ -197,40 +197,59 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
                 onCheckedChange={(v) => set("is_active", v)}
               />
             </div>
-            <div>
-              <Label className="text-[13px]">Source</Label>
-              {(() => {
-                const c = initial as Company | null | undefined;
-                const ats = c?.ats_type ?? null;
-                const slug = c?.ats_slug ?? null;
-                const b = sourceBadge(ats);
-                if (!ats && !slug) {
-                  return (
-                    <p className="text-[12px] mt-1" style={{ color: "#8B8B9E", fontFamily: "var(--font-mono)" }}>
-                      Not configured yet
-                    </p>
-                  );
-                }
-                const chipStyle =
-                  b.variant === "warning"
-                    ? { color: "#F59E0B", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)" }
-                    : b.variant === "connected"
-                    ? { color: "#00D4FF", background: "rgba(0,212,255,0.10)", border: "1px solid rgba(0,212,255,0.30)" }
-                    : { color: "#8B8B9E", background: "#1E1E2E", border: "1px solid #1E1E2E" };
-                return (
-                  <div className="flex items-center gap-2 mt-1" style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>
-                    <span style={{ ...chipStyle, padding: "2px 6px", borderRadius: 3, fontSize: 10 }}>
-                      {b.label}
-                    </span>
-                    <span style={{ color: "#8B8B9E" }}>
-                      type: <span style={{ color: "#F0F0FF" }}>{ats ?? "—"}</span>
-                    </span>
-                    <span style={{ color: "#8B8B9E" }}>
-                      slug: <span style={{ color: "#F0F0FF" }}>{slug ?? "—"}</span>
-                    </span>
-                  </div>
-                );
-              })()}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-[13px]">Source</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDetect}
+                  disabled={detecting || !form.name?.trim()}
+                >
+                  {detecting ? "Detecting…" : "Detect Source"}
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-[11px]" style={{ color: "#8B8B9E" }}>ats_type</Label>
+                  <Select
+                    value={(form.ats_type ?? "") as string}
+                    onValueChange={(v) => set("ats_type", v as AtsType)}
+                  >
+                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                    <SelectContent>
+                      {ATS_OPTIONS.map((o) => (
+                        <SelectItem key={o} value={o}>{o}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-[11px]" style={{ color: "#8B8B9E" }}>ats_slug</Label>
+                  <Input
+                    value={form.ats_slug ?? ""}
+                    onChange={(e) => set("ats_slug", e.target.value || null)}
+                    placeholder="—"
+                  />
+                </div>
+              </div>
+              {detectResult && (
+                <p
+                  className="text-[12px]"
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    color:
+                      detectResult.confidence === "high"
+                        ? "#00D4FF"
+                        : detectResult.confidence === "medium"
+                        ? "#F59E0B"
+                        : "#8B8B9E",
+                  }}
+                >
+                  {detectResult.note}
+                </p>
+              )}
             </div>
           </div>
 
