@@ -498,31 +498,39 @@ Use company tier/scores to inform Comp, Competition, and brand — but do NOT in
 }
 
 function buildUserPrompt(title: string, location: string, jd: string): string {
-  return `Score this posting:
+  return `Score this job posting for the candidate.
+
 Title: ${title}
 Location: ${location}
-Job Description: ${jd}
+Job Description:
+${jd}
 
-Respond in this exact JSON format with no other text:
+Work through the 5 steps internally, then respond with ONLY this JSON (no prose before or after, no markdown fences):
 {
   "disqualified": false,
   "disqualifier_reason": null,
   "parameter_scores": {
-    "comp": {"score": 4, "rationale": "one sentence"},
-    "fit": {"score": 4, "rationale": "one sentence"},
-    "seniority": {"score": 4, "rationale": "one sentence"},
-    "location": {"score": 4, "rationale": "one sentence"},
-    "competition": {"score": 4, "rationale": "one sentence"}
+    "comp": {"score": 4, "rationale": "<=15 words citing JD evidence"},
+    "fit": {"score": 4, "rationale": "<=15 words"},
+    "seniority": {"score": 4, "rationale": "<=15 words"},
+    "location": {"score": 4, "rationale": "<=15 words"},
+    "competition": {"score": 4, "rationale": "<=15 words"}
   },
-  "bonuses_applied": [],
+  "bonuses_applied": [{"name": "exact bonus name", "value": 0.5}],
   "final_score": 18.5,
   "title_signal": "matching",
-  "summary": "one sentence verdict",
+  "summary": "one-sentence verdict: the single most important reason to apply or skip",
   "deadline": null
 }
 
-For "deadline": if the job description explicitly states an application deadline or closing date, return it as an ISO date string (YYYY-MM-DD); otherwise null. Do not guess.`;
+Rules:
+- parameter_scores keys must be exactly comp, fit, seniority, location, competition; each score an integer 1-5.
+- If disqualified is true, still fill parameter_scores with your best estimate and compute final_score normally, but summary must state the disqualifier.
+- bonuses_applied lists only bonuses you actually applied, each with its exact name and numeric value from the bonus list; use [] if none.
+- final_score must equal the Step 5 computation, rounded to one decimal.
+- For "deadline": only if the JD explicitly states an application deadline/closing date, return ISO YYYY-MM-DD; otherwise null. Do not guess.`;
 }
+
 
 function parseDeadline(v: unknown): string | null {
   if (typeof v !== "string") return null;
