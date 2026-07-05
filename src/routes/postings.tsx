@@ -531,6 +531,30 @@ Rules:
 - For "deadline": only if the JD explicitly states an application deadline/closing date, return ISO YYYY-MM-DD; otherwise null. Do not guess.`;
 }
 
+function computeFinalScore(
+  parameterScores: Record<string, { score?: number }> | undefined,
+  bonusesApplied: Array<{ value?: number }> | undefined,
+  weights: Record<string, number> | null | undefined,
+  fallback: number | null,
+): number | null {
+  const keys = ["comp", "fit", "seniority", "location", "competition"] as const;
+  const w: Record<string, number> = {
+    comp: 0.25, fit: 0.3, seniority: 0.2, location: 0.15, competition: 0.1,
+    ...(weights ?? {}),
+  };
+  let sum = 0;
+  for (const k of keys) {
+    const s = parameterScores?.[k]?.score;
+    if (typeof s !== "number") return fallback;
+    sum += s * (typeof w[k] === "number" ? w[k] : 0);
+  }
+  let score = sum * 5;
+  for (const b of bonusesApplied ?? []) {
+    if (typeof b?.value === "number") score += b.value;
+  }
+  return Math.round(score * 10) / 10;
+}
+
 
 function parseDeadline(v: unknown): string | null {
   if (typeof v !== "string") return null;
