@@ -400,11 +400,17 @@ function CompaniesPage() {
             if (list.length === 0) return null;
             const meta = TIER_META[t];
             const isCollapsed = !!collapsed[t];
+            const tierState = tierActiveState[t];
+            const allOn = tierState.total > 0 && tierState.on === tierState.total;
+            const mixed = tierState.on > 0 && tierState.on < tierState.total;
             return (
               <section key={t}>
-                <button
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setCollapsed((p) => ({ ...p, [t]: !p[t] }))}
-                  className="w-full flex items-center justify-between"
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setCollapsed((p) => ({ ...p, [t]: !p[t] })); }}
+                  className="w-full flex items-center justify-between cursor-pointer select-none"
                   style={{
                     height: 36,
                     paddingLeft: 16,
@@ -414,6 +420,34 @@ function CompaniesPage() {
                   }}
                 >
                   <div className="flex items-center gap-2">
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      className="flex items-center gap-1.5"
+                    >
+                      <Switch
+                        checked={allOn}
+                        onCheckedChange={(v) => bulkTierActive.mutate({ tier: t, next: v })}
+                        disabled={tierState.total === 0}
+                        aria-label={`Toggle all ${meta.label}`}
+                      />
+                      {mixed && (
+                        <span
+                          style={{
+                            color: "#F59E0B",
+                            fontFamily: "var(--font-mono)",
+                            fontSize: 9,
+                            letterSpacing: "0.08em",
+                            padding: "1px 4px",
+                            border: "1px solid rgba(245,158,11,0.30)",
+                            background: "rgba(245,158,11,0.10)",
+                            borderRadius: 3,
+                          }}
+                        >
+                          MIXED
+                        </span>
+                      )}
+                    </div>
                     <span
                       className="font-bold uppercase"
                       style={{
@@ -428,6 +462,9 @@ function CompaniesPage() {
                     <span style={{ color: "#8B8B9E", fontFamily: "var(--font-mono)", fontSize: 11 }}>
                       {list.length}
                     </span>
+                    <span style={{ color: "#8B8B9E", fontFamily: "var(--font-mono)", fontSize: 10 }}>
+                      · {tierState.on}/{tierState.total} on
+                    </span>
                   </div>
                   <ChevronDown
                     size={14}
@@ -437,7 +474,7 @@ function CompaniesPage() {
                       transition: "transform 150ms",
                     }}
                   />
-                </button>
+                </div>
                 {!isCollapsed && (
                   <div>
                     {list.map((c) => <CompanyRow key={c.id} company={c} onEdit={openEdit} />)}
