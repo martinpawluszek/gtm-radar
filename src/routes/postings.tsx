@@ -712,6 +712,15 @@ function PostingsPage() {
           qc.invalidateQueries({ queryKey: ["job-posting-locations"] });
         }}
       />
+
+      {/* Batch score dialog */}
+      <BatchScoreDialog
+        open={batchOpen}
+        onOpenChange={setBatchOpen}
+        targets={filteredUnscored}
+        companyMap={companyMap}
+        onDone={() => qc.invalidateQueries({ queryKey: ["postings"] })}
+      />
     </div>
   );
 }
