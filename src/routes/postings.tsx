@@ -1132,8 +1132,19 @@ function PostingRow({
       <div>
         <StatusPill status={posting.status} />
       </div>
-      <div style={{ color: "#8B8B9E", fontFamily: MONO, fontSize: 11 }}>
-        {relativeTime(posting.scraped_at ?? posting.created_at)}
+      <div style={{ color: "#8B8B9E", fontFamily: MONO, fontSize: 11, lineHeight: 1.35 }}>
+        <div>{relativeTime(posting.posted_at ?? posting.scraped_at ?? posting.created_at)}</div>
+        <div style={{ fontSize: 10, color: "#6B7280" }}>
+          {shortAge(posting.posted_at ?? posting.scraped_at ?? posting.created_at)}
+          {posting.deadline_at && (
+            <>
+              {" · "}
+              <span style={{ color: deadlineIndicator(posting.deadline_at).color }}>
+                {deadlineIndicator(posting.deadline_at).text}
+              </span>
+            </>
+          )}
+        </div>
       </div>
       <RowActions posting={posting} company={company} onChanged={onChanged} />
     </div>
