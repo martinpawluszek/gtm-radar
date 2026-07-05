@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { gtmSupabase, gtmSupabaseInfo } from "@/lib/gtmSupabase";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
