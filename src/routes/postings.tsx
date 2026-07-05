@@ -2025,7 +2025,8 @@ function AddPostingModal({
         .maybeSingle();
       const backgroundSummary =
         (profile as { background_summary?: string | null } | null)?.background_summary ?? null;
-      const system = buildSystemPrompt(criteria, company, backgroundSummary);
+      const feedback = await fetchFeedbackContext();
+      const system = buildSystemPrompt(criteria, company, backgroundSummary, feedback.text);
       const user = buildUserPrompt(title.trim(), normalizeLocationInput(location), jdFull);
 
       const res = await score({ data: { system, user } });
