@@ -311,8 +311,9 @@ export function DashboardPage() {
         .not("scraped_at", "is", null)
         .order("scraped_at", { ascending: false })
         .limit(1);
-      if (error || !data || !data.length) return { lastRun: null as string | null, thisRunCount: 0 };
-      const lastRun = (data[0] as { scraped_at: string | null }).scraped_at;
+      const rows = (data ?? []) as unknown as Array<{ scraped_at: string | null }>;
+      if (error || !rows.length) return { lastRun: null as string | null, thisRunCount: 0 };
+      const lastRun = rows[0]?.scraped_at ?? null;
       if (!lastRun) return { lastRun: null, thisRunCount: 0 };
       const dayStart = new Date(lastRun.slice(0, 10) + "T00:00:00.000Z").toISOString();
       const c = await gtmSupabase
