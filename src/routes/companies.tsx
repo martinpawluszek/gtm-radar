@@ -227,6 +227,18 @@ function CompaniesPage() {
     return map;
   }, [sorted]);
 
+  const tierActiveState = useMemo(() => {
+    const map: Record<Tier, { total: number; on: number }> = {
+      god: { total: 0, on: 0 }, t1: { total: 0, on: 0 }, t2: { total: 0, on: 0 },
+      t3: { total: 0, on: 0 }, excluded: { total: 0, on: 0 },
+    };
+    for (const c of companies) {
+      map[c.tier].total += 1;
+      if (c.is_active !== false) map[c.tier].on += 1;
+    }
+    return map;
+  }, [companies]);
+
   const total = companies.length;
   const allTags = useMemo(() => {
     const set = new Set<string>();
