@@ -380,7 +380,7 @@ ${titles}
 Use as weak prior only. Always read the full JD — a non-matching title with a relevant JD scores normally.
 
 # Company Context
-${companyContext}`;
+${companyContext}${feedbackSection}`;
 }
 
 function buildUserPrompt(title: string, location: string, jd: string): string {
