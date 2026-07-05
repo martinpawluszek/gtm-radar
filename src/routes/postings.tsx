@@ -337,8 +337,11 @@ Respond in this exact JSON format with no other text:
   "bonuses_applied": [],
   "final_score": 18.5,
   "title_signal": "matching",
-  "summary": "one sentence verdict"
-}`;
+  "summary": "one sentence verdict",
+  "deadline": null
+}
+
+For "deadline": if the job description explicitly states an application deadline or closing date, return it as an ISO date string (YYYY-MM-DD); otherwise null. Do not guess.`;
 }
 
 function extractJson(text: string): unknown {
