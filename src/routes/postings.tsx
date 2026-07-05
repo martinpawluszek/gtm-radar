@@ -108,6 +108,39 @@ function relativeTime(iso: string): string {
   return `${Math.floor(d / 365)}y ago`;
 }
 
+function ageDays(iso: string): number {
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+}
+
+function effectiveExpiry(p: {
+  deadline_at: string | null;
+  posted_at: string | null;
+  created_at: string;
+}, lifespanDays: number): number {
+  if (p.deadline_at) return new Date(p.deadline_at).getTime();
+  const base = new Date(p.posted_at ?? p.created_at).getTime();
+  return base + lifespanDays * 86400000;
+}
+
+function shortAge(iso: string): string {
+  const d = ageDays(iso);
+  if (d <= 0) return "today";
+  if (d < 30) return `${d}d old`;
+  const mo = Math.floor(d / 30);
+  if (mo < 12) return `${mo}mo old`;
+  return `${Math.floor(d / 365)}y old`;
+}
+
+function deadlineIndicator(deadlineIso: string): { text: string; color: string } {
+  const ms = new Date(deadlineIso).getTime() - Date.now();
+  const d = Math.ceil(ms / 86400000);
+  if (d < 0) return { text: "closed", color: "#6B7280" };
+  if (d === 0) return { text: "closes today", color: "#EF4444" };
+  if (d <= 3) return { text: `closes in ${d}d`, color: "#EF4444" };
+  if (d <= 7) return { text: `closes in ${d}d`, color: "#F59E0B" };
+  return { text: `closes in ${d}d`, color: "#8B8B9E" };
+}
+
 function scoreColor(score: number | null | undefined): string {
   if (score == null) return "#8B8B9E";
   if (score >= 20) return "#10B981";
