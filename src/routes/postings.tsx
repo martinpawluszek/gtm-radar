@@ -2310,7 +2310,7 @@ function AddPostingModal({
         (profile as { background_summary?: string | null } | null)?.background_summary ?? null;
       const feedback = await fetchFeedbackContext();
       const system = buildSystemPrompt(criteria, company, backgroundSummary, feedback.text);
-      const user = buildUserPrompt(title.trim(), normalizeLocationInput(location), jdFull);
+      const user = buildUserPrompt(title.trim(), normalizeLocationInput(location), jdFull, criteria);
 
       const res = await score({ data: { system, user } });
       const parsed = extractJson(res.text) as {
