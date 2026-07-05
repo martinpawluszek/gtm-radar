@@ -386,6 +386,50 @@ function PostingsPage() {
     return list.sort((a, b) => a.name.localeCompare(b.name));
   }, [postings, companyMap]);
 
+  const { data: lifespanDays = 30 } = useQuery({
+    queryKey: ["user-profile-lifespan"],
+    queryFn: async () => {
+      const { data } = await gtmSupabase
+        .from("user_profiles" as never)
+        .select("default_posting_lifespan_days")
+        .order("created_at")
+        .limit(1)
+        .maybeSingle();
+      const v = (data as { default_posting_lifespan_days?: number | null } | null)
+        ?.default_posting_lifespan_days;
+      return typeof v === "number" && v > 0 ? v : 30;
+    },
+  });
+
+  // Auto-expire on load (once per postings snapshot)
+  const [expiredRunKey, setExpiredRunKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (isLoading || postings.length === 0) return;
+    const key = `${postings.length}:${lifespanDays}`;
+    if (expiredRunKey === key) return;
+    setExpiredRunKey(key);
+    const now = Date.now();
+    const toExpire = postings.filter(
+      (p) =>
+        (p.status === "new" || p.status === "reviewed") &&
+        effectiveExpiry(p, lifespanDays) < now,
+    );
+    if (toExpire.length === 0) return;
+    const ids = toExpire.map((p) => p.id);
+    (async () => {
+      const { error } = await gtmSupabase
+        .from("job_postings" as never)
+        .update({ status: "expired", updated_at: new Date().toISOString() } as never)
+        .in("id", ids);
+      if (error) return;
+      qc.setQueryData<Posting[]>(["postings"], (old) =>
+        (old ?? []).map((p) =>
+          ids.includes(p.id) ? { ...p, status: "expired" as PostingStatus } : p,
+        ),
+      );
+    })();
+  }, [postings, lifespanDays, isLoading, expiredRunKey, qc]);
+
   const [statusFilter, setStatusFilter] = useState<"all" | PostingStatus>("all");
   const [tierFilter, setTierFilter] = useState<TierFilter>("all");
   const [tierOpen, setTierOpen] = useState(false);
