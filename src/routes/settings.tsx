@@ -458,3 +458,164 @@ function LanguageList({
     </div>
   );
 }
+
+// ---------- AI Provider card ----------
+
+type AiProvider = "anthropic" | "openai" | "gemini";
+type AiCfg = {
+  ai_provider: AiProvider;
+  ai_model: string | null;
+  has_ai_key: boolean;
+};
+
+const MODEL_PLACEHOLDER: Record<AiProvider, string> = {
+  anthropic: "claude-sonnet-4-6",
+  openai: "gpt-4o",
+  gemini: "gemini-1.5-pro",
+};
+
+const PROVIDER_LABEL: Record<AiProvider, string> = {
+  anthropic: "Claude (Anthropic)",
+  openai: "OpenAI",
+  gemini: "Google Gemini",
+};
+
+function AiProviderCard({
+  aiCfg,
+  onSaved,
+  profileId,
+}: {
+  aiCfg: AiCfg | undefined;
+  onSaved: () => void;
+  profileId: string;
+}) {
+  const [provider, setProvider] = useState<AiProvider>("anthropic");
+  const [model, setModel] = useState("");
+  const [newKey, setNewKey] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (aiCfg) {
+      setProvider(aiCfg.ai_provider);
+      setModel(aiCfg.ai_model ?? "");
+    }
+  }, [aiCfg]);
+
+  async function saveAi(opts?: { removeKey?: boolean }) {
+    setBusy(true);
+    try {
+      const patch: Record<string, unknown> = {
+        ai_provider: provider,
+        ai_model: model.trim() === "" ? null : model.trim(),
+        updated_at: new Date().toISOString(),
+      };
+      if (opts?.removeKey) {
+        patch.ai_api_key = null;
+      } else if (newKey.trim() !== "") {
+        patch.ai_api_key = newKey.trim();
+      }
+      const { error } = await gtmSupabase
+        .from("user_profiles" as never)
+        .update(patch as never)
+        .eq("id", profileId);
+      if (error) throw error;
+      setNewKey("");
+      toast.success(opts?.removeKey ? "API key removed" : "AI settings saved");
+      onSaved();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const hasKey = !!aiCfg?.has_ai_key;
+
+  return (
+    <div style={CARD}>
+      <div style={{ ...SECTION_LABEL, marginBottom: 14 }}>AI Provider</div>
+
+      <label style={LABEL}>Provider</label>
+      <Select value={provider} onValueChange={(v) => setProvider(v as AiProvider)}>
+        <SelectTrigger
+          style={{
+            background: "#0A0A0F",
+            border: "1px solid #1E1E2E",
+            color: "#F0F0FF",
+            maxWidth: 320,
+          }}
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="anthropic">{PROVIDER_LABEL.anthropic}</SelectItem>
+          <SelectItem value="openai">{PROVIDER_LABEL.openai}</SelectItem>
+          <SelectItem value="gemini">{PROVIDER_LABEL.gemini}</SelectItem>
+        </SelectContent>
+      </Select>
+
+      <div style={{ height: 16 }} />
+      <label style={LABEL}>Model</label>
+      <Input
+        value={model}
+        onChange={(e) => setModel(e.target.value)}
+        placeholder={MODEL_PLACEHOLDER[provider]}
+        style={{
+          background: "#0A0A0F",
+          border: "1px solid #1E1E2E",
+          color: "#F0F0FF",
+          maxWidth: 320,
+        }}
+      />
+      <div style={HELP}>Leave blank to use the provider default.</div>
+
+      <div style={{ height: 16 }} />
+      <label style={LABEL}>API key</label>
+      <div style={{ marginBottom: 6, fontSize: 12, fontFamily: MONO }}>
+        {hasKey ? (
+          <span style={{ color: "#10B981" }}>✓ Key saved</span>
+        ) : (
+          <span style={{ color: "#8B8B9E" }}>No key set</span>
+        )}
+      </div>
+      <Input
+        type="password"
+        value={newKey}
+        onChange={(e) => setNewKey(e.target.value)}
+        placeholder={hasKey ? "Enter a new key to replace…" : "Paste your API key"}
+        autoComplete="new-password"
+        style={{
+          background: "#0A0A0F",
+          border: "1px solid #1E1E2E",
+          color: "#F0F0FF",
+          maxWidth: 520,
+        }}
+      />
+      <div style={HELP}>
+        Your key is stored securely and only ever used to run YOUR scoring and outreach
+        drafting. It is never shown to other users and never sent back to your browser.
+      </div>
+
+      <div style={{ height: 16 }} />
+      <div className="flex gap-2">
+        <Button
+          onClick={() => saveAi()}
+          disabled={busy}
+          style={{ background: "#00D4FF", color: "#0A0A0F" }}
+        >
+          {busy ? "Saving…" : "Save AI settings"}
+        </Button>
+        {hasKey && (
+          <Button
+            onClick={() => saveAi({ removeKey: true })}
+            disabled={busy}
+            variant="outline"
+            style={{ background: "#0A0A0F", border: "1px solid #1E1E2E", color: "#F0F0FF" }}
+          >
+            Remove key
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
