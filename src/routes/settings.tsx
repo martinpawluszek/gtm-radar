@@ -618,10 +618,55 @@ function AiProviderCard({
           maxWidth: 520,
         }}
       />
-      <div style={HELP}>
+      <div style={{ height: 10 }} />
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button
+          type="button"
+          onClick={runTest}
+          disabled={testing}
+          variant="outline"
+          style={{ background: "#0A0A0F", border: "1px solid #1E1E2E", color: "#F0F0FF" }}
+        >
+          {testing ? "Testing…" : "Test"}
+        </Button>
+        {testResult?.ok && (
+          <span
+            style={{
+              fontSize: 12,
+              fontFamily: MONO,
+              color: "#10B981",
+              border: "1px solid rgba(16,185,129,0.35)",
+              background: "rgba(16,185,129,0.08)",
+              padding: "4px 8px",
+              borderRadius: 4,
+            }}
+          >
+            ✓ Working
+          </span>
+        )}
+        {testResult && !testResult.ok && (
+          <span
+            style={{
+              fontSize: 12,
+              fontFamily: MONO,
+              color: "#EF4444",
+              border: "1px solid rgba(239,68,68,0.35)",
+              background: "rgba(239,68,68,0.08)",
+              padding: "4px 8px",
+              borderRadius: 4,
+              maxWidth: 520,
+              wordBreak: "break-word",
+            }}
+          >
+            ✗ {testResult.error ?? "Failed"}
+          </span>
+        )}
+      </div>
+      <div style={{ ...HELP, marginTop: 10 }}>
         Your key is stored securely and only ever used to run YOUR scoring and outreach
         drafting. It is never shown to other users and never sent back to your browser.
       </div>
+
 
       <div style={{ height: 16 }} />
       <div className="flex gap-2">
