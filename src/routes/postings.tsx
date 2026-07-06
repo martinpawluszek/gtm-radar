@@ -2312,7 +2312,9 @@ function AddPostingModal({
       const system = buildSystemPrompt(criteria, company, backgroundSummary, feedback.text);
       const user = buildUserPrompt(title.trim(), normalizeLocationInput(location), jdFull, criteria);
 
-      const res = await score({ data: { system, user } });
+      const { getGtmAccessToken } = await import("@/lib/gtmAuth");
+      const accessToken = await getGtmAccessToken();
+      const res = await score({ data: { system, user, accessToken } });
       const parsed = extractJson(res.text) as {
         disqualified?: boolean;
         disqualifier_reason?: string | null;
@@ -2718,7 +2720,9 @@ function BatchScoreDialog({
     const company = posting.company_id ? companyMap.get(posting.company_id) ?? null : null;
     const system = buildSystemPrompt(criteria, company, backgroundSummary, feedbackText);
     const user = buildUserPrompt(posting.title, posting.location ?? "", posting.jd_full ?? "", criteria);
-    const res = await score({ data: { system, user } });
+    const { getGtmAccessToken } = await import("@/lib/gtmAuth");
+    const accessToken = await getGtmAccessToken();
+    const res = await score({ data: { system, user, accessToken } });
     const parsed = extractJson(res.text) as {
       disqualified?: boolean;
       disqualifier_reason?: string | null;

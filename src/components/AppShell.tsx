@@ -1,4 +1,6 @@
-import { Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Building2,
@@ -9,8 +11,11 @@ import {
   Users,
   Linkedin,
   Settings,
+  LogOut,
   type LucideIcon,
 } from "lucide-react";
+import { gtmSupabase } from "@/lib/gtmSupabase";
+import { useGtmAuth } from "@/lib/gtmAuth";
 
 type NavItem = { to: string; label: string; icon: LucideIcon };
 
@@ -34,8 +39,49 @@ function formatDate() {
   });
 }
 
+function FullScreenLoader() {
+  return (
+    <div
+      className="min-h-screen flex items-center justify-center"
+      style={{ background: "#0A0A0F", color: "#8B8B9E", fontFamily: "var(--font-mono)", fontSize: 12 }}
+    >
+      Loading…
+    </div>
+  );
+}
+
 export function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { loading, session } = useGtmAuth();
+
+  const isLoginPage = pathname === "/login";
+
+  // Guard: redirect based on session state.
+  useEffect(() => {
+    if (loading) return;
+    if (!session && !isLoginPage) {
+      navigate({ to: "/login", replace: true });
+    } else if (session && isLoginPage) {
+      navigate({ to: "/", replace: true });
+    }
+  }, [loading, session, isLoginPage, navigate]);
+
+  if (loading) return <FullScreenLoader />;
+
+  // Login page: render without the sidebar/header chrome.
+  if (isLoginPage) {
+    return (
+      <div style={{ background: "#0A0A0F", minHeight: "100vh" }}>
+        <Outlet />
+      </div>
+    );
+  }
+
+  // Not signed in on a protected route — show loader until the redirect effect fires.
+  if (!session) return <FullScreenLoader />;
+
   const current = NAV.find((n) => (n.to === "/" ? pathname === "/" : pathname.startsWith(n.to)));
   const hideHeaderTitle =
     pathname === "/" ||
@@ -45,6 +91,15 @@ export function AppShell() {
     pathname.startsWith("/applications") ||
     pathname.startsWith("/outreach");
   const pageTitle = hideHeaderTitle ? "" : current?.label ?? "GTM Intelligence";
+
+  async function handleSignOut() {
+    await qc.cancelQueries();
+    qc.clear();
+    await gtmSupabase.auth.signOut();
+    navigate({ to: "/login", replace: true });
+  }
+
+  const userEmail = session.user.email ?? "signed in";
 
   return (
     <div className="min-h-screen flex w-full noise-overlay" style={{ background: "#0A0A0F" }}>
@@ -107,6 +162,41 @@ export function AppShell() {
             );
           })}
         </nav>
+
+        {/* User / sign out */}
+        <div
+          className="px-3 py-3 border-t flex flex-col gap-2"
+          style={{ borderColor: "#1E1E2E", fontFamily: "var(--font-mono)" }}
+        >
+          <div
+            className="px-1 text-[11px] truncate"
+            style={{ color: "#F0F0FF" }}
+            title={userEmail}
+          >
+            {userEmail}
+          </div>
+          <button
+            onClick={handleSignOut}
+            className="flex items-center gap-2 px-2 py-1.5 text-[11px] transition-colors"
+            style={{
+              color: "#8B8B9E",
+              border: "1px solid #1E1E2E",
+              borderRadius: 4,
+              background: "transparent",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = "#F0F0FF";
+              e.currentTarget.style.background = "rgba(255,255,255,0.03)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = "#8B8B9E";
+              e.currentTarget.style.background = "transparent";
+            }}
+          >
+            <LogOut size={12} strokeWidth={1.75} />
+            <span>Sign out</span>
+          </button>
+        </div>
 
         {/* Footer */}
         <div

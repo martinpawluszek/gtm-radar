@@ -3,34 +3,27 @@ import { createServerFn } from "@tanstack/react-start";
 // Returns the current user's AI config WITHOUT ever sending the API key to the
 // browser. Used by the Settings page to show provider/model + a "key saved"
 // indicator.
-export const getUserAiConfigPublic = createServerFn({ method: "GET" }).handler(async () => {
-  const { gtmSupabase } = await import("@/lib/gtmSupabase");
-  const { data, error } = await gtmSupabase
-    .from("user_profiles" as never)
-    .select("ai_provider, ai_model, ai_api_key")
-    .is("user_id", null)
-    .order("created_at")
-    .limit(1)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  const row = (data ?? null) as {
-    ai_provider?: string | null;
-    ai_model?: string | null;
-    ai_api_key?: string | null;
-  } | null;
-  return {
-    ai_provider: (row?.ai_provider ?? "anthropic") as "anthropic" | "openai" | "gemini",
-    ai_model: row?.ai_model ?? null,
-    has_ai_key: !!row?.ai_api_key && row.ai_api_key.trim().length > 0,
-  };
-});
+export const getUserAiConfigPublic = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => {
+    const o = (d ?? {}) as { accessToken?: string };
+    return { accessToken: typeof o.accessToken === "string" ? o.accessToken : "" };
+  })
+  .handler(async ({ data }) => {
+    const { loadPublicAiConfig } = await import("@/lib/aiProvider.server");
+    return loadPublicAiConfig(data.accessToken || undefined);
+  });
 
 // Verifies a provider/model/key combo actually works by making the smallest
 // possible real call. Never throws for auth/quota/network failures — returns
 // { ok: false, error }. Never echoes the key back to the caller.
 export const testAiCredentials = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => {
-    const o = (d ?? {}) as { provider?: string; model?: string; apiKey?: string };
+    const o = (d ?? {}) as {
+      provider?: string;
+      model?: string;
+      apiKey?: string;
+      accessToken?: string;
+    };
     const provider = o.provider;
     if (provider !== "anthropic" && provider !== "openai" && provider !== "gemini") {
       throw new Error("provider required");
@@ -39,6 +32,7 @@ export const testAiCredentials = createServerFn({ method: "POST" })
       provider: provider as "anthropic" | "openai" | "gemini",
       model: typeof o.model === "string" ? o.model.trim() : "",
       apiKey: typeof o.apiKey === "string" ? o.apiKey.trim() : "",
+      accessToken: typeof o.accessToken === "string" ? o.accessToken : "",
     };
   })
   .handler(async ({ data }) => {
@@ -46,7 +40,7 @@ export const testAiCredentials = createServerFn({ method: "POST" })
     let apiKey = data.apiKey;
     if (!apiKey) {
       try {
-        apiKey = await loadSavedApiKey(data.provider);
+        apiKey = await loadSavedApiKey(data.provider, data.accessToken || undefined);
       } catch (e) {
         return { ok: false as const, error: (e as Error).message };
       }
@@ -128,7 +122,7 @@ export const testAiCredentials = createServerFn({ method: "POST" })
         msg = "Key is valid but the account is out of credit/quota.";
       } else if (
         status === 404 ||
-        lower.includes("model") && (lower.includes("not found") || lower.includes("does not exist"))
+        (lower.includes("model") && (lower.includes("not found") || lower.includes("does not exist")))
       ) {
         msg = "Model not found — check the model name.";
       } else {
