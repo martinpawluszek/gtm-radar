@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { gtmSupabase } from "@/lib/gtmSupabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
