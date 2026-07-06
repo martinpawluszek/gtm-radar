@@ -12,11 +12,30 @@ export type AiConfig = {
   model: string;
 };
 
-const DEFAULT_MODEL: Record<AiProvider, string> = {
+export const DEFAULT_MODEL: Record<AiProvider, string> = {
   anthropic: "claude-sonnet-4-6",
   openai: "gpt-4o",
   gemini: "gemini-1.5-pro",
 };
+
+// Returns the saved API key for the given provider, or "" if none is saved.
+// Never returned to the client.
+export async function loadSavedApiKey(provider: AiProvider): Promise<string> {
+  const { data, error } = await gtmSupabase
+    .from("user_profiles" as never)
+    .select("ai_provider, ai_api_key")
+    .is("user_id", null)
+    .order("created_at")
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`Failed to load AI config: ${error.message}`);
+  const row = (data ?? null) as {
+    ai_provider?: string | null;
+    ai_api_key?: string | null;
+  } | null;
+  if ((row?.ai_provider ?? "anthropic") !== provider) return "";
+  return row?.ai_api_key?.trim() ?? "";
+}
 
 // Loads the AI config for the "current" user. There is no auth yet, so we read
 // the single seed profile row (user_id IS NULL). This is written to be easy to
