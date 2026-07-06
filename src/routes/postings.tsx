@@ -589,7 +589,7 @@ final_score = ( sum of each parameter_score × its weight ) × 5, then add every
 
 # Title signal (soft prior only — never overrides the JD)
 ${titles}
-Return "title_signal" as one of: "strong" (title closely matches a high-weight target title), "matching" (clearly a relevant commercial title), "weak" (commercial but off-target), or "off" (not a commercial title). Always read the full JD regardless of title.
+Return "title_signal" as one of: "matching" (title closely matches a target title or is clearly a relevant commercial title), "partial" (commercial but only loosely related to the target titles), or "none" (not a commercial title at all). Always read the full JD regardless of title.
 
 # Company context
 ${companyContext}
