@@ -5,7 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { X, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { gtmSupabase } from "@/lib/gtmSupabase";
-import { getUserAiConfigPublic } from "@/lib/aiConfig.functions";
+import { getUserAiConfigPublic, testAiCredentials } from "@/lib/aiConfig.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
