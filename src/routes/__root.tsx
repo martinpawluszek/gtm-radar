@@ -126,8 +126,10 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AppShell />
-      {mounted && <Toaster />}
+      <GtmAuthProvider>
+        <AppShell />
+        {mounted && <Toaster />}
+      </GtmAuthProvider>
     </QueryClientProvider>
   );
 }
