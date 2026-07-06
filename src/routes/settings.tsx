@@ -68,7 +68,9 @@ type UserProfile = {
 async function loadProfile(): Promise<UserProfile | null> {
   const { data, error } = await gtmSupabase
     .from("user_profiles" as never)
-    .select("*")
+    .select(
+      "id, display_name, background_summary, target_role_types, target_seniority, target_locations, target_comp_min, target_comp_max, languages, skills, weekly_posting_cap, agent_enabled, default_posting_lifespan_days",
+    )
     .order("created_at")
     .limit(1)
     .maybeSingle();
