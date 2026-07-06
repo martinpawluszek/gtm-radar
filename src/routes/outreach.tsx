@@ -1195,7 +1195,9 @@ OUTPUT: Only the message. No "Here's a draft", no word count, no dashes, no subj
   const handleDraft = async () => {
     setDrafting(true);
     try {
-      const res = await draftFn({ data: { prompt: buildPrompt() } });
+      const { getGtmAccessToken } = await import("@/lib/gtmAuth");
+      const accessToken = await getGtmAccessToken();
+      const res = await draftFn({ data: { prompt: buildPrompt(), accessToken } });
       setDraft(res.text);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed";
