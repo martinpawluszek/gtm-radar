@@ -36,7 +36,7 @@ export const testAiCredentials = createServerFn({ method: "POST" })
       throw new Error("provider required");
     }
     return {
-      provider,
+      provider: provider as "anthropic" | "openai" | "gemini",
       model: typeof o.model === "string" ? o.model.trim() : "",
       apiKey: typeof o.apiKey === "string" ? o.apiKey.trim() : "",
     };
