@@ -57,21 +57,22 @@ export function AppShell() {
   const { loading, session } = useGtmAuth();
 
   const isLoginPage = pathname === "/login";
+  const isPublicPage = isLoginPage || pathname === "/reset-password";
 
   // Guard: redirect based on session state.
   useEffect(() => {
     if (loading) return;
-    if (!session && !isLoginPage) {
+    if (!session && !isPublicPage) {
       navigate({ to: "/login", replace: true });
     } else if (session && isLoginPage) {
       navigate({ to: "/", replace: true });
     }
-  }, [loading, session, isLoginPage, navigate]);
+  }, [loading, session, isLoginPage, isPublicPage, navigate]);
 
   if (loading) return <FullScreenLoader />;
 
-  // Login page: render without the sidebar/header chrome.
-  if (isLoginPage) {
+  // Public pages: render without the sidebar/header chrome.
+  if (isPublicPage) {
     return (
       <div style={{ background: "#0A0A0F", minHeight: "100vh" }}>
         <Outlet />

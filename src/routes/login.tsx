@@ -11,18 +11,50 @@ export const Route = createFileRoute("/login")({
 
 const MONO = "var(--font-mono)";
 
+type Mode = "signin" | "signup" | "forgot";
+
 function LoginPage() {
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
+  function switchMode(next: Mode, keepEmail = true) {
+    setMode(next);
+    setError(null);
+    setInfo(null);
+    if (!keepEmail) setEmail("");
+    setPassword("");
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setInfo(null);
+
+    if (mode === "forgot") {
+      if (!email.trim()) {
+        setError("Email is required.");
+        return;
+      }
+      setBusy(true);
+      try {
+        await gtmSupabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: window.location.origin + "/reset-password",
+        });
+        setInfo("If an account exists for that email, a reset link has been sent.");
+      } catch (err) {
+        // Still show non-revealing message; log for debugging.
+        console.error(err);
+        setInfo("If an account exists for that email, a reset link has been sent.");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
     if (!email.trim() || !password) {
       setError("Email and password are required.");
       return;
@@ -35,7 +67,6 @@ function LoginPage() {
           password,
         });
         if (error) throw error;
-        // Auth state change → AppShell redirects to /.
       } else {
         const { data, error } = await gtmSupabase.auth.signUp({
           email: email.trim(),
@@ -43,10 +74,21 @@ function LoginPage() {
         });
         if (error) throw error;
         if (!data.session) {
-          setInfo("Check your email to confirm your account, then sign in.");
-          setMode("signin");
+          // Supabase anti-enumeration: if the email is already registered+confirmed,
+          // signUp returns success with a user whose `identities` array is empty.
+          // A genuine new signup has at least one identity.
+          const identities = data.user?.identities;
+          if (Array.isArray(identities) && identities.length === 0) {
+            setError(
+              "An account with this email already exists. Try signing in, or use 'Forgot password' if you don't remember it.",
+            );
+            setMode("signin");
+            setPassword("");
+          } else {
+            setInfo("Check your email to confirm your account, then sign in.");
+            setMode("signin");
+          }
         }
-        // If session is returned immediately, AppShell redirects.
       }
     } catch (err) {
       setError((err as Error).message);
@@ -54,6 +96,15 @@ function LoginPage() {
       setBusy(false);
     }
   }
+
+  const title =
+    mode === "signin" ? "Sign in" : mode === "signup" ? "Create account" : "Reset password";
+  const subtitle =
+    mode === "signin"
+      ? "Access your workspace."
+      : mode === "signup"
+        ? "New here? Set up your account."
+        : "We'll email you a link to reset your password.";
 
   return (
     <main
@@ -97,13 +148,9 @@ function LoginPage() {
             marginBottom: 4,
           }}
         >
-          {mode === "signin" ? "Sign in" : "Create account"}
+          {title}
         </h1>
-        <p style={{ color: "#8B8B9E", fontSize: 12, marginBottom: 20 }}>
-          {mode === "signin"
-            ? "Access your workspace."
-            : "New here? Set up your account."}
-        </p>
+        <p style={{ color: "#8B8B9E", fontSize: 12, marginBottom: 20 }}>{subtitle}</p>
 
         <form onSubmit={submit} className="flex flex-col gap-3">
           <div>
@@ -126,27 +173,35 @@ function LoginPage() {
               style={{ background: "#0A0A0F", border: "1px solid #1E1E2E", color: "#F0F0FF" }}
             />
           </div>
-          <div>
-            <label
-              style={{
-                display: "block",
-                color: "#F0F0FF",
-                fontSize: 12,
-                marginBottom: 6,
-              }}
-            >
-              Password
-            </label>
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete={mode === "signin" ? "current-password" : "new-password"}
-              required
-              minLength={6}
-              style={{ background: "#0A0A0F", border: "1px solid #1E1E2E", color: "#F0F0FF" }}
-            />
-          </div>
+
+          {mode !== "forgot" && (
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  color: "#F0F0FF",
+                  fontSize: 12,
+                  marginBottom: 6,
+                }}
+              >
+                Password
+              </label>
+              <Input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                required
+                minLength={mode === "signup" ? 8 : 6}
+                style={{ background: "#0A0A0F", border: "1px solid #1E1E2E", color: "#F0F0FF" }}
+              />
+              {mode === "signup" && (
+                <div style={{ color: "#8B8B9E", fontSize: 11, marginTop: 4, fontFamily: MONO }}>
+                  At least 8 characters.
+                </div>
+              )}
+            </div>
+          )}
 
           {error && (
             <div
@@ -187,42 +242,67 @@ function LoginPage() {
             {busy
               ? mode === "signin"
                 ? "Signing in…"
-                : "Creating account…"
+                : mode === "signup"
+                  ? "Creating account…"
+                  : "Sending…"
               : mode === "signin"
                 ? "Sign in"
-                : "Create account"}
+                : mode === "signup"
+                  ? "Create account"
+                  : "Send reset link"}
           </Button>
+
+          {mode === "signin" && (
+            <button
+              type="button"
+              onClick={() => switchMode("forgot")}
+              style={{
+                color: "#00D4FF",
+                fontFamily: MONO,
+                fontSize: 12,
+                textAlign: "left",
+                marginTop: 2,
+              }}
+            >
+              Forgot password?
+            </button>
+          )}
         </form>
 
         <div style={{ marginTop: 16, fontSize: 12, color: "#8B8B9E" }}>
-          {mode === "signin" ? (
+          {mode === "signin" && (
             <>
               No account?{" "}
               <button
                 type="button"
-                onClick={() => {
-                  setMode("signup");
-                  setError(null);
-                  setInfo(null);
-                }}
+                onClick={() => switchMode("signup")}
                 style={{ color: "#00D4FF", fontFamily: MONO }}
               >
                 Create one
               </button>
             </>
-          ) : (
+          )}
+          {mode === "signup" && (
             <>
               Already have an account?{" "}
               <button
                 type="button"
-                onClick={() => {
-                  setMode("signin");
-                  setError(null);
-                  setInfo(null);
-                }}
+                onClick={() => switchMode("signin")}
                 style={{ color: "#00D4FF", fontFamily: MONO }}
               >
                 Sign in
+              </button>
+            </>
+          )}
+          {mode === "forgot" && (
+            <>
+              Remembered it?{" "}
+              <button
+                type="button"
+                onClick={() => switchMode("signin")}
+                style={{ color: "#00D4FF", fontFamily: MONO }}
+              >
+                Back to sign in
               </button>
             </>
           )}
