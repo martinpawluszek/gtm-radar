@@ -517,11 +517,14 @@ function AiProviderCard({
     setTesting(true);
     setTestResult(null);
     try {
+      const { getGtmAccessToken } = await import("@/lib/gtmAuth");
+      const accessToken = await getGtmAccessToken();
       const res = await testFn({
         data: {
           provider,
           model: model.trim(),
           apiKey: newKey.trim() ? newKey.trim() : undefined,
+          accessToken,
         },
       });
       setTestResult(res.ok ? { ok: true } : { ok: false, error: res.error });
