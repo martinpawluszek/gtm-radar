@@ -85,6 +85,12 @@ function SettingsPage() {
     queryFn: loadProfile,
   });
 
+  const getAiCfg = useServerFn(getUserAiConfigPublic);
+  const { data: aiCfg } = useQuery({
+    queryKey: ["user-ai-config"],
+    queryFn: () => getAiCfg(),
+  });
+
   const [form, setForm] = useState<UserProfile | null>(null);
   const [saving, setSaving] = useState(false);
 
