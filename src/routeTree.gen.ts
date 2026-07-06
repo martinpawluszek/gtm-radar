@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as RoleCriteriaRouteImport } from './routes/role-criteria'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as PostingsRouteImport } from './routes/postings'
 import { Route as ParametersRouteImport } from './routes/parameters'
 import { Route as OutreachRouteImport } from './routes/outreach'
@@ -28,6 +29,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const RoleCriteriaRoute = RoleCriteriaRouteImport.update({
   id: '/role-criteria',
   path: '/role-criteria',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PostingsRoute = PostingsRouteImport.update({
@@ -80,6 +86,7 @@ export interface FileRoutesByFullPath {
   '/outreach': typeof OutreachRoute
   '/parameters': typeof ParametersRoute
   '/postings': typeof PostingsRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/role-criteria': typeof RoleCriteriaRoute
   '/settings': typeof SettingsRoute
 }
@@ -92,6 +99,7 @@ export interface FileRoutesByTo {
   '/outreach': typeof OutreachRoute
   '/parameters': typeof ParametersRoute
   '/postings': typeof PostingsRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/role-criteria': typeof RoleCriteriaRoute
   '/settings': typeof SettingsRoute
 }
@@ -105,6 +113,7 @@ export interface FileRoutesById {
   '/outreach': typeof OutreachRoute
   '/parameters': typeof ParametersRoute
   '/postings': typeof PostingsRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/role-criteria': typeof RoleCriteriaRoute
   '/settings': typeof SettingsRoute
 }
@@ -119,6 +128,7 @@ export interface FileRouteTypes {
     | '/outreach'
     | '/parameters'
     | '/postings'
+    | '/reset-password'
     | '/role-criteria'
     | '/settings'
   fileRoutesByTo: FileRoutesByTo
@@ -131,6 +141,7 @@ export interface FileRouteTypes {
     | '/outreach'
     | '/parameters'
     | '/postings'
+    | '/reset-password'
     | '/role-criteria'
     | '/settings'
   id:
@@ -143,6 +154,7 @@ export interface FileRouteTypes {
     | '/outreach'
     | '/parameters'
     | '/postings'
+    | '/reset-password'
     | '/role-criteria'
     | '/settings'
   fileRoutesById: FileRoutesById
@@ -156,6 +168,7 @@ export interface RootRouteChildren {
   OutreachRoute: typeof OutreachRoute
   ParametersRoute: typeof ParametersRoute
   PostingsRoute: typeof PostingsRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   RoleCriteriaRoute: typeof RoleCriteriaRoute
   SettingsRoute: typeof SettingsRoute
 }
@@ -174,6 +187,13 @@ declare module '@tanstack/react-router' {
       path: '/role-criteria'
       fullPath: '/role-criteria'
       preLoaderRoute: typeof RoleCriteriaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/postings': {
@@ -244,6 +264,7 @@ const rootRouteChildren: RootRouteChildren = {
   OutreachRoute: OutreachRoute,
   ParametersRoute: ParametersRoute,
   PostingsRoute: PostingsRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   RoleCriteriaRoute: RoleCriteriaRoute,
   SettingsRoute: SettingsRoute,
 }
