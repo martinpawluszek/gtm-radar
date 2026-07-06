@@ -88,7 +88,11 @@ function SettingsPage() {
   const getAiCfg = useServerFn(getUserAiConfigPublic);
   const { data: aiCfg } = useQuery({
     queryKey: ["user-ai-config"],
-    queryFn: () => getAiCfg(),
+    queryFn: async () => {
+      const { getGtmAccessToken } = await import("@/lib/gtmAuth");
+      const accessToken = await getGtmAccessToken();
+      return getAiCfg({ data: { accessToken } });
+    },
   });
 
   const [form, setForm] = useState<UserProfile | null>(null);
