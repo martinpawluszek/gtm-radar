@@ -316,6 +316,10 @@ function SettingsPage() {
         </div>
       </div>
 
+      <AiProviderCard aiCfg={aiCfg} onSaved={() => qc.invalidateQueries({ queryKey: ["user-ai-config"] })} profileId={form.id} />
+
+
+
       <div className="flex justify-end">
         <Button
           onClick={save}
