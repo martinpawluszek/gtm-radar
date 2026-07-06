@@ -14,6 +14,7 @@ import { Route as RoleCriteriaRouteImport } from './routes/role-criteria'
 import { Route as PostingsRouteImport } from './routes/postings'
 import { Route as ParametersRouteImport } from './routes/parameters'
 import { Route as OutreachRouteImport } from './routes/outreach'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as LinkedinPresenceRouteImport } from './routes/linkedin-presence'
 import { Route as CompaniesRouteImport } from './routes/companies'
 import { Route as ApplicationsRouteImport } from './routes/applications'
@@ -44,6 +45,11 @@ const OutreachRoute = OutreachRouteImport.update({
   path: '/outreach',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LinkedinPresenceRoute = LinkedinPresenceRouteImport.update({
   id: '/linkedin-presence',
   path: '/linkedin-presence',
@@ -70,6 +76,7 @@ export interface FileRoutesByFullPath {
   '/applications': typeof ApplicationsRoute
   '/companies': typeof CompaniesRoute
   '/linkedin-presence': typeof LinkedinPresenceRoute
+  '/login': typeof LoginRoute
   '/outreach': typeof OutreachRoute
   '/parameters': typeof ParametersRoute
   '/postings': typeof PostingsRoute
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/applications': typeof ApplicationsRoute
   '/companies': typeof CompaniesRoute
   '/linkedin-presence': typeof LinkedinPresenceRoute
+  '/login': typeof LoginRoute
   '/outreach': typeof OutreachRoute
   '/parameters': typeof ParametersRoute
   '/postings': typeof PostingsRoute
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/applications': typeof ApplicationsRoute
   '/companies': typeof CompaniesRoute
   '/linkedin-presence': typeof LinkedinPresenceRoute
+  '/login': typeof LoginRoute
   '/outreach': typeof OutreachRoute
   '/parameters': typeof ParametersRoute
   '/postings': typeof PostingsRoute
@@ -106,6 +115,7 @@ export interface FileRouteTypes {
     | '/applications'
     | '/companies'
     | '/linkedin-presence'
+    | '/login'
     | '/outreach'
     | '/parameters'
     | '/postings'
@@ -117,6 +127,7 @@ export interface FileRouteTypes {
     | '/applications'
     | '/companies'
     | '/linkedin-presence'
+    | '/login'
     | '/outreach'
     | '/parameters'
     | '/postings'
@@ -128,6 +139,7 @@ export interface FileRouteTypes {
     | '/applications'
     | '/companies'
     | '/linkedin-presence'
+    | '/login'
     | '/outreach'
     | '/parameters'
     | '/postings'
@@ -140,6 +152,7 @@ export interface RootRouteChildren {
   ApplicationsRoute: typeof ApplicationsRoute
   CompaniesRoute: typeof CompaniesRoute
   LinkedinPresenceRoute: typeof LinkedinPresenceRoute
+  LoginRoute: typeof LoginRoute
   OutreachRoute: typeof OutreachRoute
   ParametersRoute: typeof ParametersRoute
   PostingsRoute: typeof PostingsRoute
@@ -184,6 +197,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OutreachRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/linkedin-presence': {
       id: '/linkedin-presence'
       path: '/linkedin-presence'
@@ -220,6 +240,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApplicationsRoute: ApplicationsRoute,
   CompaniesRoute: CompaniesRoute,
   LinkedinPresenceRoute: LinkedinPresenceRoute,
+  LoginRoute: LoginRoute,
   OutreachRoute: OutreachRoute,
   ParametersRoute: ParametersRoute,
   PostingsRoute: PostingsRoute,
