@@ -493,6 +493,9 @@ function AiProviderCard({
   const [model, setModel] = useState("");
   const [newKey, setNewKey] = useState("");
   const [busy, setBusy] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; error?: string } | null>(null);
+  const testFn = useServerFn(testAiCredentials);
 
   useEffect(() => {
     if (aiCfg) {
@@ -500,6 +503,30 @@ function AiProviderCard({
       setModel(aiCfg.ai_model ?? "");
     }
   }, [aiCfg]);
+
+  // Reset test result on any relevant edit.
+  useEffect(() => {
+    setTestResult(null);
+  }, [provider, model, newKey]);
+
+  async function runTest() {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await testFn({
+        data: {
+          provider,
+          model: model.trim(),
+          apiKey: newKey.trim() ? newKey.trim() : undefined,
+        },
+      });
+      setTestResult(res.ok ? { ok: true } : { ok: false, error: res.error });
+    } catch (e) {
+      setTestResult({ ok: false, error: (e as Error).message });
+    } finally {
+      setTesting(false);
+    }
+  }
 
   async function saveAi(opts?: { removeKey?: boolean }) {
     setBusy(true);
