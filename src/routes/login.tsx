@@ -275,14 +275,31 @@ function LoginPage() {
         <div style={{ marginTop: 16, fontSize: 12, color: "#8B8B9E" }}>
           {mode === "signin" && (
             <>
-              No account?{" "}
-              <button
-                type="button"
-                onClick={() => switchMode("signup")}
-                style={{ color: "#00D4FF", fontFamily: MONO }}
-              >
-                Create one
-              </button>
+              {!showSignupMessage ? (
+                <>
+                  No account?{" "}
+                  <button
+                    type="button"
+                    onClick={() => setShowSignupMessage(true)}
+                    style={{ color: "#8B8B9E", fontFamily: MONO, cursor: "default" }}
+                  >
+                    Create one
+                  </button>
+                </>
+              ) : (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    color: "#00D4FF",
+                    fontFamily: MONO,
+                  }}
+                >
+                  <Info size={14} />
+                  Signups are coming soon — check back later.
+                </div>
+              )}
             </>
           )}
           {mode === "signup" && (
