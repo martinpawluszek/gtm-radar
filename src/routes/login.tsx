@@ -21,9 +21,11 @@ function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [showSignupMessage, setShowSignupMessage] = useState(false);
 
   function switchMode(next: Mode, keepEmail = true) {
     setMode(next);
+    setShowSignupMessage(false);
     setError(null);
     setInfo(null);
     if (!keepEmail) setEmail("");
