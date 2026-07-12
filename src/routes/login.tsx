@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Info } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { gtmSupabase } from "@/lib/gtmSupabase";
 import { Button } from "@/components/ui/button";
@@ -20,9 +21,11 @@ function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [showSignupMessage, setShowSignupMessage] = useState(false);
 
   function switchMode(next: Mode, keepEmail = true) {
     setMode(next);
+    setShowSignupMessage(false);
     setError(null);
     setInfo(null);
     if (!keepEmail) setEmail("");
@@ -152,29 +155,28 @@ function LoginPage() {
         </h1>
         <p style={{ color: "#8B8B9E", fontSize: 12, marginBottom: 20 }}>{subtitle}</p>
 
-        <form onSubmit={submit} className="flex flex-col gap-3">
-          <div>
-            <label
-              style={{
-                display: "block",
-                color: "#F0F0FF",
-                fontSize: 12,
-                marginBottom: 6,
-              }}
-            >
-              Email
-            </label>
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              required
-              style={{ background: "#0A0A0F", border: "1px solid #1E1E2E", color: "#F0F0FF" }}
-            />
+        {mode === "signup" ? (
+          <div
+            className="flex flex-col items-center justify-center gap-3"
+            style={{
+              minHeight: 220,
+              border: "1px dashed #1E1E2E",
+              borderRadius: 6,
+              padding: 24,
+              textAlign: "center",
+            }}
+          >
+            <Info size={28} style={{ color: "#00D4FF" }} />
+            <div style={{ color: "#F0F0FF", fontFamily: MONO, fontSize: 14, fontWeight: 600 }}>
+              Signups are coming soon
+            </div>
+            <div style={{ color: "#8B8B9E", fontSize: 12, maxWidth: 240 }}>
+              We're keeping the app owner-only during early testing. Check back later for public
+              access.
+            </div>
           </div>
-
-          {mode !== "forgot" && (
+        ) : (
+          <form onSubmit={submit} className="flex flex-col gap-3">
             <div>
               <label
                 style={{
@@ -184,102 +186,133 @@ function LoginPage() {
                   marginBottom: 6,
                 }}
               >
-                Password
+                Email
               </label>
               <Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
                 required
-                minLength={mode === "signup" ? 8 : 6}
                 style={{ background: "#0A0A0F", border: "1px solid #1E1E2E", color: "#F0F0FF" }}
               />
-              {mode === "signup" && (
-                <div style={{ color: "#8B8B9E", fontSize: 11, marginTop: 4, fontFamily: MONO }}>
-                  At least 8 characters.
-                </div>
-              )}
             </div>
-          )}
 
-          {error && (
-            <div
-              style={{
-                color: "#EF4444",
-                fontSize: 12,
-                fontFamily: MONO,
-                border: "1px solid rgba(239,68,68,0.35)",
-                background: "rgba(239,68,68,0.08)",
-                borderRadius: 4,
-                padding: "6px 8px",
-              }}
-            >
-              {error}
-            </div>
-          )}
-          {info && (
-            <div
-              style={{
-                color: "#10B981",
-                fontSize: 12,
-                fontFamily: MONO,
-                border: "1px solid rgba(16,185,129,0.35)",
-                background: "rgba(16,185,129,0.08)",
-                borderRadius: 4,
-                padding: "6px 8px",
-              }}
-            >
-              {info}
-            </div>
-          )}
+            {mode !== "forgot" && (
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    color: "#F0F0FF",
+                    fontSize: 12,
+                    marginBottom: 6,
+                  }}
+                >
+                  Password
+                </label>
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                  required
+                  minLength={6}
+                  style={{ background: "#0A0A0F", border: "1px solid #1E1E2E", color: "#F0F0FF" }}
+                />
+              </div>
+            )}
 
-          <Button
-            type="submit"
-            disabled={busy}
-            style={{ background: "#00D4FF", color: "#0A0A0F", marginTop: 4 }}
-          >
-            {busy
-              ? mode === "signin"
-                ? "Signing in…"
-                : mode === "signup"
-                  ? "Creating account…"
+            {error && (
+              <div
+                style={{
+                  color: "#EF4444",
+                  fontSize: 12,
+                  fontFamily: MONO,
+                  border: "1px solid rgba(239,68,68,0.35)",
+                  background: "rgba(239,68,68,0.08)",
+                  borderRadius: 4,
+                  padding: "6px 8px",
+                }}
+              >
+                {error}
+              </div>
+            )}
+            {info && (
+              <div
+                style={{
+                  color: "#10B981",
+                  fontSize: 12,
+                  fontFamily: MONO,
+                  border: "1px solid rgba(16,185,129,0.35)",
+                  background: "rgba(16,185,129,0.08)",
+                  borderRadius: 4,
+                  padding: "6px 8px",
+                }}
+              >
+                {info}
+              </div>
+            )}
+
+            <Button
+              type="submit"
+              disabled={busy}
+              style={{ background: "#00D4FF", color: "#0A0A0F", marginTop: 4 }}
+            >
+              {busy
+                ? mode === "signin"
+                  ? "Signing in…"
                   : "Sending…"
-              : mode === "signin"
-                ? "Sign in"
-                : mode === "signup"
-                  ? "Create account"
+                : mode === "signin"
+                  ? "Sign in"
                   : "Send reset link"}
-          </Button>
+            </Button>
 
-          {mode === "signin" && (
-            <button
-              type="button"
-              onClick={() => switchMode("forgot")}
-              style={{
-                color: "#00D4FF",
-                fontFamily: MONO,
-                fontSize: 12,
-                textAlign: "left",
-                marginTop: 2,
-              }}
-            >
-              Forgot password?
-            </button>
-          )}
-        </form>
+            {mode === "signin" && (
+              <button
+                type="button"
+                onClick={() => switchMode("forgot")}
+                style={{
+                  color: "#00D4FF",
+                  fontFamily: MONO,
+                  fontSize: 12,
+                  textAlign: "left",
+                  marginTop: 2,
+                }}
+              >
+                Forgot password?
+              </button>
+            )}
+          </form>
+        )}
 
         <div style={{ marginTop: 16, fontSize: 12, color: "#8B8B9E" }}>
           {mode === "signin" && (
             <>
-              No account?{" "}
-              <button
-                type="button"
-                onClick={() => switchMode("signup")}
-                style={{ color: "#00D4FF", fontFamily: MONO }}
-              >
-                Create one
-              </button>
+              {!showSignupMessage ? (
+                <>
+                  No account?{" "}
+                  <button
+                    type="button"
+                    onClick={() => setShowSignupMessage(true)}
+                    style={{ color: "#8B8B9E", fontFamily: MONO, cursor: "default" }}
+                  >
+                    Create one
+                  </button>
+                </>
+              ) : (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    color: "#00D4FF",
+                    fontFamily: MONO,
+                  }}
+                >
+                  <Info size={14} />
+                  Signups are coming soon — check back later.
+                </div>
+              )}
             </>
           )}
           {mode === "signup" && (
