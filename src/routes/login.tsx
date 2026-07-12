@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Info } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { gtmSupabase } from "@/lib/gtmSupabase";
 import { Button } from "@/components/ui/button";
