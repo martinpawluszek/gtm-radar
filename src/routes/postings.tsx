@@ -168,6 +168,7 @@ type ListFilters = {
   tier: TierFilter;
   companyId: CompanyFilter;
   unscoredOnly: boolean;
+  search: string;
 };
 
 const LIST_COLUMNS =
@@ -194,6 +195,10 @@ async function fetchPostingsPage(
   }
   if (filters.companyId !== "all") {
     q = q.eq("company_id", filters.companyId);
+  }
+  const term = filters.search.trim();
+  if (term) {
+    q = q.ilike("title", `%${term}%`);
   }
   q = q
     .order("ai_composite_score", { ascending: false, nullsFirst: false })
@@ -720,6 +725,7 @@ function PostingsPage() {
   const [companyFilter, setCompanyFilter] = useState<CompanyFilter>("all");
   const [companyOpen, setCompanyOpen] = useState(false);
   const [unscoredOnly, setUnscoredOnly] = useState(false);
+  const [search, setSearch] = useState("");
   const [batchOpen, setBatchOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -730,7 +736,7 @@ function PostingsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, tierFilter, companyFilter, unscoredOnly, pageSize]);
+  }, [statusFilter, tierFilter, companyFilter, unscoredOnly, search, pageSize]);
 
   const tierCompanyIds = useMemo(() => {
     if (tierFilter === "all") return null;
@@ -748,12 +754,13 @@ function PostingsPage() {
     tier: tierFilter,
     companyId: companyFilter,
     unscoredOnly,
+    search,
   };
 
   const { data: pageData, isLoading, isFetching } = useQuery({
     queryKey: [
       "postings",
-      { statusFilter, tierFilter, companyFilter, unscoredOnly, page, pageSize },
+      { statusFilter, tierFilter, companyFilter, unscoredOnly, search, page, pageSize },
     ],
     queryFn: () => fetchPostingsPage(listFilters, tierCompanyIds, page, pageSize),
     placeholderData: (prev) => prev,
