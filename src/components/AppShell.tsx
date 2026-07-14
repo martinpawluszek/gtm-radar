@@ -233,21 +233,24 @@ export function AppShell() {
           <h1 className="text-sm font-medium" style={{ color: "#F0F0FF" }}>
             {pageTitle}
           </h1>
-          <div
-            className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium"
-            style={{
-              color: "#10B981",
-              background: "rgba(16,185,129,0.08)",
-              border: "1px solid rgba(16,185,129,0.25)",
-              borderRadius: 4,
-              fontFamily: "var(--font-mono)",
-            }}
-          >
-            <span
-              className="inline-block rounded-full"
-              style={{ width: 6, height: 6, background: "#10B981" }}
-            />
-            Connected
+          <div className="flex items-center gap-3">
+            <NotificationBell />
+            <div
+              className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium"
+              style={{
+                color: "#10B981",
+                background: "rgba(16,185,129,0.08)",
+                border: "1px solid rgba(16,185,129,0.25)",
+                borderRadius: 4,
+                fontFamily: "var(--font-mono)",
+              }}
+            >
+              <span
+                className="inline-block rounded-full"
+                style={{ width: 6, height: 6, background: "#10B981" }}
+              />
+              Connected
+            </div>
           </div>
         </header>
 
