@@ -1143,6 +1143,11 @@ function DetailModal({
           <Tag color="#00D4FF">{TYPE_LABEL[item.item_type]}</Tag>
           {item.category && <Tag color="#8B8B9E">{CATEGORY_LABEL[item.category]}</Tag>}
           <Tag color={statusColor(item.status)}>{STATUS_LABEL[item.status]}</Tag>
+          {item.generated_by === "ai_nightly" ? (
+            <Tag color="#00D4FF">AI draft</Tag>
+          ) : (
+            <Tag color="#8B8B9E">Manual</Tag>
+          )}
         </div>
 
         {item.item_type === "reply_opportunity" ? (
