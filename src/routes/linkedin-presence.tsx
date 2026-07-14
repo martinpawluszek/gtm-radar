@@ -1208,6 +1208,43 @@ function DetailModal({
           {STATUS_DESCRIPTION[item.status]}
         </div>
 
+        <div className="pt-2 border-t" style={{ borderColor: "#1E1E2E" }}>
+          {(() => {
+            const hasFinal = !!(item.final_text && item.final_text.trim());
+            return (
+              <button
+                onClick={async () => {
+                  if (!hasFinal) return;
+                  try {
+                    await navigator.clipboard.writeText(item.final_text ?? "");
+                    toast.success("Post copied. Opening LinkedIn.");
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "Copy failed");
+                    return;
+                  }
+                  window.open(
+                    "https://www.linkedin.com/feed/?shareActive=true",
+                    "_blank",
+                    "noopener,noreferrer",
+                  );
+                }}
+                disabled={!hasFinal}
+                title={hasFinal ? "Copies the final text and opens the LinkedIn share composer in a new tab." : "Add final post text first."}
+                className="w-full sm:w-auto px-4 py-2 text-[13px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                  color: "#0A0A0F",
+                  background: hasFinal ? "#00D4FF" : "rgba(0,212,255,0.2)",
+                  border: "1px solid rgba(0,212,255,0.4)",
+                  borderRadius: 4,
+                  fontFamily: MONO,
+                }}
+              >
+                Copy &amp; open LinkedIn
+              </button>
+            );
+          })()}
+        </div>
+
         <div className="flex flex-wrap gap-2 pt-2 border-t" style={{ borderColor: "#1E1E2E" }}>
           <Action onClick={() => setEditing(true)} disabled={busy}>Edit</Action>
           <Action onClick={() => copyText(promptFor(item))} color="#00D4FF">Copy prompt</Action>
