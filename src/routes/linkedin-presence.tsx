@@ -19,7 +19,7 @@ export const Route = createFileRoute("/linkedin-presence")({
 });
 
 // ---------- Types ----------
-type ItemStatus = "idea" | "drafted" | "posted" | "archived";
+type ItemStatus = "idea" | "drafted" | "prompt_ready" | "posted" | "archived";
 type ItemType = "post_idea" | "reply_opportunity";
 type Category =
   | "build_log"
