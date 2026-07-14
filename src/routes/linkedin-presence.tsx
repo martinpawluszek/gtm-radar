@@ -16,10 +16,41 @@ const MONO = "var(--font-mono)";
 export const Route = createFileRoute("/linkedin-presence")({
   head: () => ({ meta: [{ title: "LinkedIn Presence — GTM Intelligence" }] }),
   component: LinkedInPresencePage,
+  errorComponent: LinkedInPresenceError,
+  notFoundComponent: () => (
+    <div style={{ padding: 24, color: "#F0F0FF", fontFamily: MONO }}>Not found.</div>
+  ),
 });
 
+function LinkedInPresenceError({ error, reset }: { error: Error; reset: () => void }) {
+  console.error("[linkedin-presence] route error:", error);
+  return (
+    <div style={{ padding: 24, color: "#F0F0FF", fontFamily: MONO, maxWidth: 640 }}>
+      <h1 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
+        LinkedIn Presence couldn't load
+      </h1>
+      <p style={{ color: "#8B8B9E", fontSize: 13, marginBottom: 12 }}>
+        {error?.message ?? "Unknown error"}
+      </p>
+      <button
+        onClick={() => reset()}
+        style={{
+          background: "#1E1E2E",
+          color: "#F0F0FF",
+          border: "1px solid #2A2A3E",
+          padding: "6px 12px",
+          fontSize: 12,
+          cursor: "pointer",
+        }}
+      >
+        Try again
+      </button>
+    </div>
+  );
+}
+
 // ---------- Types ----------
-type ItemStatus = "idea" | "drafted" | "posted" | "archived";
+type ItemStatus = "idea" | "drafted" | "prompt_ready" | "posted" | "archived";
 type ItemType = "post_idea" | "reply_opportunity";
 type Category =
   | "build_log"
@@ -94,6 +125,7 @@ const CATEGORY_LABEL: Record<Category, string> = {
 const STATUS_LABEL: Record<ItemStatus, string> = {
   idea: "Idea",
   drafted: "Drafted",
+  prompt_ready: "Prompt ready",
   posted: "Posted",
   archived: "Archived",
 };
@@ -106,6 +138,7 @@ const TYPE_LABEL: Record<ItemType, string> = {
 const STATUS_DESCRIPTION: Record<ItemStatus, string> = {
   idea: "Captured but not drafted or posted.",
   drafted: "Draft exists or is in progress, but not counted as published.",
+  prompt_ready: "Prompt generated and ready to use.",
   posted: "Counted as published in weekly stats based on Posted date.",
   archived: "Hidden from active workflow.",
 };
@@ -993,8 +1026,10 @@ function statusColor(s: ItemStatus): string {
   switch (s) {
     case "idea": return "#8B8B9E";
     case "drafted": return "#F59E0B";
+    case "prompt_ready": return "#3B82F6";
     case "posted": return "#10B981";
     case "archived": return "#6B7280";
+    default: return "#8B8B9E";
   }
 }
 
