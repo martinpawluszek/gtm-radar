@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Plus, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { gtmSupabase, gtmSupabaseInfo } from "@/lib/gtmSupabase";
+import { useGtmAuth } from "@/lib/gtmAuth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -106,6 +107,7 @@ async function fetchCompanies(): Promise<CompaniesQueryDebug> {
 
 function CompaniesPage() {
   const qc = useQueryClient();
+  const { session } = useGtmAuth();
   const { data: queryDebug, isLoading, error } = useQuery({
     queryKey: ["companies"],
     queryFn: fetchCompanies,
@@ -129,7 +131,7 @@ function CompaniesPage() {
         const { error } = await gtmSupabase.from("companies").update(payload as never).eq("id", editing.id);
         if (error) throw error;
       } else {
-        const { error } = await gtmSupabase.from("companies").insert(payload as never);
+        const { error } = await gtmSupabase.from("companies").insert({ ...payload, user_id: session?.user.id } as never);
         if (error) throw error;
       }
     },
