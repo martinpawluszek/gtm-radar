@@ -131,7 +131,7 @@ function CompaniesPage() {
         const { error } = await gtmSupabase.from("companies").update(payload as never).eq("id", editing.id);
         if (error) throw error;
       } else {
-        const { error } = await gtmSupabase.from("companies").insert(payload as never);
+        const { error } = await gtmSupabase.from("companies").insert({ ...payload, user_id: session?.user.id } as never);
         if (error) throw error;
       }
     },
