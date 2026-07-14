@@ -599,9 +599,26 @@ function ItemsTab({ kind }: { kind: TabKind }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex justify-between items-center">
-        <div className="text-sm" style={{ color: "#8B8B9E" }}>
-          {header.count}
+      <div className="flex justify-between items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="text-sm" style={{ color: "#8B8B9E" }}>
+            {header.count}
+          </div>
+          {aiDraftCount > 0 && (
+            <span
+              className="px-2 py-0.5 text-[11px] font-medium"
+              style={{
+                color: "#00D4FF",
+                background: "rgba(0,212,255,0.1)",
+                border: "1px solid rgba(0,212,255,0.3)",
+                borderRadius: 999,
+                fontFamily: MONO,
+              }}
+              title="AI-generated drafts awaiting review"
+            >
+              {aiDraftCount} new AI draft{aiDraftCount === 1 ? "" : "s"} to review
+            </span>
+          )}
         </div>
         {header.cta && (
           <button
