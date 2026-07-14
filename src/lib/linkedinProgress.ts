@@ -2,11 +2,12 @@
 // Single source of truth used by both the LinkedIn Presence page (Progress tab,
 // Settings, weekly status) and the main Dashboard card.
 //
-// The project_start_date is stored in localStorage because the existing
-// linkedin_presence_goals schema cannot be extended from this app (the
-// constraint says no schema changes / no new tables).
+// project_start_date now lives in the DB on the active
+// public.linkedin_presence_goals row. A one-time migration copies any legacy
+// localStorage value into the DB the first time this hook runs.
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { gtmSupabase } from "@/lib/gtmSupabase";
 
 export const LP_START_DATE_KEY = "lp.project_start_date";
 export const LP_START_DATE_QK = ["lp-project-start-date"] as const;
@@ -14,7 +15,7 @@ export const LP_START_DATE_QK = ["lp-project-start-date"] as const;
 export type LpItem = {
   id: string;
   item_type: "post_idea" | "reply_opportunity";
-  status: "idea" | "drafted" | "posted" | "archived";
+  status: "idea" | "drafted" | "prompt_ready" | "posted" | "archived";
   posted_at: string | null;
   created_at: string;
 };
@@ -23,12 +24,13 @@ export type LpGoal = {
   weekly_posts_goal: number;
   weekly_comments_goal: number;
   weekly_ideas_goal: number;
+  project_start_date?: string | null;
 };
 
 export type WeekStat = {
-  week_number: number; // 1-based, week 1 = week of project start
-  week_start: string; // yyyy-mm-dd (Monday, local)
-  week_end: string; // yyyy-mm-dd (next Monday, exclusive)
+  week_number: number;
+  week_start: string;
+  week_end: string;
   posts_published: number;
   comments_posted: number;
   ideas_saved: number;
@@ -45,31 +47,84 @@ export type WeekStat = {
 };
 
 // ---------- storage ----------
-export function readProjectStartDate(): string | null {
+function readLegacyLocal(): string | null {
   if (typeof window === "undefined") return null;
   const v = window.localStorage.getItem(LP_START_DATE_KEY);
   return v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
 }
 
-export function writeProjectStartDate(value: string | null) {
+function clearLegacyLocal() {
   if (typeof window === "undefined") return;
-  if (value) window.localStorage.setItem(LP_START_DATE_KEY, value);
-  else window.localStorage.removeItem(LP_START_DATE_KEY);
+  window.localStorage.removeItem(LP_START_DATE_KEY);
+}
+
+async function fetchActiveGoalRow(): Promise<{
+  id: string;
+  project_start_date: string | null;
+} | null> {
+  const { data, error } = await gtmSupabase
+    .from("linkedin_presence_goals" as never)
+    .select("id, project_start_date")
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return (data ?? null) as unknown as { id: string; project_start_date: string | null } | null;
+}
+
+async function writeStartDate(goalId: string, value: string | null): Promise<void> {
+  const { error } = await gtmSupabase
+    .from("linkedin_presence_goals" as never)
+    .update({ project_start_date: value } as never)
+    .eq("id", goalId);
+  if (error) throw error;
 }
 
 export function useProjectStartDate() {
   const qc = useQueryClient();
   const query = useQuery({
     queryKey: LP_START_DATE_QK,
-    queryFn: async () => readProjectStartDate(),
-    staleTime: Infinity,
+    queryFn: async (): Promise<string | null> => {
+      const row = await fetchActiveGoalRow();
+      if (!row) return null;
+      // One-time migration: DB null + legacy localStorage value -> write to DB.
+      if (!row.project_start_date) {
+        const legacy = readLegacyLocal();
+        if (legacy) {
+          try {
+            await writeStartDate(row.id, legacy);
+            clearLegacyLocal();
+            qc.invalidateQueries({ queryKey: ["lp-active-goal"] });
+            return legacy;
+          } catch {
+            return legacy;
+          }
+        }
+      }
+      return row.project_start_date ?? null;
+    },
+    staleTime: 60_000,
   });
+
+  const mut = useMutation({
+    mutationFn: async (value: string | null) => {
+      const row = await fetchActiveGoalRow();
+      if (!row) throw new Error("No active LinkedIn goal row");
+      await writeStartDate(row.id, value);
+      return value;
+    },
+    onSuccess: (value) => {
+      qc.setQueryData(LP_START_DATE_QK, value);
+      qc.invalidateQueries({ queryKey: ["lp-active-goal"] });
+      qc.invalidateQueries({ queryKey: ["lp-weekly-progress"] });
+      qc.invalidateQueries({ queryKey: ["lp-weekly-status"] });
+    },
+  });
+
   const set = (value: string | null) => {
-    writeProjectStartDate(value);
-    qc.setQueryData(LP_START_DATE_QK, value);
-    // Recompute weekly progress everywhere it's derived from the start date.
-    qc.invalidateQueries({ queryKey: ["lp-weekly-progress"] });
+    mut.mutate(value);
   };
+
   return { value: query.data ?? null, set };
 }
 
@@ -87,7 +142,6 @@ function parseIsoDate(iso: string): Date {
   return new Date(y, (m ?? 1) - 1, d ?? 1);
 }
 
-// Monday of the week containing d (local time). JS getDay: 0=Sun..6=Sat.
 export function mondayOf(d: Date): Date {
   const out = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const day = out.getDay();
@@ -105,7 +159,6 @@ function addDays(d: Date, n: number): Date {
 export function formatWeekRange(startIso: string, endIso: string): string {
   const fmt = (iso: string) =>
     parseIsoDate(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  // endIso is exclusive (next Monday); show inclusive Sunday for readability.
   const end = parseIsoDate(endIso);
   end.setDate(end.getDate() - 1);
   return `${fmt(startIso)} – ${end.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
@@ -119,7 +172,6 @@ export function computeWeeks(
   now: Date = new Date(),
 ): WeekStat[] {
   if (!goal) return [];
-  // Default: start from current week if no project start configured.
   const startDate = startDateIso ? parseIsoDate(startDateIso) : now;
   const firstMonday = mondayOf(startDate);
   const currentMonday = mondayOf(now);
@@ -140,7 +192,6 @@ export function computeWeeks(
     let ideas = 0;
 
     for (const it of items) {
-      // Posted items count toward posts/comments based on posted_at.
       if (it.status === "posted" && it.posted_at) {
         const pAt = new Date(it.posted_at);
         if (pAt >= cursor && pAt < nextMonday) {
@@ -148,7 +199,6 @@ export function computeWeeks(
           else if (it.item_type === "reply_opportunity") comments++;
         }
       }
-      // Ideas saved counted by created_at, excluding archived.
       if (it.item_type === "post_idea" && it.status !== "archived" && it.created_at) {
         const cAt = new Date(it.created_at);
         if (cAt >= cursor && cAt < nextMonday) ideas++;
@@ -189,7 +239,6 @@ export function computeWeeks(
     weekNumber++;
   }
 
-  // Latest first.
   return weeks.reverse();
 }
 

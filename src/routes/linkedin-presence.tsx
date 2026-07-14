@@ -60,6 +60,8 @@ type Category =
   | "tool_stack"
   | "reply";
 
+type GeneratedBy = "manual" | "ai_nightly";
+
 type Item = {
   id: string;
   item_type: ItemType;
@@ -75,6 +77,9 @@ type Item = {
   posted_at: string | null;
   created_at: string;
   updated_at: string | null;
+  generated_by: GeneratedBy | null;
+  scheduled_for: string | null;
+  ai_rationale: string | null;
 };
 
 type Goal = {
@@ -85,6 +90,7 @@ type Goal = {
   reminder_day: number;
   reminder_threshold: "behind" | "zero_activity";
   is_active: boolean;
+  project_start_date: string | null;
 };
 
 type WeeklyStatus = {
@@ -531,9 +537,16 @@ function ItemsTab({ kind }: { kind: TabKind }) {
 
   const list = useMemo(() => {
     if (kind === "post_idea") {
-      return items.filter(
+      const filtered = items.filter(
         (i) => i.item_type === "post_idea" && i.status !== "posted" && i.status !== "archived",
       );
+      // AI-nightly prompt_ready items first, then by created_at desc (existing order).
+      return [...filtered].sort((a, b) => {
+        const aAi = a.generated_by === "ai_nightly" && a.status === "prompt_ready" ? 1 : 0;
+        const bAi = b.generated_by === "ai_nightly" && b.status === "prompt_ready" ? 1 : 0;
+        if (aAi !== bAi) return bAi - aAi;
+        return (b.created_at ?? "").localeCompare(a.created_at ?? "");
+      });
     }
     if (kind === "reply_opportunity") {
       return items.filter(
@@ -550,6 +563,19 @@ function ItemsTab({ kind }: { kind: TabKind }) {
     }
     return items.filter((i) => i.status === "archived");
   }, [items, kind]);
+
+  const aiDraftCount = useMemo(
+    () =>
+      kind === "post_idea"
+        ? items.filter(
+            (i) =>
+              i.item_type === "post_idea" &&
+              i.generated_by === "ai_nightly" &&
+              i.status === "prompt_ready",
+          ).length
+        : 0,
+    [items, kind],
+  );
 
   function refresh() {
     qc.invalidateQueries({ queryKey: ["lp-items"] });
@@ -573,9 +599,26 @@ function ItemsTab({ kind }: { kind: TabKind }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex justify-between items-center">
-        <div className="text-sm" style={{ color: "#8B8B9E" }}>
-          {header.count}
+      <div className="flex justify-between items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="text-sm" style={{ color: "#8B8B9E" }}>
+            {header.count}
+          </div>
+          {aiDraftCount > 0 && (
+            <span
+              className="px-2 py-0.5 text-[11px] font-medium"
+              style={{
+                color: "#00D4FF",
+                background: "rgba(0,212,255,0.1)",
+                border: "1px solid rgba(0,212,255,0.3)",
+                borderRadius: 999,
+                fontFamily: MONO,
+              }}
+              title="AI-generated drafts awaiting review"
+            >
+              {aiDraftCount} new AI draft{aiDraftCount === 1 ? "" : "s"} to review
+            </span>
+          )}
         </div>
         {header.cta && (
           <button
@@ -975,9 +1018,10 @@ function ItemCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
         padding: 16,
       }}
     >
-      <div className="flex items-center gap-2 mb-2 text-[11px]" style={{ fontFamily: MONO }}>
+      <div className="flex items-center gap-2 mb-2 text-[11px] flex-wrap" style={{ fontFamily: MONO }}>
         {item.category && <Tag color="#00D4FF">{CATEGORY_LABEL[item.category]}</Tag>}
         <Tag color={statusColor(item.status)}>{STATUS_LABEL[item.status]}</Tag>
+        {item.generated_by === "ai_nightly" && <Tag color="#00D4FF">AI draft</Tag>}
         <span style={{ color: "#8B8B9E", marginLeft: "auto" }}>
           {item.status === "posted" && item.posted_at
             ? new Date(item.posted_at).toLocaleDateString()
@@ -1000,6 +1044,16 @@ function ItemCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
         <pre className="text-[12px] whitespace-pre-wrap mt-2 font-sans" style={{ color: "#8B8B9E" }}>
           {item.final_text.slice(0, 200)}{item.final_text.length > 200 ? "…" : ""}
         </pre>
+      )}
+
+      {item.ai_rationale && (
+        <div
+          className="text-[11px] mt-2 italic"
+          style={{ color: "#6B6B80", fontFamily: MONO }}
+          title={item.ai_rationale}
+        >
+          AI: {item.ai_rationale.length > 140 ? `${item.ai_rationale.slice(0, 140)}…` : item.ai_rationale}
+        </div>
       )}
     </div>
   );
@@ -1152,6 +1206,43 @@ function DetailModal({
             {STATUS_LABEL[item.status]}:
           </span>
           {STATUS_DESCRIPTION[item.status]}
+        </div>
+
+        <div className="pt-2 border-t" style={{ borderColor: "#1E1E2E" }}>
+          {(() => {
+            const hasFinal = !!(item.final_text && item.final_text.trim());
+            return (
+              <button
+                onClick={async () => {
+                  if (!hasFinal) return;
+                  try {
+                    await navigator.clipboard.writeText(item.final_text ?? "");
+                    toast.success("Post copied. Opening LinkedIn.");
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "Copy failed");
+                    return;
+                  }
+                  window.open(
+                    "https://www.linkedin.com/feed/?shareActive=true",
+                    "_blank",
+                    "noopener,noreferrer",
+                  );
+                }}
+                disabled={!hasFinal}
+                title={hasFinal ? "Copies the final text and opens the LinkedIn share composer in a new tab." : "Add final post text first."}
+                className="w-full sm:w-auto px-4 py-2 text-[13px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                  color: "#0A0A0F",
+                  background: hasFinal ? "#00D4FF" : "rgba(0,212,255,0.2)",
+                  border: "1px solid rgba(0,212,255,0.4)",
+                  borderRadius: 4,
+                  fontFamily: MONO,
+                }}
+              >
+                Copy &amp; open LinkedIn
+              </button>
+            );
+          })()}
         </div>
 
         <div className="flex flex-wrap gap-2 pt-2 border-t" style={{ borderColor: "#1E1E2E" }}>
