@@ -1018,9 +1018,10 @@ function ItemCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
         padding: 16,
       }}
     >
-      <div className="flex items-center gap-2 mb-2 text-[11px]" style={{ fontFamily: MONO }}>
+      <div className="flex items-center gap-2 mb-2 text-[11px] flex-wrap" style={{ fontFamily: MONO }}>
         {item.category && <Tag color="#00D4FF">{CATEGORY_LABEL[item.category]}</Tag>}
         <Tag color={statusColor(item.status)}>{STATUS_LABEL[item.status]}</Tag>
+        {item.generated_by === "ai_nightly" && <Tag color="#00D4FF">AI draft</Tag>}
         <span style={{ color: "#8B8B9E", marginLeft: "auto" }}>
           {item.status === "posted" && item.posted_at
             ? new Date(item.posted_at).toLocaleDateString()
