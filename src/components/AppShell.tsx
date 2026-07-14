@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { gtmSupabase } from "@/lib/gtmSupabase";
 import { useGtmAuth } from "@/lib/gtmAuth";
+import { NotificationBell } from "@/components/NotificationBell";
 
 type NavItem = { to: string; label: string; icon: LucideIcon };
 
