@@ -537,9 +537,16 @@ function ItemsTab({ kind }: { kind: TabKind }) {
 
   const list = useMemo(() => {
     if (kind === "post_idea") {
-      return items.filter(
+      const filtered = items.filter(
         (i) => i.item_type === "post_idea" && i.status !== "posted" && i.status !== "archived",
       );
+      // AI-nightly prompt_ready items first, then by created_at desc (existing order).
+      return [...filtered].sort((a, b) => {
+        const aAi = a.generated_by === "ai_nightly" && a.status === "prompt_ready" ? 1 : 0;
+        const bAi = b.generated_by === "ai_nightly" && b.status === "prompt_ready" ? 1 : 0;
+        if (aAi !== bAi) return bAi - aAi;
+        return (b.created_at ?? "").localeCompare(a.created_at ?? "");
+      });
     }
     if (kind === "reply_opportunity") {
       return items.filter(
@@ -556,6 +563,19 @@ function ItemsTab({ kind }: { kind: TabKind }) {
     }
     return items.filter((i) => i.status === "archived");
   }, [items, kind]);
+
+  const aiDraftCount = useMemo(
+    () =>
+      kind === "post_idea"
+        ? items.filter(
+            (i) =>
+              i.item_type === "post_idea" &&
+              i.generated_by === "ai_nightly" &&
+              i.status === "prompt_ready",
+          ).length
+        : 0,
+    [items, kind],
+  );
 
   function refresh() {
     qc.invalidateQueries({ queryKey: ["lp-items"] });
