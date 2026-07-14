@@ -2261,7 +2261,7 @@ function AddPostingModal({
     c.name.toLowerCase().includes(companySearch.toLowerCase()),
   );
 
-  async function submit() {
+  async function submit(withScoring: boolean) {
     if (!companyId) return toast.error("Company is required");
     if (!title.trim()) return toast.error("Role title is required");
     if (!location.trim()) return toast.error("Location is required");
@@ -2297,68 +2297,73 @@ function AddPostingModal({
       if (insErr || !ins) throw insErr ?? new Error("Insert failed");
       const postingId = (ins as { id: string }).id;
 
-      // Build prompts
-      const criteria = await fetchActiveCriteria();
-      if (!criteria) throw new Error("No active role_criteria row found");
-      const { data: profile } = await gtmSupabase
-        .from("user_profiles" as never)
-        .select("background_summary")
-        .order("created_at")
-        .limit(1)
-        .maybeSingle();
-      const backgroundSummary =
-        (profile as { background_summary?: string | null } | null)?.background_summary ?? null;
-      const feedback = await fetchFeedbackContext();
-      const system = buildSystemPrompt(criteria, company, backgroundSummary, feedback.text);
-      const user = buildUserPrompt(title.trim(), normalizeLocationInput(location), jdFull, criteria);
+      if (withScoring) {
+        // Build prompts
+        const criteria = await fetchActiveCriteria();
+        if (!criteria) throw new Error("No active role_criteria row found");
+        const { data: profile } = await gtmSupabase
+          .from("user_profiles" as never)
+          .select("background_summary")
+          .order("created_at")
+          .limit(1)
+          .maybeSingle();
+        const backgroundSummary =
+          (profile as { background_summary?: string | null } | null)?.background_summary ?? null;
+        const feedback = await fetchFeedbackContext();
+        const system = buildSystemPrompt(criteria, company, backgroundSummary, feedback.text);
+        const user = buildUserPrompt(title.trim(), normalizeLocationInput(location), jdFull, criteria);
 
-      const { getGtmAccessToken } = await import("@/lib/gtmAuth");
-      const accessToken = await getGtmAccessToken();
-      const res = await score({ data: { system, user, accessToken } });
-      const parsed = extractJson(res.text) as {
-        disqualified?: boolean;
-        disqualifier_reason?: string | null;
-        parameter_scores?: Record<string, ParameterScore>;
-        bonuses_applied?: unknown[];
-        final_score?: number;
-        title_signal?: string;
-        summary?: string;
-        deadline?: string | null;
-      };
+        const { getGtmAccessToken } = await import("@/lib/gtmAuth");
+        const accessToken = await getGtmAccessToken();
+        const res = await score({ data: { system, user, accessToken } });
+        const parsed = extractJson(res.text) as {
+          disqualified?: boolean;
+          disqualifier_reason?: string | null;
+          parameter_scores?: Record<string, ParameterScore>;
+          bonuses_applied?: unknown[];
+          final_score?: number;
+          title_signal?: string;
+          summary?: string;
+          deadline?: string | null;
+        };
 
-      const finalScore = computeFinalScore(
-        parsed.parameter_scores,
-        parsed.bonuses_applied as Array<{ value?: number }> | undefined,
-        criteria.weights,
-        typeof parsed.final_score === "number" ? parsed.final_score : null,
-      );
+        const finalScore = computeFinalScore(
+          parsed.parameter_scores,
+          parsed.bonuses_applied as Array<{ value?: number }> | undefined,
+          criteria.weights,
+          typeof parsed.final_score === "number" ? parsed.final_score : null,
+        );
 
-      const rationale: AiRationale = {
-        parameter_scores: parsed.parameter_scores,
-        bonuses_applied: (parsed.bonuses_applied ?? []) as AiRationale["bonuses_applied"],
-        summary: parsed.summary,
-      };
-      const parsedDeadline = parseDeadline(parsed.deadline);
+        const rationale: AiRationale = {
+          parameter_scores: parsed.parameter_scores,
+          bonuses_applied: (parsed.bonuses_applied ?? []) as AiRationale["bonuses_applied"],
+          summary: parsed.summary,
+        };
+        const parsedDeadline = parseDeadline(parsed.deadline);
 
-      const updatePayload: Record<string, unknown> = {
-        ai_role_score: finalScore,
-        ai_composite_score: finalScore,
-        ai_rationale: rationale,
-        disqualified: parsed.disqualified ?? false,
-        disqualifier_reason: parsed.disqualifier_reason ?? null,
-        title_signal: parsed.title_signal ?? null,
-        updated_at: new Date().toISOString(),
-      };
-      if (parsedDeadline) updatePayload.deadline_at = parsedDeadline;
+        const updatePayload: Record<string, unknown> = {
+          ai_role_score: finalScore,
+          ai_composite_score: finalScore,
+          ai_rationale: rationale,
+          disqualified: parsed.disqualified ?? false,
+          disqualifier_reason: parsed.disqualifier_reason ?? null,
+          title_signal: parsed.title_signal ?? null,
+          updated_at: new Date().toISOString(),
+        };
+        if (parsedDeadline) updatePayload.deadline_at = parsedDeadline;
 
-      const { error: upErr } = await gtmSupabase
-        .from("job_postings" as never)
-        .update(updatePayload as never)
-        .eq("id", postingId);
-      if (upErr) throw upErr;
-      await markFeedbackUsed(feedback.ids);
+        const { error: upErr } = await gtmSupabase
+          .from("job_postings" as never)
+          .update(updatePayload as never)
+          .eq("id", postingId);
+        if (upErr) throw upErr;
+        await markFeedbackUsed(feedback.ids);
 
-      toast.success("Posting scored");
+        toast.success("Posting scored");
+      } else {
+        toast.success("Posting saved");
+      }
+
       onAdded();
       onOpenChange(false);
     } catch (e) {
@@ -2503,7 +2508,21 @@ function AddPostingModal({
               Cancel
             </Button>
             <Button
-              onClick={submit}
+              onClick={() => submit(false)}
+              disabled={busy}
+              variant="outline"
+              style={{ border: "1px solid #1E1E2E", color: "#F0F0FF", background: "transparent" }}
+            >
+              {busy ? (
+                <span className="inline-flex items-center gap-2">
+                  <Spinner /> Saving…
+                </span>
+              ) : (
+                "Save without Scoring"
+              )}
+            </Button>
+            <Button
+              onClick={() => submit(true)}
               disabled={busy}
               style={{ background: "#00D4FF", color: "#0A0A0F" }}
             >
