@@ -1810,6 +1810,7 @@ function DetailPanelInner({
       toast.success(
         action === "apply" ? "Moved to Applications" : action === "save" ? "Saved" : "Dismissed",
       );
+      if (action === "apply") onClose();
     },
     onSettled: () => onChanged(),
   });
