@@ -16,7 +16,38 @@ const MONO = "var(--font-mono)";
 export const Route = createFileRoute("/linkedin-presence")({
   head: () => ({ meta: [{ title: "LinkedIn Presence — GTM Intelligence" }] }),
   component: LinkedInPresencePage,
+  errorComponent: LinkedInPresenceError,
+  notFoundComponent: () => (
+    <div style={{ padding: 24, color: "#F0F0FF", fontFamily: MONO }}>Not found.</div>
+  ),
 });
+
+function LinkedInPresenceError({ error, reset }: { error: Error; reset: () => void }) {
+  console.error("[linkedin-presence] route error:", error);
+  return (
+    <div style={{ padding: 24, color: "#F0F0FF", fontFamily: MONO, maxWidth: 640 }}>
+      <h1 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
+        LinkedIn Presence couldn't load
+      </h1>
+      <p style={{ color: "#8B8B9E", fontSize: 13, marginBottom: 12 }}>
+        {error?.message ?? "Unknown error"}
+      </p>
+      <button
+        onClick={() => reset()}
+        style={{
+          background: "#1E1E2E",
+          color: "#F0F0FF",
+          border: "1px solid #2A2A3E",
+          padding: "6px 12px",
+          fontSize: 12,
+          cursor: "pointer",
+        }}
+      >
+        Try again
+      </button>
+    </div>
+  );
+}
 
 // ---------- Types ----------
 type ItemStatus = "idea" | "drafted" | "prompt_ready" | "posted" | "archived";
