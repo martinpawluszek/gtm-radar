@@ -995,8 +995,10 @@ function statusColor(s: ItemStatus): string {
   switch (s) {
     case "idea": return "#8B8B9E";
     case "drafted": return "#F59E0B";
+    case "prompt_ready": return "#3B82F6";
     case "posted": return "#10B981";
     case "archived": return "#6B7280";
+    default: return "#8B8B9E";
   }
 }
 
