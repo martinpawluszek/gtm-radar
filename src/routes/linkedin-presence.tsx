@@ -1045,6 +1045,16 @@ function ItemCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
           {item.final_text.slice(0, 200)}{item.final_text.length > 200 ? "…" : ""}
         </pre>
       )}
+
+      {item.ai_rationale && (
+        <div
+          className="text-[11px] mt-2 italic"
+          style={{ color: "#6B6B80", fontFamily: MONO }}
+          title={item.ai_rationale}
+        >
+          AI: {item.ai_rationale.length > 140 ? `${item.ai_rationale.slice(0, 140)}…` : item.ai_rationale}
+        </div>
+      )}
     </div>
   );
 }
