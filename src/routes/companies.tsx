@@ -107,6 +107,7 @@ async function fetchCompanies(): Promise<CompaniesQueryDebug> {
 
 function CompaniesPage() {
   const qc = useQueryClient();
+  const { session } = useGtmAuth();
   const { data: queryDebug, isLoading, error } = useQuery({
     queryKey: ["companies"],
     queryFn: fetchCompanies,
