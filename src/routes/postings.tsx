@@ -2508,7 +2508,21 @@ function AddPostingModal({
               Cancel
             </Button>
             <Button
-              onClick={submit}
+              onClick={() => submit(false)}
+              disabled={busy}
+              variant="outline"
+              style={{ border: "1px solid #1E1E2E", color: "#F0F0FF", background: "transparent" }}
+            >
+              {busy ? (
+                <span className="inline-flex items-center gap-2">
+                  <Spinner /> Saving…
+                </span>
+              ) : (
+                "Save without Scoring"
+              )}
+            </Button>
+            <Button
+              onClick={() => submit(true)}
               disabled={busy}
               style={{ background: "#00D4FF", color: "#0A0A0F" }}
             >
