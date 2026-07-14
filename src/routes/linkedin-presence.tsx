@@ -94,6 +94,7 @@ const CATEGORY_LABEL: Record<Category, string> = {
 const STATUS_LABEL: Record<ItemStatus, string> = {
   idea: "Idea",
   drafted: "Drafted",
+  prompt_ready: "Prompt ready",
   posted: "Posted",
   archived: "Archived",
 };
@@ -106,6 +107,7 @@ const TYPE_LABEL: Record<ItemType, string> = {
 const STATUS_DESCRIPTION: Record<ItemStatus, string> = {
   idea: "Captured but not drafted or posted.",
   drafted: "Draft exists or is in progress, but not counted as published.",
+  prompt_ready: "Prompt generated and ready to use.",
   posted: "Counted as published in weekly stats based on Posted date.",
   archived: "Hidden from active workflow.",
 };
