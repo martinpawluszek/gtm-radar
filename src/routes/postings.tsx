@@ -889,6 +889,21 @@ function PostingsPage() {
           height: 48,
         }}
       >
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search title…"
+          style={{
+            width: 180,
+            height: 32,
+            background: "#0A0A0F",
+            border: "1px solid #1E1E2E",
+            borderRadius: 4,
+            color: "#F0F0FF",
+            fontFamily: MONO,
+            fontSize: 12,
+          }}
+        />
         <div className="flex items-center gap-1">
           {(["new", "saved", "applied", "dismissed", "expired"] as const).map((s) => (
             <FilterPill
@@ -1146,9 +1161,10 @@ function PostingsPage() {
         open={addOpen}
         onOpenChange={setAddOpen}
         companies={companies}
-        onAdded={() => {
+        onAdded={(postingId) => {
           invalidateAll();
           qc.invalidateQueries({ queryKey: ["job-posting-locations"] });
+          setSelectedId(postingId);
         }}
       />
 
@@ -2240,7 +2256,7 @@ function AddPostingModal({
   open: boolean;
   onOpenChange: (v: boolean) => void;
   companies: CompanyLite[];
-  onAdded: () => void;
+  onAdded: (postingId: string) => void;
 }) {
   const score = useSF(scoreJobPosting);
   const [companyId, setCompanyId] = useState("");
@@ -2371,7 +2387,7 @@ function AddPostingModal({
         toast.success("Posting saved");
       }
 
-      onAdded();
+      onAdded(postingId);
       onOpenChange(false);
     } catch (e) {
       toast.error((e as Error).message);
