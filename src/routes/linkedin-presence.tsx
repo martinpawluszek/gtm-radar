@@ -60,6 +60,8 @@ type Category =
   | "tool_stack"
   | "reply";
 
+type GeneratedBy = "manual" | "ai_nightly";
+
 type Item = {
   id: string;
   item_type: ItemType;
@@ -75,6 +77,9 @@ type Item = {
   posted_at: string | null;
   created_at: string;
   updated_at: string | null;
+  generated_by: GeneratedBy | null;
+  scheduled_for: string | null;
+  ai_rationale: string | null;
 };
 
 type Goal = {
@@ -85,6 +90,7 @@ type Goal = {
   reminder_day: number;
   reminder_threshold: "behind" | "zero_activity";
   is_active: boolean;
+  project_start_date: string | null;
 };
 
 type WeeklyStatus = {
