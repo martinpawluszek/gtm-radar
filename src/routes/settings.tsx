@@ -607,9 +607,9 @@ function AiProviderCard({
       <label style={LABEL}>API key</label>
       <div style={{ marginBottom: 6, fontSize: 12, fontFamily: MONO }}>
         {hasKey ? (
-          <span style={{ color: "#10B981" }}>✓ Key saved</span>
+          <span style={{ color: "#10B981" }}>✓ API key configured</span>
         ) : (
-          <span style={{ color: "#8B8B9E" }}>No key set</span>
+          <span style={{ color: "#8B8B9E" }}>No API key set</span>
         )}
       </div>
       <Input
