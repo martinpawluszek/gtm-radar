@@ -1,14 +1,23 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { BuiltTab } from "@/components/career/BuiltTab";
 import { CredentialsTab } from "@/components/career/CredentialsTab";
+import { CvStudioTab } from "@/components/career/CvStudioTab";
 import { ExperienceTab } from "@/components/career/ExperienceTab";
 import { ProfileCard } from "@/components/career/ProfileCard";
 import { RulesTab } from "@/components/career/RulesTab";
 import { StoriesTab } from "@/components/career/StoriesTab";
 import { MONO } from "@/components/career/ui";
+import { gtmSupabase } from "@/lib/gtmSupabase";
+
+type CareerSearch = { tab?: string; posting?: string };
 
 export const Route = createFileRoute("/career")({
+  validateSearch: (search: Record<string, unknown>): CareerSearch => ({
+    tab: typeof search.tab === "string" ? search.tab : undefined,
+    posting: typeof search.posting === "string" ? search.posting : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Career — GTM Intelligence" },
@@ -58,7 +67,7 @@ function CareerError({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
-type TabKey = "experience" | "built" | "stories" | "credentials" | "rules";
+type TabKey = "experience" | "built" | "stories" | "credentials" | "rules" | "cv-studio";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "experience", label: "Experience" },
@@ -66,10 +75,45 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "stories", label: "Stories" },
   { key: "credentials", label: "Credentials & Skills" },
   { key: "rules", label: "Rules" },
+  { key: "cv-studio", label: "CV Studio" },
 ];
 
+type PostingSeed = { jd_full: string | null; company_name: string | null };
+
+async function fetchPostingSeed(id: string): Promise<PostingSeed> {
+  const { data, error } = await gtmSupabase
+    .from("job_postings" as never)
+    .select("jd_full,company_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  const row = data as unknown as { jd_full: string | null; company_id: string | null } | null;
+  if (!row) return { jd_full: null, company_name: null };
+  let companyName: string | null = null;
+  if (row.company_id) {
+    const { data: c } = await gtmSupabase
+      .from("companies" as never)
+      .select("name")
+      .eq("id", row.company_id)
+      .maybeSingle();
+    companyName = (c as unknown as { name: string | null } | null)?.name ?? null;
+  }
+  return { jd_full: row.jd_full, company_name: companyName };
+}
+
 function CareerPage() {
-  const [tab, setTab] = useState<TabKey>("experience");
+  const search = Route.useSearch();
+  const [tab, setTab] = useState<TabKey>(
+    TABS.some((t) => t.key === search.tab) ? (search.tab as TabKey) : "experience",
+  );
+
+  const postingId = search.posting ?? null;
+  const { data: seed } = useQuery({
+    queryKey: ["career:posting-seed", postingId],
+    queryFn: () => fetchPostingSeed(postingId as string),
+    enabled: !!postingId,
+  });
+
 
   return (
     <div className="flex flex-col gap-6">
@@ -122,6 +166,14 @@ function CareerPage() {
       {tab === "stories" && <StoriesTab />}
       {tab === "credentials" && <CredentialsTab />}
       {tab === "rules" && <RulesTab />}
+      {tab === "cv-studio" && (
+        <CvStudioTab
+          initialCompany={seed?.company_name ?? ""}
+          initialJd={seed?.jd_full ?? ""}
+          postingId={postingId}
+        />
+      )}
     </div>
   );
 }
+
