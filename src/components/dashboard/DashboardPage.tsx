@@ -1270,7 +1270,9 @@ async function bumpTitleWeight(title: string, delta: 1 | -1) {
 function LinkedInPresenceCard() {
   const navigate = useNavigate();
   const itemsQ = useQuery({
-    queryKey: ["lp-items"],
+    // This is intentionally distinct from the full LinkedIn Presence item cache.
+    // The dashboard selects only fields needed for progress calculations.
+    queryKey: ["dash:lp-items"],
     queryFn: async () => {
       const { data, error } = await gtmSupabase
         .from("linkedin_presence_items" as never)

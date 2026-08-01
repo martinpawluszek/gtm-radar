@@ -166,6 +166,10 @@ function localInputToIso(local: string): string | null {
   return d.toISOString();
 }
 
+function safeText(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
 const DAYS = [
   { v: 1, l: "Monday" },
   { v: 2, l: "Tuesday" },
@@ -256,7 +260,7 @@ I want to sound sharp, useful and understated.
 Not like a LinkedIn influencer.
 
 Topic:
-${it.raw_input}
+${safeText(it.raw_input)}
 
 Title or improved angle:
 ${it.improved_title ?? ""}
@@ -284,7 +288,7 @@ function buildCommentPrompt(it: Item): string {
   return `Help me write a LinkedIn comment.
 
 Original post:
-${it.raw_input}
+${safeText(it.raw_input)}
 
 My context:
 I am a founder/CRO working on GTM, AI workflows, B2B SaaS, sales systems and internal tools.
@@ -1002,7 +1006,10 @@ function Bullets({ items }: { items: string[] }) {
 // ---------- ItemCard ----------
 function ItemCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
   const isReply = item.item_type === "reply_opportunity";
-  const title = item.improved_title || item.raw_input.slice(0, 120);
+  const rawInput = safeText(item.raw_input);
+  const finalText = safeText(item.final_text);
+  const aiRationale = safeText(item.ai_rationale);
+  const title = safeText(item.improved_title) || rawInput.slice(0, 120);
 
   return (
     <div
@@ -1036,23 +1043,23 @@ function ItemCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
       )}
 
       <div className="text-sm font-medium" style={{ color: "#F0F0FF" }}>
-        {isReply ? item.raw_input.slice(0, 240) : title}
-        {isReply && item.raw_input.length > 240 && <span style={{ color: "#8B8B9E" }}>…</span>}
+        {isReply ? rawInput.slice(0, 240) : title}
+        {isReply && rawInput.length > 240 && <span style={{ color: "#8B8B9E" }}>…</span>}
       </div>
 
-      {item.final_text && (
+      {finalText && (
         <pre className="text-[12px] whitespace-pre-wrap mt-2 font-sans" style={{ color: "#8B8B9E" }}>
-          {item.final_text.slice(0, 200)}{item.final_text.length > 200 ? "…" : ""}
+          {finalText.slice(0, 200)}{finalText.length > 200 ? "…" : ""}
         </pre>
       )}
 
-      {item.ai_rationale && (
+      {aiRationale && (
         <div
           className="text-[11px] mt-2 italic"
           style={{ color: "#6B6B80", fontFamily: MONO }}
-          title={item.ai_rationale}
+          title={aiRationale}
         >
-          AI: {item.ai_rationale.length > 140 ? `${item.ai_rationale.slice(0, 140)}…` : item.ai_rationale}
+          AI: {aiRationale.length > 140 ? `${aiRationale.slice(0, 140)}…` : aiRationale}
         </div>
       )}
     </div>
@@ -1114,7 +1121,9 @@ function DetailModal({
     onChanged();
   }
 
-  const title = item.improved_title || item.raw_input.slice(0, 140);
+  const rawInput = safeText(item.raw_input);
+  const finalText = safeText(item.final_text);
+  const title = safeText(item.improved_title) || rawInput.slice(0, 140) || "LinkedIn item";
 
   if (editing) {
     return (
@@ -1153,7 +1162,7 @@ function DetailModal({
         {item.item_type === "reply_opportunity" ? (
           <>
             <Field label="LinkedIn post text">
-              <pre className="whitespace-pre-wrap font-sans text-sm" style={{ color: "#F0F0FF" }}>{item.raw_input}</pre>
+              <pre className="whitespace-pre-wrap font-sans text-sm" style={{ color: "#F0F0FF" }}>{rawInput}</pre>
             </Field>
             {item.source_url && (
               <Field label="Post URL">
@@ -1162,22 +1171,22 @@ function DetailModal({
             )}
             {item.target_person && <Field label="Person"><div>{item.target_person}</div></Field>}
             {item.target_company && <Field label="Company"><div>{item.target_company}</div></Field>}
-            {item.final_text && (
+            {finalText && (
               <Field label="Final comment text">
-                <pre className="whitespace-pre-wrap font-sans text-sm" style={{ color: "#F0F0FF" }}>{item.final_text}</pre>
+                <pre className="whitespace-pre-wrap font-sans text-sm" style={{ color: "#F0F0FF" }}>{finalText}</pre>
               </Field>
             )}
           </>
         ) : (
           <>
             <Field label="Rough idea">
-              <pre className="whitespace-pre-wrap font-sans text-sm" style={{ color: "#F0F0FF" }}>{item.raw_input}</pre>
+              <pre className="whitespace-pre-wrap font-sans text-sm" style={{ color: "#F0F0FF" }}>{rawInput}</pre>
             </Field>
             {item.improved_title && <Field label="Better title"><div>{item.improved_title}</div></Field>}
             {item.angle && <Field label="Angle"><div>{item.angle}</div></Field>}
-            {item.final_text && (
+            {finalText && (
               <Field label="Final post text">
-                <pre className="whitespace-pre-wrap font-sans text-sm" style={{ color: "#F0F0FF" }}>{item.final_text}</pre>
+                <pre className="whitespace-pre-wrap font-sans text-sm" style={{ color: "#F0F0FF" }}>{finalText}</pre>
               </Field>
             )}
           </>
@@ -1215,13 +1224,13 @@ function DetailModal({
 
         <div className="pt-2 border-t" style={{ borderColor: "#1E1E2E" }}>
           {(() => {
-            const hasFinal = !!(item.final_text && item.final_text.trim());
+            const hasFinal = finalText.trim().length > 0;
             return (
               <button
                 onClick={async () => {
                   if (!hasFinal) return;
                   try {
-                    await navigator.clipboard.writeText(item.final_text ?? "");
+                    await navigator.clipboard.writeText(finalText);
                     toast.success("Post copied. Opening LinkedIn.");
                   } catch (e) {
                     toast.error(e instanceof Error ? e.message : "Copy failed");
