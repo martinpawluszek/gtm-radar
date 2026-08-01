@@ -92,6 +92,7 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
     setForm(initial ? { ...(initial as CompanyInsert), is_active: (initial as Company).is_active !== false } : { ...emptyForm });
     setTagInput("");
     setDetectResult(null);
+    setTestResult(null);
   }, [open, initial]);
 
   const set = <K extends keyof CompanyInsert>(k: K, v: CompanyInsert[K]) =>
