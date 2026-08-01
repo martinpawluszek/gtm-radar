@@ -166,6 +166,14 @@ function CareerPage() {
       {tab === "stories" && <StoriesTab />}
       {tab === "credentials" && <CredentialsTab />}
       {tab === "rules" && <RulesTab />}
+      {tab === "cv-studio" && (
+        <CvStudioTab
+          initialCompany={seed?.company_name ?? ""}
+          initialJd={seed?.jd_full ?? ""}
+          postingId={postingId}
+        />
+      )}
     </div>
   );
 }
+
