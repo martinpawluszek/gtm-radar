@@ -44,7 +44,9 @@ export function NotificationBell() {
   const ref = useRef<HTMLDivElement | null>(null);
 
   const { data: status } = useQuery({
-    queryKey: ["lp-weekly-status"],
+    // Distinct from the LinkedIn Presence page cache (["lp-weekly-status"]) which
+    // selects "*". This one selects a narrow column subset, so it gets its own key.
+    queryKey: ["bell:lp-weekly-status"],
     queryFn: fetchWeeklyStatus,
   });
 
