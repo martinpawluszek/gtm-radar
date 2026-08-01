@@ -77,12 +77,15 @@ const emptyForm: CompanyInsert = {
 };
 
 export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: Props) {
+  const { session } = useGtmAuth();
   const [form, setForm] = useState<CompanyInsert>(emptyForm);
   const [tagInput, setTagInput] = useState("");
   const [saving, setSaving] = useState(false);
 
   const [detecting, setDetecting] = useState(false);
   const [detectResult, setDetectResult] = useState<{ note: string; confidence: "high" | "medium" | "none" } | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ job_count: number | null; sample_titles: string[]; note: string } | null>(null);
 
   useEffect(() => {
     if (!open) return;
