@@ -257,6 +257,29 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
                   />
                 </div>
               </div>
+              {(() => {
+                const b = sourcingBadge({ sourcing_status: form.sourcing_status, ats_type: form.ats_type });
+                return (
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={b.variant === "discovering" ? "animate-pulse" : undefined}
+                      style={{
+                        ...SOURCING_STYLES[b.variant],
+                        fontSize: 10,
+                        padding: "2px 6px",
+                        borderRadius: 3,
+                        fontFamily: "var(--font-mono)",
+                      }}
+                    >
+                      {b.label}
+                    </span>
+                    {form.sourcing_note && (
+                      <span className="text-[11px]" style={{ color: "#8B8B9E" }}>{form.sourcing_note}</span>
+                    )}
+                  </div>
+                );
+              })()}
+
               {detectResult && (
                 <p
                   className="text-[12px]"
