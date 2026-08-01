@@ -616,7 +616,11 @@ function AiProviderCard({
         type="password"
         value={newKey}
         onChange={(e) => setNewKey(e.target.value)}
-        placeholder={hasKey ? "Enter a new key to replace…" : "Paste your API key"}
+        placeholder={
+          hasKey
+            ? "Enter a new key to replace it — leave blank to keep the current one unchanged"
+            : "Enter a new key to set it — leave blank to keep it unset"
+        }
         autoComplete="new-password"
         style={{
           background: "#0A0A0F",
