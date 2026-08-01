@@ -111,11 +111,56 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
     if (e.key === "Enter") { e.preventDefault(); addTag(); }
   };
 
+  const runBackgroundTest = async () => {
+    try {
+      const { data: row } = await gtmSupabase
+        .from("companies")
+        .select("id")
+        .eq("user_id", session?.user.id ?? "")
+        .eq("careers_url", form.careers_url ?? "")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+      const newId = (row as { id: string } | null)?.id;
+      if (!newId) return;
+      const data = await testCompanySourcing(newId);
+      if (!data.success) return;
+      if (data.job_count != null) toast.success(`Found ${data.job_count} live postings`);
+      else toast.success("Source verified — " + data.note);
+    } catch {
+      /* silent — save already succeeded */
+    }
+  };
+
+  const handleTest = async () => {
+    if (!initial?.id) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const data = await testCompanySourcing(initial.id);
+      setTestResult({ job_count: data.job_count, sample_titles: data.sample_titles ?? [], note: data.note });
+      if (!data.success) toast.error(data.note);
+      else if (data.job_count != null) toast.success(`Found ${data.job_count} live postings`);
+      else toast.success("Source verified — " + data.note);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Sourcing test failed");
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!form.name?.trim()) return;
+    const isNew = !initial;
     setSaving(true);
-    try { await onSave(form); onOpenChange(false); } finally { setSaving(false); }
+    try {
+      await onSave(form);
+      onOpenChange(false);
+      if (isNew) void runBackgroundTest();
+    } finally { setSaving(false); }
   };
+
+
 
   const handleDelete = async () => {
     if (!initial?.id || !onDelete) return;
