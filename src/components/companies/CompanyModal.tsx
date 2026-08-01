@@ -146,7 +146,12 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
     setTesting(true);
     setTestResult(null);
     try {
-      const data = await testCompanySourcing(initial.id);
+      const data = await testCompanySourcing({
+        id: initial.id,
+        name: initial.name,
+        careers_url: initial.careers_url,
+        ats_type: initial.ats_type,
+      });
       setTestResult({ job_count: data.job_count, sample_titles: data.sample_titles ?? [], note: data.note });
       if (!data.success) toast.error(data.note);
       else if (data.job_count != null) toast.success(`Found ${data.job_count} live postings`);
