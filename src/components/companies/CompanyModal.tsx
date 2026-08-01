@@ -292,15 +292,26 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="text-[13px]">Source</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDetect}
-                  disabled={detecting || !form.name?.trim()}
-                >
-                  {detecting ? "Discovering…" : "Discover Postings"}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDetect}
+                    disabled={detecting || !form.name?.trim()}
+                  >
+                    {detecting ? "Discovering…" : "Discover Postings"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleTest}
+                    disabled={testing || !initial?.id}
+                  >
+                    {testing ? "Testing…" : "Test Sourcing Now"}
+                  </Button>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
