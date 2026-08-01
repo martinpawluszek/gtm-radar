@@ -133,10 +133,21 @@ export function CompanyRow({ company, onEdit }: { company: Company; onEdit: (c: 
         </span>
       </div>
 
-      {/* Source badge */}
-      <div className="flex-shrink-0">
-        <SourceBadgeChip ats={company.ats_type} />
+      {/* Sourcing badge */}
+      <div className="flex-shrink-0 flex items-center gap-1">
+        <SourcingBadgeChip company={company} />
+        <button
+          type="button"
+          onClick={() => discover.mutate()}
+          disabled={discover.isPending}
+          className="p-1 disabled:opacity-40"
+          title="Discover job postings for this company"
+          style={{ color: "#8B8B9E" }}
+        >
+          <Radar size={14} />
+        </button>
       </div>
+
 
       {/* Score bars */}
       <div className="flex gap-2">
