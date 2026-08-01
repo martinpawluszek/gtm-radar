@@ -230,7 +230,7 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
                   onClick={handleDetect}
                   disabled={detecting || !form.name?.trim()}
                 >
-                  {detecting ? "Detecting…" : "Detect Source"}
+                  {detecting ? "Discovering…" : "Discover Postings"}
                 </Button>
               </div>
               <div className="grid grid-cols-2 gap-2">
