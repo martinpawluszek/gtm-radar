@@ -360,6 +360,24 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
                 );
               })()}
 
+              {testResult && (
+                <div className="space-y-1">
+                  <p className="text-[12px]" style={{ fontFamily: "var(--font-mono)", color: testResult.job_count != null ? "#00D4FF" : "#8B8B9E" }}>
+                    {testResult.job_count != null ? `${testResult.job_count} live postings — ${testResult.note}` : testResult.note}
+                  </p>
+                  {testResult.sample_titles.length > 0 && (
+                    <div>
+                      <p style={{ fontSize: 11, color: "#8B8B9E" }}>Sample postings found:</p>
+                      <ul className="list-disc pl-4" style={{ fontSize: 11, color: "#8B8B9E" }}>
+                        {testResult.sample_titles.slice(0, 5).map((t, i) => (
+                          <li key={`${t}-${i}`}>{t}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {detectResult && (
                 <p
                   className="text-[12px]"
