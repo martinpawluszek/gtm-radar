@@ -67,7 +67,7 @@ function CareerError({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
-type TabKey = "experience" | "built" | "stories" | "credentials" | "rules";
+type TabKey = "experience" | "built" | "stories" | "credentials" | "rules" | "cv-studio";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "experience", label: "Experience" },
@@ -75,10 +75,45 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "stories", label: "Stories" },
   { key: "credentials", label: "Credentials & Skills" },
   { key: "rules", label: "Rules" },
+  { key: "cv-studio", label: "CV Studio" },
 ];
 
+type PostingSeed = { jd_full: string | null; company_name: string | null };
+
+async function fetchPostingSeed(id: string): Promise<PostingSeed> {
+  const { data, error } = await gtmSupabase
+    .from("job_postings" as never)
+    .select("jd_full,company_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  const row = data as unknown as { jd_full: string | null; company_id: string | null } | null;
+  if (!row) return { jd_full: null, company_name: null };
+  let companyName: string | null = null;
+  if (row.company_id) {
+    const { data: c } = await gtmSupabase
+      .from("companies" as never)
+      .select("name")
+      .eq("id", row.company_id)
+      .maybeSingle();
+    companyName = (c as unknown as { name: string | null } | null)?.name ?? null;
+  }
+  return { jd_full: row.jd_full, company_name: companyName };
+}
+
 function CareerPage() {
-  const [tab, setTab] = useState<TabKey>("experience");
+  const search = Route.useSearch();
+  const [tab, setTab] = useState<TabKey>(
+    TABS.some((t) => t.key === search.tab) ? (search.tab as TabKey) : "experience",
+  );
+
+  const postingId = search.posting ?? null;
+  const { data: seed } = useQuery({
+    queryKey: ["career:posting-seed", postingId],
+    queryFn: () => fetchPostingSeed(postingId as string),
+    enabled: !!postingId,
+  });
+
 
   return (
     <div className="flex flex-col gap-6">
