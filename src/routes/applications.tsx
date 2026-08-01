@@ -748,7 +748,9 @@ function DetailPanel({
   });
 
   const { data: posting } = useQuery({
-    queryKey: ["posting", app.posting_id],
+    // Distinct from the Postings detail cache (["posting", id]) which selects "*".
+    // This one only selects id,jd_url, so it needs its own key to avoid poisoning it.
+    queryKey: ["app:posting-link", app.posting_id],
     queryFn: () => (app.posting_id ? fetchPosting(app.posting_id) : Promise.resolve(null)),
     enabled: !!app.posting_id,
   });
