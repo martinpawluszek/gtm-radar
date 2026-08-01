@@ -9,22 +9,33 @@ export type AtsType =
   | "lever"
   | "amazon"
   | "workday"
+  | "apple"
+  | "google"
+  | "microsoft"
   | "generic_scraper"
   | "unknown"
   | "private"
   | "custom"
   | null;
 
+export type SourcingStatus = "not_configured" | "discovering" | "ready" | "unreachable";
+
 export type Company = BaseCompany & {
   is_active?: boolean | null;
   ats_type?: AtsType;
   ats_slug?: string | null;
+  sourcing_status?: SourcingStatus | null;
+  sourcing_checked_at?: string | null;
+  sourcing_note?: string | null;
 };
 
 export type CompanyInsert = BaseInsert & {
   is_active?: boolean | null;
   ats_type?: AtsType;
   ats_slug?: string | null;
+  sourcing_status?: SourcingStatus | null;
+  sourcing_checked_at?: string | null;
+  sourcing_note?: string | null;
 };
 export type Tier = "god" | "t1" | "t2" | "t3" | "excluded";
 
@@ -34,6 +45,9 @@ const KNOWN_ATS: Record<string, string> = {
   lever: "Lever",
   amazon: "Amazon",
   workday: "Workday",
+  apple: "Apple",
+  google: "Google Careers",
+  microsoft: "Microsoft Careers",
 };
 
 export type SourceBadge = {
@@ -43,9 +57,30 @@ export type SourceBadge = {
 
 export function sourceBadge(ats: AtsType | undefined): SourceBadge {
   if (ats && KNOWN_ATS[ats]) return { label: `Via ${KNOWN_ATS[ats]}`, variant: "connected" };
-  if (ats === "generic_scraper") return { label: "Needs scraper", variant: "warning" };
+  if (ats === "generic_scraper") return { label: "AI scraping", variant: "warning" };
   return { label: "Not configured", variant: "muted" };
 }
+
+export type SourcingBadge = {
+  label: string;
+  variant: "discovering" | "ready" | "unreachable" | "not_configured";
+};
+
+export function sourcingBadge(company: Pick<Company, "sourcing_status" | "ats_type">): SourcingBadge {
+  const status = company.sourcing_status ?? "not_configured";
+  if (status === "discovering") return { label: "Discovering…", variant: "discovering" };
+  if (status === "ready") {
+    const label = company.ats_type && KNOWN_ATS[company.ats_type]
+      ? `Ready — via ${KNOWN_ATS[company.ats_type]}`
+      : company.ats_type === "generic_scraper"
+      ? "Ready — via AI web scraping"
+      : "Ready";
+    return { label, variant: "ready" };
+  }
+  if (status === "unreachable") return { label: "Unreachable", variant: "unreachable" };
+  return { label: "Not configured", variant: "not_configured" };
+}
+
 
 export const TIER_ORDER: Tier[] = ["god", "t1", "t2", "t3", "excluded"];
 
