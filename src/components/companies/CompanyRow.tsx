@@ -69,6 +69,78 @@ export function CompanyRow({ company, onEdit }: { company: Company; onEdit: (c: 
     },
   });
 
+  const patchCache = (patch: Partial<Company>) => {
+    const prev = qc.getQueryData<{ data: Company[] } & Record<string, unknown>>(["companies"]);
+    if (prev?.data) {
+      qc.setQueryData(["companies"], {
+        ...prev,
+        data: prev.data.map((c) => (c.id === company.id ? { ...c, ...patch } : c)),
+      });
+    }
+  };
+
+  const discover = useMutation({
+    mutationFn: async () => {
+      patchCache({ sourcing_status: "discovering", sourcing_note: null });
+      await gtmSupabase
+        .from("companies")
+        .update({ sourcing_status: "discovering" } as never)
+        .eq("id", company.id);
+
+      try {
+        const { data, error } = await gtmSupabase.functions.invoke("detect-ats", {
+          body: { name: company.name, careers_url: company.careers_url || undefined },
+        });
+        if (error) throw error;
+        if (!data || (data as { error?: string }).error) {
+          throw new Error((data as { error?: string })?.error ?? "Detection failed");
+        }
+        const r = data as {
+          ats_type: string;
+          ats_slug: string | null;
+          confidence: "high" | "medium" | "none";
+          note: string;
+        };
+        const status = r.confidence === "none" ? "unreachable" : "ready";
+        const note = !company.careers_url && status === "unreachable" ? "No careers URL set" : r.note;
+        const { error: upErr } = await gtmSupabase
+          .from("companies")
+          .update({
+            ats_type: r.ats_type,
+            ats_slug: r.ats_slug,
+            sourcing_status: status,
+            sourcing_checked_at: new Date().toISOString(),
+            sourcing_note: note,
+          } as never)
+          .eq("id", company.id);
+        if (upErr) throw upErr;
+        return { status, note };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Discovery failed";
+        await gtmSupabase
+          .from("companies")
+          .update({
+            sourcing_status: "unreachable",
+            sourcing_checked_at: new Date().toISOString(),
+            sourcing_note: company.careers_url ? msg : "No careers URL set",
+          } as never)
+          .eq("id", company.id);
+        throw new Error(msg);
+      }
+    },
+    onError: (e: Error) => {
+      toast.error(`Discovery failed: ${e.message}`);
+      qc.invalidateQueries({ queryKey: ["companies"] });
+    },
+    onSuccess: (r) => {
+      if (r.status === "ready") toast.success("Source ready");
+      else toast.error(r.note || "Unreachable");
+      qc.invalidateQueries({ queryKey: ["companies"] });
+    },
+  });
+
+
+
   return (
     <div
       className="company-row group flex items-center gap-4 transition-colors"
