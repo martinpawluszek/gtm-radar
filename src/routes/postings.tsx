@@ -2149,7 +2149,20 @@ function DetailPanelInner({
 
       {/* Actions */}
       <Section title="Actions">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={() =>
+              detailNavigate({ to: "/career", search: { tab: "cv-studio", posting: posting.id } })
+            }
+            style={{
+              border: "1px solid rgba(0,212,255,0.3)",
+              color: "#00D4FF",
+              background: "transparent",
+            }}
+          >
+            Tailor CV
+          </Button>
           <Button
             variant="outline"
             disabled={actionMut.isPending || posting.status === "dismissed"}
