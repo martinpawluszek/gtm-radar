@@ -1,24 +1,25 @@
-import { Pencil, ExternalLink, Briefcase } from "lucide-react";
+import { Pencil, ExternalLink, Briefcase, Radar } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { gtmSupabase } from "@/lib/gtmSupabase";
-import { Company, SCORE_DIMS, TIER_META, totalScore, sourceBadge } from "@/lib/companies";
+import { Company, SCORE_DIMS, TIER_META, totalScore, sourcingBadge, SourcingBadge } from "@/lib/companies";
 
-function SourceBadgeChip({ ats }: { ats: Company["ats_type"] }) {
-  const b = sourceBadge(ats);
-  const styles =
-    b.variant === "warning"
-      ? { color: "#F59E0B", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)" }
-      : b.variant === "connected"
-      ? { color: "#00D4FF", background: "rgba(0,212,255,0.10)", border: "1px solid rgba(0,212,255,0.30)" }
-      : { color: "#8B8B9E", background: "#1E1E2E", border: "1px solid #1E1E2E" };
+const SOURCING_STYLES: Record<SourcingBadge["variant"], React.CSSProperties> = {
+  ready: { color: "#00D4FF", background: "rgba(0,212,255,0.10)", border: "1px solid rgba(0,212,255,0.30)" },
+  discovering: { color: "#F59E0B", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)" },
+  unreachable: { color: "#EF4444", background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.30)" },
+  not_configured: { color: "#8B8B9E", background: "#1E1E2E", border: "1px solid #1E1E2E" },
+};
+
+function SourcingBadgeChip({ company }: { company: Company }) {
+  const b = sourcingBadge(company);
   return (
     <span
-      className="whitespace-nowrap"
-      title={ats ?? "not configured"}
+      className={`whitespace-nowrap${b.variant === "discovering" ? " animate-pulse" : ""}`}
+      title={company.sourcing_note ?? company.ats_type ?? "not configured"}
       style={{
-        ...styles,
+        ...SOURCING_STYLES[b.variant],
         fontSize: 10,
         padding: "2px 6px",
         borderRadius: 3,
@@ -29,6 +30,7 @@ function SourceBadgeChip({ ats }: { ats: Company["ats_type"] }) {
     </span>
   );
 }
+
 
 export function CompanyRow({ company, onEdit }: { company: Company; onEdit: (c: Company) => void }) {
   const tier = TIER_META[company.tier];
