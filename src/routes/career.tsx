@@ -1,0 +1,127 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
+import { BuiltTab } from "@/components/career/BuiltTab";
+import { CredentialsTab } from "@/components/career/CredentialsTab";
+import { ExperienceTab } from "@/components/career/ExperienceTab";
+import { ProfileCard } from "@/components/career/ProfileCard";
+import { RulesTab } from "@/components/career/RulesTab";
+import { StoriesTab } from "@/components/career/StoriesTab";
+import { MONO } from "@/components/career/ui";
+
+export const Route = createFileRoute("/career")({
+  head: () => ({
+    meta: [
+      { title: "Career — GTM Intelligence" },
+      {
+        name: "description",
+        content:
+          "Manage your full career history: experience, bullets, projects, stories, credentials and CV generation rules.",
+      },
+      { property: "og:title", content: "Career — GTM Intelligence" },
+      {
+        property: "og:description",
+        content: "Experience, projects, STAR stories, credentials and CV rules in one place.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
+  component: CareerPage,
+  errorComponent: CareerError,
+  notFoundComponent: () => (
+    <div style={{ padding: 24, color: "#F0F0FF", fontFamily: MONO }}>Not found.</div>
+  ),
+});
+
+function CareerError({ error, reset }: { error: Error; reset: () => void }) {
+  console.error("[career] route error:", error);
+  return (
+    <div style={{ padding: 24, color: "#F0F0FF", fontFamily: MONO, maxWidth: 640 }}>
+      <h1 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Career couldn't load</h1>
+      <p style={{ color: "#8B8B9E", fontSize: 13, marginBottom: 12 }}>
+        {error?.message ?? "Unknown error"}
+      </p>
+      <button
+        onClick={() => reset()}
+        style={{
+          background: "#1E1E2E",
+          color: "#F0F0FF",
+          border: "1px solid #2A2A3E",
+          padding: "6px 12px",
+          fontSize: 12,
+          cursor: "pointer",
+        }}
+      >
+        Try again
+      </button>
+    </div>
+  );
+}
+
+type TabKey = "experience" | "built" | "stories" | "credentials" | "rules";
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "experience", label: "Experience" },
+  { key: "built", label: "Built" },
+  { key: "stories", label: "Stories" },
+  { key: "credentials", label: "Credentials & Skills" },
+  { key: "rules", label: "Rules" },
+];
+
+function CareerPage() {
+  const [tab, setTab] = useState<TabKey>("experience");
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1
+          className="text-lg font-semibold tracking-tight"
+          style={{ color: "#F0F0FF", fontFamily: MONO }}
+        >
+          Career
+        </h1>
+        <p className="text-sm mt-1" style={{ color: "#8B8B9E" }}>
+          Your full career history in one place — the source material for tailored CVs and cover
+          letters.
+        </p>
+      </div>
+
+      <ProfileCard />
+
+      <div
+        className="flex items-center gap-2 px-3 flex-wrap"
+        style={{
+          background: "#111118",
+          border: "1px solid #1E1E2E",
+          borderRadius: 6,
+          minHeight: 48,
+          paddingTop: 6,
+          paddingBottom: 6,
+        }}
+      >
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className="px-3 py-1 text-[13px] font-medium transition-colors"
+            style={{
+              color: tab === t.key ? "#00D4FF" : "#8B8B9E",
+              background: tab === t.key ? "rgba(0,212,255,0.1)" : "transparent",
+              borderRadius: 4,
+              border: tab === t.key ? "1px solid rgba(0,212,255,0.25)" : "1px solid transparent",
+              fontFamily: MONO,
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "experience" && <ExperienceTab />}
+      {tab === "built" && <BuiltTab />}
+      {tab === "stories" && <StoriesTab />}
+      {tab === "credentials" && <CredentialsTab />}
+      {tab === "rules" && <RulesTab />}
+    </div>
+  );
+}
