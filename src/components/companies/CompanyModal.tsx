@@ -15,12 +15,22 @@ import {
 import { Switch } from "@/components/ui/switch";
 import {
   Company, CompanyInsert, SCORE_DIMS, SCORE_RUBRIC, TIER_META, TIER_ORDER, Tier, AtsType,
+  sourcingBadge, SourcingBadge,
 } from "@/lib/companies";
 import { gtmSupabase } from "@/lib/gtmSupabase";
 
+const SOURCING_STYLES: Record<SourcingBadge["variant"], React.CSSProperties> = {
+  ready: { color: "#00D4FF", background: "rgba(0,212,255,0.10)", border: "1px solid rgba(0,212,255,0.30)" },
+  discovering: { color: "#F59E0B", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)" },
+  unreachable: { color: "#EF4444", background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.30)" },
+  not_configured: { color: "#8B8B9E", background: "#1E1E2E", border: "1px solid #1E1E2E" },
+};
+
 const ATS_OPTIONS: Exclude<AtsType, null>[] = [
-  "greenhouse", "ashby", "lever", "amazon", "workday", "generic_scraper", "private", "unknown", "custom",
+  "greenhouse", "ashby", "lever", "amazon", "workday", "apple", "google", "microsoft",
+  "generic_scraper", "private", "unknown", "custom",
 ];
+
 
 type Props = {
   open: boolean;
@@ -94,6 +104,7 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
     if (!form.name?.trim()) return;
     setDetecting(true);
     setDetectResult(null);
+    setForm((p) => ({ ...p, sourcing_status: "discovering", sourcing_note: null }));
     try {
       const { data, error } = await gtmSupabase.functions.invoke("detect-ats", {
         body: { name: form.name.trim(), careers_url: form.careers_url || undefined },
@@ -103,19 +114,31 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
         throw new Error((data as { error?: string })?.error ?? "Detection failed");
       }
       const r = data as { ats_type: string; ats_slug: string | null; confidence: "high" | "medium" | "none"; note: string };
+      const status = r.confidence === "none" ? "unreachable" : "ready";
+      const note = !form.careers_url && status === "unreachable" ? "No careers URL set" : r.note;
       setForm((p) => ({
         ...p,
         ats_type: r.ats_type as AtsType,
         ats_slug: r.ats_slug,
-        ...(r.ats_type === "generic_scraper" ? { is_active: false } : {}),
+        sourcing_status: status,
+        sourcing_checked_at: new Date().toISOString(),
+        sourcing_note: note,
       }));
-      setDetectResult({ note: r.note, confidence: r.confidence });
+      setDetectResult({ note, confidence: r.confidence });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Detect source failed");
+      const msg = e instanceof Error ? e.message : "Discover postings failed";
+      setForm((p) => ({
+        ...p,
+        sourcing_status: "unreachable",
+        sourcing_checked_at: new Date().toISOString(),
+        sourcing_note: form.careers_url ? msg : "No careers URL set",
+      }));
+      toast.error(msg);
     } finally {
       setDetecting(false);
     }
   };
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -207,7 +230,7 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
                   onClick={handleDetect}
                   disabled={detecting || !form.name?.trim()}
                 >
-                  {detecting ? "Detecting…" : "Detect Source"}
+                  {detecting ? "Discovering…" : "Discover Postings"}
                 </Button>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -234,6 +257,29 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
                   />
                 </div>
               </div>
+              {(() => {
+                const b = sourcingBadge({ sourcing_status: form.sourcing_status, ats_type: form.ats_type });
+                return (
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={b.variant === "discovering" ? "animate-pulse" : undefined}
+                      style={{
+                        ...SOURCING_STYLES[b.variant],
+                        fontSize: 10,
+                        padding: "2px 6px",
+                        borderRadius: 3,
+                        fontFamily: "var(--font-mono)",
+                      }}
+                    >
+                      {b.label}
+                    </span>
+                    {form.sourcing_note && (
+                      <span className="text-[11px]" style={{ color: "#8B8B9E" }}>{form.sourcing_note}</span>
+                    )}
+                  </div>
+                );
+              })()}
+
               {detectResult && (
                 <p
                   className="text-[12px]"

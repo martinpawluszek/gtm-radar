@@ -1,24 +1,25 @@
-import { Pencil, ExternalLink, Briefcase } from "lucide-react";
+import { Pencil, ExternalLink, Briefcase, Radar } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { gtmSupabase } from "@/lib/gtmSupabase";
-import { Company, SCORE_DIMS, TIER_META, totalScore, sourceBadge } from "@/lib/companies";
+import { Company, SCORE_DIMS, TIER_META, totalScore, sourcingBadge, SourcingBadge } from "@/lib/companies";
 
-function SourceBadgeChip({ ats }: { ats: Company["ats_type"] }) {
-  const b = sourceBadge(ats);
-  const styles =
-    b.variant === "warning"
-      ? { color: "#F59E0B", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)" }
-      : b.variant === "connected"
-      ? { color: "#00D4FF", background: "rgba(0,212,255,0.10)", border: "1px solid rgba(0,212,255,0.30)" }
-      : { color: "#8B8B9E", background: "#1E1E2E", border: "1px solid #1E1E2E" };
+const SOURCING_STYLES: Record<SourcingBadge["variant"], React.CSSProperties> = {
+  ready: { color: "#00D4FF", background: "rgba(0,212,255,0.10)", border: "1px solid rgba(0,212,255,0.30)" },
+  discovering: { color: "#F59E0B", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)" },
+  unreachable: { color: "#EF4444", background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.30)" },
+  not_configured: { color: "#8B8B9E", background: "#1E1E2E", border: "1px solid #1E1E2E" },
+};
+
+function SourcingBadgeChip({ company }: { company: Company }) {
+  const b = sourcingBadge(company);
   return (
     <span
-      className="whitespace-nowrap"
-      title={ats ?? "not configured"}
+      className={`whitespace-nowrap${b.variant === "discovering" ? " animate-pulse" : ""}`}
+      title={company.sourcing_note ?? company.ats_type ?? "not configured"}
       style={{
-        ...styles,
+        ...SOURCING_STYLES[b.variant],
         fontSize: 10,
         padding: "2px 6px",
         borderRadius: 3,
@@ -29,6 +30,7 @@ function SourceBadgeChip({ ats }: { ats: Company["ats_type"] }) {
     </span>
   );
 }
+
 
 export function CompanyRow({ company, onEdit }: { company: Company; onEdit: (c: Company) => void }) {
   const tier = TIER_META[company.tier];
@@ -66,6 +68,78 @@ export function CompanyRow({ company, onEdit }: { company: Company; onEdit: (c: 
       qc.invalidateQueries({ queryKey: ["companies"] });
     },
   });
+
+  const patchCache = (patch: Partial<Company>) => {
+    const prev = qc.getQueryData<{ data: Company[] } & Record<string, unknown>>(["companies"]);
+    if (prev?.data) {
+      qc.setQueryData(["companies"], {
+        ...prev,
+        data: prev.data.map((c) => (c.id === company.id ? { ...c, ...patch } : c)),
+      });
+    }
+  };
+
+  const discover = useMutation({
+    mutationFn: async () => {
+      patchCache({ sourcing_status: "discovering", sourcing_note: null });
+      await gtmSupabase
+        .from("companies")
+        .update({ sourcing_status: "discovering" } as never)
+        .eq("id", company.id);
+
+      try {
+        const { data, error } = await gtmSupabase.functions.invoke("detect-ats", {
+          body: { name: company.name, careers_url: company.careers_url || undefined },
+        });
+        if (error) throw error;
+        if (!data || (data as { error?: string }).error) {
+          throw new Error((data as { error?: string })?.error ?? "Detection failed");
+        }
+        const r = data as {
+          ats_type: string;
+          ats_slug: string | null;
+          confidence: "high" | "medium" | "none";
+          note: string;
+        };
+        const status = r.confidence === "none" ? "unreachable" : "ready";
+        const note = !company.careers_url && status === "unreachable" ? "No careers URL set" : r.note;
+        const { error: upErr } = await gtmSupabase
+          .from("companies")
+          .update({
+            ats_type: r.ats_type,
+            ats_slug: r.ats_slug,
+            sourcing_status: status,
+            sourcing_checked_at: new Date().toISOString(),
+            sourcing_note: note,
+          } as never)
+          .eq("id", company.id);
+        if (upErr) throw upErr;
+        return { status, note };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Discovery failed";
+        await gtmSupabase
+          .from("companies")
+          .update({
+            sourcing_status: "unreachable",
+            sourcing_checked_at: new Date().toISOString(),
+            sourcing_note: company.careers_url ? msg : "No careers URL set",
+          } as never)
+          .eq("id", company.id);
+        throw new Error(msg);
+      }
+    },
+    onError: (e: Error) => {
+      toast.error(`Discovery failed: ${e.message}`);
+      qc.invalidateQueries({ queryKey: ["companies"] });
+    },
+    onSuccess: (r) => {
+      if (r.status === "ready") toast.success("Source ready");
+      else toast.error(r.note || "Unreachable");
+      qc.invalidateQueries({ queryKey: ["companies"] });
+    },
+  });
+
+
 
   return (
     <div
@@ -131,10 +205,21 @@ export function CompanyRow({ company, onEdit }: { company: Company; onEdit: (c: 
         </span>
       </div>
 
-      {/* Source badge */}
-      <div className="flex-shrink-0">
-        <SourceBadgeChip ats={company.ats_type} />
+      {/* Sourcing badge */}
+      <div className="flex-shrink-0 flex items-center gap-1">
+        <SourcingBadgeChip company={company} />
+        <button
+          type="button"
+          onClick={() => discover.mutate()}
+          disabled={discover.isPending}
+          className="p-1 disabled:opacity-40"
+          title="Discover job postings for this company"
+          style={{ color: "#8B8B9E" }}
+        >
+          <Radar size={14} />
+        </button>
       </div>
+
 
       {/* Score bars */}
       <div className="flex gap-2">
