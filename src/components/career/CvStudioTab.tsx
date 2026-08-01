@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Action,
@@ -10,6 +11,18 @@ import {
   TextInput,
   Chip,
 } from "@/components/career/ui";
+import { cvKey, cvList, type CvExperience, type CvProfile } from "@/lib/career";
+import {
+  buildCvDocxBlob,
+  buildCvPrintHtml,
+  buildFileBasename,
+  downloadBlob,
+  printCvPdf,
+  validateDocxForAts,
+  type AtsFinding,
+  type CvContact,
+  type ExperienceMeta,
+} from "@/lib/cvExport";
 import {
   finalizeGeneration,
   generateTailoredCv,
@@ -20,6 +33,7 @@ import {
   type CvGeneration,
   type CvOutput,
 } from "@/lib/cvStudio";
+
 
 // ---------- Inline editable text ----------
 function Editable({
