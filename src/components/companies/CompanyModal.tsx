@@ -29,11 +29,21 @@ type SourcingTestResult = {
   note: string;
 };
 
-async function testCompanySourcing(companyId: string): Promise<SourcingTestResult> {
+async function testCompanySourcing(company: {
+  id: string;
+  name: string;
+  careers_url: string | null | undefined;
+  ats_type: string | null | undefined;
+}): Promise<SourcingTestResult> {
   const res = await fetch("https://n8njmpawluszek.com/webhook/test-company-sourcing", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ company_id: companyId }),
+    body: JSON.stringify({
+      company_id: company.id,
+      name: company.name,
+      careers_url: company.careers_url,
+      ats_type: company.ats_type,
+    }),
   });
   if (!res.ok) throw new Error(`Test failed (HTTP ${res.status})`);
   return res.json();
