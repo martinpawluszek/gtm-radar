@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn as useSF } from "@tanstack/react-start";
 import { ChevronDown, ChevronLeft, ChevronRight, Plus, X, ExternalLink, Sparkles, AlertTriangle } from "lucide-react";
