@@ -1614,8 +1614,26 @@ function RowActions({
     onSettled: () => onChanged(),
   });
   const stop = (e: React.MouseEvent) => e.stopPropagation();
+  const navigate = useNavigate();
   return (
     <div className="flex items-center justify-end gap-1" onClick={stop}>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() =>
+          navigate({ to: "/career", search: { tab: "cv-studio", posting: posting.id } })
+        }
+        style={{
+          height: 26,
+          padding: "0 10px",
+          border: "1px solid rgba(0,212,255,0.3)",
+          color: "#00D4FF",
+          background: "transparent",
+          fontSize: 11,
+        }}
+      >
+        Tailor CV
+      </Button>
       <Button
         size="sm"
         variant="outline"
