@@ -15,12 +15,22 @@ import {
 import { Switch } from "@/components/ui/switch";
 import {
   Company, CompanyInsert, SCORE_DIMS, SCORE_RUBRIC, TIER_META, TIER_ORDER, Tier, AtsType,
+  sourcingBadge, SourcingBadge,
 } from "@/lib/companies";
 import { gtmSupabase } from "@/lib/gtmSupabase";
 
+const SOURCING_STYLES: Record<SourcingBadge["variant"], React.CSSProperties> = {
+  ready: { color: "#00D4FF", background: "rgba(0,212,255,0.10)", border: "1px solid rgba(0,212,255,0.30)" },
+  discovering: { color: "#F59E0B", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)" },
+  unreachable: { color: "#EF4444", background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.30)" },
+  not_configured: { color: "#8B8B9E", background: "#1E1E2E", border: "1px solid #1E1E2E" },
+};
+
 const ATS_OPTIONS: Exclude<AtsType, null>[] = [
-  "greenhouse", "ashby", "lever", "amazon", "workday", "generic_scraper", "private", "unknown", "custom",
+  "greenhouse", "ashby", "lever", "amazon", "workday", "apple", "google", "microsoft",
+  "generic_scraper", "private", "unknown", "custom",
 ];
+
 
 type Props = {
   open: boolean;
