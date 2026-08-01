@@ -113,11 +113,9 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
 
   const runBackgroundTest = async () => {
     try {
-      const { data: row } = await (gtmSupabase
-        .from("companies")
-        .select("id") as never as {
-          eq: (c: string, v: string) => never;
-        })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const q: any = gtmSupabase.from("companies").select("id");
+      const { data: row } = await q
         .eq("user_id", session?.user.id ?? "")
         .eq("careers_url", form.careers_url ?? "")
         .order("created_at", { ascending: false })
