@@ -124,16 +124,15 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
   const runBackgroundTest = async () => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const q: any = gtmSupabase.from("companies").select("id");
+      const q: any = gtmSupabase.from("companies").select("id, name, careers_url, ats_type");
       const { data: row } = await q
         .eq("user_id", session?.user.id ?? "")
         .eq("careers_url", form.careers_url ?? "")
         .order("created_at", { ascending: false })
         .limit(1)
         .single();
-      const newId = (row as { id: string } | null)?.id;
-      if (!newId) return;
-      const data = await testCompanySourcing(newId);
+      if (!row) return;
+      const data = await testCompanySourcing(row as { id: string; name: string; careers_url: string | null; ats_type: string | null });
       if (!data.success) return;
       if (data.job_count != null) toast.success(`Found ${data.job_count} live postings`);
       else toast.success("Source verified — " + data.note);
