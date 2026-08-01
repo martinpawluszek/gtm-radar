@@ -10,6 +10,7 @@ import {
   Kanban,
   Users,
   Linkedin,
+  BriefcaseBusiness,
   Settings,
   LogOut,
   type LucideIcon,
