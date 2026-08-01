@@ -104,6 +104,7 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
     if (!form.name?.trim()) return;
     setDetecting(true);
     setDetectResult(null);
+    setForm((p) => ({ ...p, sourcing_status: "discovering", sourcing_note: null }));
     try {
       const { data, error } = await gtmSupabase.functions.invoke("detect-ats", {
         body: { name: form.name.trim(), careers_url: form.careers_url || undefined },
@@ -113,19 +114,31 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
         throw new Error((data as { error?: string })?.error ?? "Detection failed");
       }
       const r = data as { ats_type: string; ats_slug: string | null; confidence: "high" | "medium" | "none"; note: string };
+      const status = r.confidence === "none" ? "unreachable" : "ready";
+      const note = !form.careers_url && status === "unreachable" ? "No careers URL set" : r.note;
       setForm((p) => ({
         ...p,
         ats_type: r.ats_type as AtsType,
         ats_slug: r.ats_slug,
-        ...(r.ats_type === "generic_scraper" ? { is_active: false } : {}),
+        sourcing_status: status,
+        sourcing_checked_at: new Date().toISOString(),
+        sourcing_note: note,
       }));
-      setDetectResult({ note: r.note, confidence: r.confidence });
+      setDetectResult({ note, confidence: r.confidence });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Detect source failed");
+      const msg = e instanceof Error ? e.message : "Discover postings failed";
+      setForm((p) => ({
+        ...p,
+        sourcing_status: "unreachable",
+        sourcing_checked_at: new Date().toISOString(),
+        sourcing_note: form.careers_url ? msg : "No careers URL set",
+      }));
+      toast.error(msg);
     } finally {
       setDetecting(false);
     }
   };
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
