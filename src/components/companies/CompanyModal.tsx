@@ -18,6 +18,26 @@ import {
   sourcingBadge, SourcingBadge,
 } from "@/lib/companies";
 import { gtmSupabase } from "@/lib/gtmSupabase";
+import { useGtmAuth } from "@/lib/gtmAuth";
+
+type SourcingTestResult = {
+  success: boolean;
+  company_name: string;
+  ats_type: string;
+  job_count: number | null;
+  sample_titles: string[];
+  note: string;
+};
+
+async function testCompanySourcing(companyId: string): Promise<SourcingTestResult> {
+  const res = await fetch("https://n8njmpawluszek.com/webhook/test-company-sourcing", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ company_id: companyId }),
+  });
+  if (!res.ok) throw new Error(`Test failed (HTTP ${res.status})`);
+  return res.json();
+}
 
 const SOURCING_STYLES: Record<SourcingBadge["variant"], React.CSSProperties> = {
   ready: { color: "#00D4FF", background: "rgba(0,212,255,0.10)", border: "1px solid rgba(0,212,255,0.30)" },
