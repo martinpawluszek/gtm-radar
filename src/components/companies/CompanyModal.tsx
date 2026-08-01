@@ -18,6 +18,26 @@ import {
   sourcingBadge, SourcingBadge,
 } from "@/lib/companies";
 import { gtmSupabase } from "@/lib/gtmSupabase";
+import { useGtmAuth } from "@/lib/gtmAuth";
+
+type SourcingTestResult = {
+  success: boolean;
+  company_name: string;
+  ats_type: string;
+  job_count: number | null;
+  sample_titles: string[];
+  note: string;
+};
+
+async function testCompanySourcing(companyId: string): Promise<SourcingTestResult> {
+  const res = await fetch("https://n8njmpawluszek.com/webhook/test-company-sourcing", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ company_id: companyId }),
+  });
+  if (!res.ok) throw new Error(`Test failed (HTTP ${res.status})`);
+  return res.json();
+}
 
 const SOURCING_STYLES: Record<SourcingBadge["variant"], React.CSSProperties> = {
   ready: { color: "#00D4FF", background: "rgba(0,212,255,0.10)", border: "1px solid rgba(0,212,255,0.30)" },
@@ -57,18 +77,22 @@ const emptyForm: CompanyInsert = {
 };
 
 export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: Props) {
+  const { session } = useGtmAuth();
   const [form, setForm] = useState<CompanyInsert>(emptyForm);
   const [tagInput, setTagInput] = useState("");
   const [saving, setSaving] = useState(false);
 
   const [detecting, setDetecting] = useState(false);
   const [detectResult, setDetectResult] = useState<{ note: string; confidence: "high" | "medium" | "none" } | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ job_count: number | null; sample_titles: string[]; note: string } | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setForm(initial ? { ...(initial as CompanyInsert), is_active: (initial as Company).is_active !== false } : { ...emptyForm });
     setTagInput("");
     setDetectResult(null);
+    setTestResult(null);
   }, [open, initial]);
 
   const set = <K extends keyof CompanyInsert>(k: K, v: CompanyInsert[K]) =>
@@ -87,11 +111,56 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
     if (e.key === "Enter") { e.preventDefault(); addTag(); }
   };
 
+  const runBackgroundTest = async () => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const q: any = gtmSupabase.from("companies").select("id");
+      const { data: row } = await q
+        .eq("user_id", session?.user.id ?? "")
+        .eq("careers_url", form.careers_url ?? "")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+      const newId = (row as { id: string } | null)?.id;
+      if (!newId) return;
+      const data = await testCompanySourcing(newId);
+      if (!data.success) return;
+      if (data.job_count != null) toast.success(`Found ${data.job_count} live postings`);
+      else toast.success("Source verified — " + data.note);
+    } catch {
+      /* silent — save already succeeded */
+    }
+  };
+
+  const handleTest = async () => {
+    if (!initial?.id) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const data = await testCompanySourcing(initial.id);
+      setTestResult({ job_count: data.job_count, sample_titles: data.sample_titles ?? [], note: data.note });
+      if (!data.success) toast.error(data.note);
+      else if (data.job_count != null) toast.success(`Found ${data.job_count} live postings`);
+      else toast.success("Source verified — " + data.note);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Sourcing test failed");
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!form.name?.trim()) return;
+    const isNew = !initial;
     setSaving(true);
-    try { await onSave(form); onOpenChange(false); } finally { setSaving(false); }
+    try {
+      await onSave(form);
+      onOpenChange(false);
+      if (isNew) void runBackgroundTest();
+    } finally { setSaving(false); }
   };
+
+
 
   const handleDelete = async () => {
     if (!initial?.id || !onDelete) return;
@@ -223,15 +292,26 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="text-[13px]">Source</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDetect}
-                  disabled={detecting || !form.name?.trim()}
-                >
-                  {detecting ? "Discovering…" : "Discover Postings"}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDetect}
+                    disabled={detecting || !form.name?.trim()}
+                  >
+                    {detecting ? "Discovering…" : "Discover Postings"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleTest}
+                    disabled={testing || !initial?.id}
+                  >
+                    {testing ? "Testing…" : "Test Sourcing Now"}
+                  </Button>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -279,6 +359,24 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
                   </div>
                 );
               })()}
+
+              {testResult && (
+                <div className="space-y-1">
+                  <p className="text-[12px]" style={{ fontFamily: "var(--font-mono)", color: testResult.job_count != null ? "#00D4FF" : "#8B8B9E" }}>
+                    {testResult.job_count != null ? `${testResult.job_count} live postings — ${testResult.note}` : testResult.note}
+                  </p>
+                  {testResult.sample_titles.length > 0 && (
+                    <div>
+                      <p style={{ fontSize: 11, color: "#8B8B9E" }}>Sample postings found:</p>
+                      <ul className="list-disc pl-4" style={{ fontSize: 11, color: "#8B8B9E" }}>
+                        {testResult.sample_titles.slice(0, 5).map((t, i) => (
+                          <li key={`${t}-${i}`}>{t}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {detectResult && (
                 <p
