@@ -10,6 +10,7 @@ import {
   Kanban,
   Users,
   Linkedin,
+  BriefcaseBusiness,
   Settings,
   LogOut,
   type LucideIcon,
@@ -29,6 +30,7 @@ const NAV: NavItem[] = [
   { to: "/applications", label: "Applications", icon: Kanban },
   { to: "/outreach", label: "Outreach", icon: Users },
   { to: "/linkedin-presence", label: "LinkedIn Presence", icon: Linkedin },
+  { to: "/career", label: "Career", icon: BriefcaseBusiness },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
