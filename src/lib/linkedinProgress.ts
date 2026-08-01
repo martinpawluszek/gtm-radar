@@ -118,6 +118,7 @@ export function useProjectStartDate() {
       qc.invalidateQueries({ queryKey: ["lp-active-goal"] });
       qc.invalidateQueries({ queryKey: ["lp-weekly-progress"] });
       qc.invalidateQueries({ queryKey: ["lp-weekly-status"] });
+    qc.invalidateQueries({ queryKey: ["bell:lp-weekly-status"] });
     },
   });
 

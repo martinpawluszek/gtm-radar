@@ -35,8 +35,9 @@ function SourcingBadgeChip({ company }: { company: Company }) {
 export function CompanyRow({ company, onEdit }: { company: Company; onEdit: (c: Company) => void }) {
   const tier = TIER_META[company.tier];
   const total = totalScore(company);
-  const visibleTags = company.tags.slice(0, 3);
-  const overflow = company.tags.length - visibleTags.length;
+  const tags = company.tags ?? [];
+  const visibleTags = tags.slice(0, 3);
+  const overflow = tags.length - visibleTags.length;
   const isActive = company.is_active !== false;
 
   const qc = useQueryClient();
