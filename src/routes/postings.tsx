@@ -1732,6 +1732,7 @@ function DetailPanelInner({
   onClose: () => void;
   onChanged: () => void;
 }) {
+  const detailNavigate = useNavigate();
   const [jdOpen, setJdOpen] = useState(false);
   const [overridesOpen, setOverridesOpen] = useState(false);
   const [rating, setRating] = useState<number | null>(posting.martin_feedback_score ?? null);
