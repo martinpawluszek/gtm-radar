@@ -161,6 +161,20 @@ export function CvStudioTab({
   const [cv, setCv] = useState<CvOutput | null>(null);
   const [finalized, setFinalized] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState<"docx" | "pdf" | null>(null);
+  const [atsFindings, setAtsFindings] = useState<AtsFinding[]>([]);
+
+  const { data: profileRows = [] } = useQuery({
+    queryKey: cvKey("cv_profile"),
+    queryFn: () => cvList<CvProfile>("cv_profile"),
+  });
+  const profile = profileRows[0] ?? null;
+
+  const { data: experiences = [] } = useQuery({
+    queryKey: cvKey("cv_experiences"),
+    queryFn: () => cvList<CvExperience>("cv_experiences"),
+  });
+
 
   useEffect(() => {
     setCompany(initialCompany);
