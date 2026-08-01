@@ -1,14 +1,23 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { BuiltTab } from "@/components/career/BuiltTab";
 import { CredentialsTab } from "@/components/career/CredentialsTab";
+import { CvStudioTab } from "@/components/career/CvStudioTab";
 import { ExperienceTab } from "@/components/career/ExperienceTab";
 import { ProfileCard } from "@/components/career/ProfileCard";
 import { RulesTab } from "@/components/career/RulesTab";
 import { StoriesTab } from "@/components/career/StoriesTab";
 import { MONO } from "@/components/career/ui";
+import { gtmSupabase } from "@/lib/gtmSupabase";
+
+type CareerSearch = { tab?: string; posting?: string };
 
 export const Route = createFileRoute("/career")({
+  validateSearch: (search: Record<string, unknown>): CareerSearch => ({
+    tab: typeof search.tab === "string" ? search.tab : undefined,
+    posting: typeof search.posting === "string" ? search.posting : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Career — GTM Intelligence" },
