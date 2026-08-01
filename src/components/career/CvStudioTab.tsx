@@ -432,15 +432,60 @@ export function CvStudioTab({
                     </div>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Action onClick={saveAll} disabled={saving}>
                     {saving ? "Saving…" : "Save"}
+                  </Action>
+                  <Action onClick={exportDocx} disabled={exporting !== null} color="#00D4FF">
+                    {exporting === "docx" ? "Checking…" : "Download DOCX"}
+                  </Action>
+                  <Action onClick={exportPdf} disabled={exporting !== null} color="#00D4FF">
+                    {exporting === "pdf" ? "Opening…" : "Download PDF"}
                   </Action>
                   <Action onClick={finalize} disabled={saving || finalized} color="#10B981">
                     {finalized ? "Finalized" : "Mark finalized"}
                   </Action>
                 </div>
               </div>
+
+              {atsFindings.length > 0 && (
+                <div
+                  style={{
+                    border: `1px solid ${
+                      atsFindings.some((f) => f.level === "critical")
+                        ? "rgba(239,68,68,0.35)"
+                        : "rgba(245,158,11,0.35)"
+                    }`,
+                    background: atsFindings.some((f) => f.level === "critical")
+                      ? "rgba(239,68,68,0.05)"
+                      : "rgba(245,158,11,0.05)",
+                    borderRadius: 6,
+                    padding: 12,
+                  }}
+                >
+                  <SectionLabel>
+                    {atsFindings.some((f) => f.level === "critical")
+                      ? "ATS check failed — download blocked"
+                      : "ATS check passed with warnings"}
+                  </SectionLabel>
+                  <ul className="mt-2 flex flex-col gap-2">
+                    {atsFindings.map((f) => (
+                      <li key={f.label}>
+                        <div
+                          className="text-[12px] font-semibold"
+                          style={{ color: f.level === "critical" ? "#EF4444" : "#F59E0B" }}
+                        >
+                          [{f.level}] {f.label}
+                        </div>
+                        <div className="text-[11px]" style={{ color: "#8B8B9E" }}>
+                          {f.detail}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
 
               <DocSection title="Summary">
                 <Editable
