@@ -29,11 +29,21 @@ type SourcingTestResult = {
   note: string;
 };
 
-async function testCompanySourcing(companyId: string): Promise<SourcingTestResult> {
+async function testCompanySourcing(company: {
+  id: string;
+  name: string;
+  careers_url: string | null | undefined;
+  ats_type: string | null | undefined;
+}): Promise<SourcingTestResult> {
   const res = await fetch("https://n8njmpawluszek.com/webhook/test-company-sourcing", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ company_id: companyId }),
+    body: JSON.stringify({
+      company_id: company.id,
+      name: company.name,
+      careers_url: company.careers_url,
+      ats_type: company.ats_type,
+    }),
   });
   if (!res.ok) throw new Error(`Test failed (HTTP ${res.status})`);
   return res.json();
@@ -114,16 +124,15 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
   const runBackgroundTest = async () => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const q: any = gtmSupabase.from("companies").select("id");
+      const q: any = gtmSupabase.from("companies").select("id, name, careers_url, ats_type");
       const { data: row } = await q
         .eq("user_id", session?.user.id ?? "")
         .eq("careers_url", form.careers_url ?? "")
         .order("created_at", { ascending: false })
         .limit(1)
         .single();
-      const newId = (row as { id: string } | null)?.id;
-      if (!newId) return;
-      const data = await testCompanySourcing(newId);
+      if (!row) return;
+      const data = await testCompanySourcing(row as { id: string; name: string; careers_url: string | null; ats_type: string | null });
       if (!data.success) return;
       if (data.job_count != null) toast.success(`Found ${data.job_count} live postings`);
       else toast.success("Source verified — " + data.note);
@@ -137,7 +146,12 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
     setTesting(true);
     setTestResult(null);
     try {
-      const data = await testCompanySourcing(initial.id);
+      const data = await testCompanySourcing({
+        id: initial.id,
+        name: initial.name,
+        careers_url: initial.careers_url,
+        ats_type: initial.ats_type,
+      });
       setTestResult({ job_count: data.job_count, sample_titles: data.sample_titles ?? [], note: data.note });
       if (!data.success) toast.error(data.note);
       else if (data.job_count != null) toast.success(`Found ${data.job_count} live postings`);
