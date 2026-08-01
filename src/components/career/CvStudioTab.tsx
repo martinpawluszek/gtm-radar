@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Action,
@@ -10,6 +11,18 @@ import {
   TextInput,
   Chip,
 } from "@/components/career/ui";
+import { cvKey, cvList, type CvExperience, type CvProfile } from "@/lib/career";
+import {
+  buildCvDocxBlob,
+  buildCvPrintHtml,
+  buildFileBasename,
+  downloadBlob,
+  printCvPdf,
+  validateDocxForAts,
+  type AtsFinding,
+  type CvContact,
+  type ExperienceMeta,
+} from "@/lib/cvExport";
 import {
   finalizeGeneration,
   generateTailoredCv,
@@ -20,6 +33,7 @@ import {
   type CvGeneration,
   type CvOutput,
 } from "@/lib/cvStudio";
+
 
 // ---------- Inline editable text ----------
 function Editable({
@@ -147,6 +161,20 @@ export function CvStudioTab({
   const [cv, setCv] = useState<CvOutput | null>(null);
   const [finalized, setFinalized] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState<"docx" | "pdf" | null>(null);
+  const [atsFindings, setAtsFindings] = useState<AtsFinding[]>([]);
+
+  const { data: profileRows = [] } = useQuery({
+    queryKey: cvKey("cv_profile"),
+    queryFn: () => cvList<CvProfile>("cv_profile"),
+  });
+  const profile = profileRows[0] ?? null;
+
+  const { data: experiences = [] } = useQuery({
+    queryKey: cvKey("cv_experiences"),
+    queryFn: () => cvList<CvExperience>("cv_experiences"),
+  });
+
 
   useEffect(() => {
     setCompany(initialCompany);
@@ -226,9 +254,90 @@ export function CvStudioTab({
     }
   }
 
+  // ---------- Export ----------
+  const contact: CvContact = {
+    full_name: profile?.full_name ?? null,
+    location: profile?.location ?? null,
+    phone: profile?.phone ?? null,
+    email: profile?.email ?? null,
+    linkedin_url: profile?.linkedin_url ?? null,
+    citizenship:
+      (profile as unknown as { citizenship?: string | null } | null)?.citizenship ?? null,
+  };
+
+  const experienceMeta: Record<string, ExperienceMeta> = {};
+  for (const e of experiences) {
+    experienceMeta[e.id] = {
+      start_date: e.start_date,
+      end_date: e.end_date,
+      is_current: e.is_current,
+      location: e.location,
+    };
+  }
+
+  function baseName(): string {
+    return buildFileBasename(
+      (gen as unknown as { file_basename?: string | null } | null)?.file_basename,
+      gen?.company_name ?? company,
+      profile?.full_name,
+    );
+  }
+
+  // Exporting a file means the CV is done being edited — promote a draft to
+  // "finalized" (never downgrade an already-sent generation).
+  async function markExported() {
+    if (!gen || !cv) return;
+    if (finalized || (gen.status ?? "draft") !== "draft") return;
+    try {
+      await finalizeGeneration(gen.id, cv);
+      setFinalized(true);
+    } catch {
+      /* export already succeeded; status bookkeeping is best-effort */
+    }
+  }
+
+  async function exportDocx() {
+    if (!cv) return;
+    setExporting("docx");
+    setAtsFindings([]);
+    try {
+      const blob = await buildCvDocxBlob({ cv, contact, experienceMeta });
+      const findings = await validateDocxForAts(blob);
+      setAtsFindings(findings);
+      if (findings.some((f) => f.level === "critical")) {
+        toast.error("ATS check failed — download blocked. See findings below.");
+        return;
+      }
+      downloadBlob(blob, `${baseName()}.docx`);
+      if (findings.length > 0) toast.warning("Downloaded with warnings — see ATS check below.");
+      else toast.success("DOCX downloaded — ATS check passed");
+      void markExported();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "DOCX export failed");
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  function exportPdf() {
+    if (!cv) return;
+    setExporting("pdf");
+    try {
+      const name = baseName();
+      printCvPdf(buildCvPrintHtml({ cv, contact, experienceMeta, title: `${name}.pdf` }));
+      toast.success("Print dialog opened — choose “Save as PDF”");
+      void markExported();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "PDF export failed");
+    } finally {
+      setExporting(null);
+    }
+  }
+
   const covered = textList(cv?.keyword_coverage?.covered);
   const missing = textList(cv?.keyword_coverage?.missing);
   const gaps = textList(cv?.gaps);
+
 
   return (
     <div className="flex flex-col gap-4">
@@ -323,15 +432,60 @@ export function CvStudioTab({
                     </div>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Action onClick={saveAll} disabled={saving}>
                     {saving ? "Saving…" : "Save"}
+                  </Action>
+                  <Action onClick={exportDocx} disabled={exporting !== null} color="#00D4FF">
+                    {exporting === "docx" ? "Checking…" : "Download DOCX"}
+                  </Action>
+                  <Action onClick={exportPdf} disabled={exporting !== null} color="#00D4FF">
+                    {exporting === "pdf" ? "Opening…" : "Download PDF"}
                   </Action>
                   <Action onClick={finalize} disabled={saving || finalized} color="#10B981">
                     {finalized ? "Finalized" : "Mark finalized"}
                   </Action>
                 </div>
               </div>
+
+              {atsFindings.length > 0 && (
+                <div
+                  style={{
+                    border: `1px solid ${
+                      atsFindings.some((f) => f.level === "critical")
+                        ? "rgba(239,68,68,0.35)"
+                        : "rgba(245,158,11,0.35)"
+                    }`,
+                    background: atsFindings.some((f) => f.level === "critical")
+                      ? "rgba(239,68,68,0.05)"
+                      : "rgba(245,158,11,0.05)",
+                    borderRadius: 6,
+                    padding: 12,
+                  }}
+                >
+                  <SectionLabel>
+                    {atsFindings.some((f) => f.level === "critical")
+                      ? "ATS check failed — download blocked"
+                      : "ATS check passed with warnings"}
+                  </SectionLabel>
+                  <ul className="mt-2 flex flex-col gap-2">
+                    {atsFindings.map((f) => (
+                      <li key={f.label}>
+                        <div
+                          className="text-[12px] font-semibold"
+                          style={{ color: f.level === "critical" ? "#EF4444" : "#F59E0B" }}
+                        >
+                          [{f.level}] {f.label}
+                        </div>
+                        <div className="text-[11px]" style={{ color: "#8B8B9E" }}>
+                          {f.detail}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
 
               <DocSection title="Summary">
                 <Editable
