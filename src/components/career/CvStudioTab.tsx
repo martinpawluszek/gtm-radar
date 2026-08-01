@@ -226,9 +226,90 @@ export function CvStudioTab({
     }
   }
 
+  // ---------- Export ----------
+  const contact: CvContact = {
+    full_name: profile?.full_name ?? null,
+    location: profile?.location ?? null,
+    phone: profile?.phone ?? null,
+    email: profile?.email ?? null,
+    linkedin_url: profile?.linkedin_url ?? null,
+    citizenship:
+      (profile as unknown as { citizenship?: string | null } | null)?.citizenship ?? null,
+  };
+
+  const experienceMeta: Record<string, ExperienceMeta> = {};
+  for (const e of experiences) {
+    experienceMeta[e.id] = {
+      start_date: e.start_date,
+      end_date: e.end_date,
+      is_current: e.is_current,
+      location: e.location,
+    };
+  }
+
+  function baseName(): string {
+    return buildFileBasename(
+      (gen as unknown as { file_basename?: string | null } | null)?.file_basename,
+      gen?.company_name ?? company,
+      profile?.full_name,
+    );
+  }
+
+  // Exporting a file means the CV is done being edited — promote a draft to
+  // "finalized" (never downgrade an already-sent generation).
+  async function markExported() {
+    if (!gen || !cv) return;
+    if (finalized || (gen.status ?? "draft") !== "draft") return;
+    try {
+      await finalizeGeneration(gen.id, cv);
+      setFinalized(true);
+    } catch {
+      /* export already succeeded; status bookkeeping is best-effort */
+    }
+  }
+
+  async function exportDocx() {
+    if (!cv) return;
+    setExporting("docx");
+    setAtsFindings([]);
+    try {
+      const blob = await buildCvDocxBlob({ cv, contact, experienceMeta });
+      const findings = await validateDocxForAts(blob);
+      setAtsFindings(findings);
+      if (findings.some((f) => f.level === "critical")) {
+        toast.error("ATS check failed — download blocked. See findings below.");
+        return;
+      }
+      downloadBlob(blob, `${baseName()}.docx`);
+      if (findings.length > 0) toast.warning("Downloaded with warnings — see ATS check below.");
+      else toast.success("DOCX downloaded — ATS check passed");
+      void markExported();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "DOCX export failed");
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  function exportPdf() {
+    if (!cv) return;
+    setExporting("pdf");
+    try {
+      const name = baseName();
+      printCvPdf(buildCvPrintHtml({ cv, contact, experienceMeta, title: `${name}.pdf` }));
+      toast.success("Print dialog opened — choose “Save as PDF”");
+      void markExported();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "PDF export failed");
+    } finally {
+      setExporting(null);
+    }
+  }
+
   const covered = textList(cv?.keyword_coverage?.covered);
   const missing = textList(cv?.keyword_coverage?.missing);
   const gaps = textList(cv?.gaps);
+
 
   return (
     <div className="flex flex-col gap-4">
