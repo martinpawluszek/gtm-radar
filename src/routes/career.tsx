@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { AnswersTab } from "@/components/career/AnswersTab";
 import { BuiltTab } from "@/components/career/BuiltTab";
+import { GenerationsTab } from "@/components/career/GenerationsTab";
 import { CredentialsTab } from "@/components/career/CredentialsTab";
 import { CvStudioTab } from "@/components/career/CvStudioTab";
 import { ExperienceTab } from "@/components/career/ExperienceTab";
@@ -174,7 +176,9 @@ function CareerPage() {
       {tab === "experience" && <ExperienceTab />}
       {tab === "built" && <BuiltTab />}
       {tab === "stories" && <StoriesTab />}
+      {tab === "answers" && <AnswersTab />}
       {tab === "credentials" && <CredentialsTab />}
+      {tab === "applications" && <GenerationsTab />}
       {tab === "rules" && <RulesTab />}
       {tab === "cv-studio" && (
         <CvStudioTab
