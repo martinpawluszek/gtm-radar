@@ -953,6 +953,53 @@ function PostingsPage() {
     if (selectedId) qc.invalidateQueries({ queryKey: ["posting", selectedId] });
   };
 
+  // Open the review loop at a row: snapshot the ids currently in view.
+  const openQueueAt = (id: string) => {
+    const ids = rows.map((r) => r.id);
+    const idx = ids.indexOf(id);
+    setQueueEnd(false);
+    setQueue(idx >= 0 ? { ids, index: idx, page } : { ids: [id], index: 0, page });
+  };
+
+  const closeQueue = () => {
+    setQueue(null);
+    setQueueEnd(false);
+  };
+
+  // Advance within the frozen snapshot; fetch the next server-side page when it runs out.
+  const goNext = async () => {
+    const q = queue;
+    if (!q) return;
+    if (q.index + 1 < q.ids.length) {
+      setQueue({ ...q, index: q.index + 1 });
+      return;
+    }
+    setLoadingNext(true);
+    try {
+      const nextPage = q.page + 1;
+      const res = await fetchPostingsPage(listFilters, tierCompanyIds, nextPage, pageSize);
+      const seen = new Set(q.ids);
+      const fresh = res.rows.map((r) => r.id).filter((rid) => !seen.has(rid));
+      if (fresh.length === 0) {
+        setQueueEnd(true);
+        return;
+      }
+      setQueue({ ids: [...q.ids, ...fresh], index: q.index + 1, page: nextPage });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setLoadingNext(false);
+    }
+  };
+
+  const goPrev = () => {
+    setQueueEnd(false);
+    setQueue((q) => (q && q.index > 0 ? { ...q, index: q.index - 1 } : q));
+  };
+
+  const queueTotal = Math.max(total, queue?.ids.length ?? 0);
+
+
   const emptyMessage =
     unscoredOnly && statusFilter === "new"
       ? "No unscored postings right now. New leads arrive from the daily agent."
