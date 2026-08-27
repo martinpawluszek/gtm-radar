@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -7,6 +7,7 @@ import {
   cvKey,
   cvList,
   cvUpdate,
+  orderOf,
   safeStr,
   safeTags,
   type CvExperience,
@@ -25,6 +26,23 @@ import {
   TextInput,
 } from "./ui";
 
+export const STORY_TYPES: { value: string; label: string }[] = [
+  { value: "win", label: "Win" },
+  { value: "failure", label: "Failure" },
+  { value: "leadership", label: "Leadership" },
+  { value: "conflict", label: "Conflict" },
+  { value: "turnaround", label: "Turnaround" },
+  { value: "decision", label: "Decision" },
+  { value: "technical", label: "Technical" },
+  { value: "other", label: "Other" },
+];
+
+const SENSITIVITY_OPTIONS = [
+  { value: "cv_ok", label: "cv_ok" },
+  { value: "cv_only", label: "cv_only" },
+  { value: "excluded", label: "excluded" },
+];
+
 export function StoriesTab() {
   const qc = useQueryClient();
   const { data: stories = [], isLoading } = useQuery({
@@ -37,6 +55,31 @@ export function StoriesTab() {
   });
   const refresh = () => qc.invalidateQueries({ queryKey: cvKey("cv_stories") });
   const [adding, setAdding] = useState(false);
+  const [filter, setFilter] = useState<string>("all");
+
+  const ordered = useMemo(() => {
+    const rows = Array.isArray(stories) ? [...stories] : [];
+    return rows.sort((a, b) => {
+      const sig = Number(b.is_signature === true) - Number(a.is_signature === true);
+      if (sig !== 0) return sig;
+      const ord = orderOf(a) - orderOf(b);
+      if (ord !== 0) return ord;
+      return safeStr(a.created_at).localeCompare(safeStr(b.created_at));
+    });
+  }, [stories]);
+
+  const counts = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const s of ordered) {
+      const k = safeStr(s.story_type) || "other";
+      map[k] = (map[k] ?? 0) + 1;
+    }
+    return map;
+  }, [ordered]);
+
+  const visible = ordered.filter(
+    (s) => filter === "all" || (safeStr(s.story_type) || "other") === filter,
+  );
 
   async function addStory() {
     setAdding(true);
@@ -58,17 +101,35 @@ export function StoriesTab() {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <p className="text-sm max-w-2xl" style={{ color: "#8B8B9E" }}>
           STAR-format stories (situation, action, result, lesson) for cover letters and interview
-          prep. {stories.length} stor{stories.length === 1 ? "y" : "ies"}.
+          prep. {ordered.length} stor{ordered.length === 1 ? "y" : "ies"}.
         </p>
         <PrimaryButton onClick={addStory} disabled={adding}>
           + New story
         </PrimaryButton>
       </div>
 
-      {stories.length === 0 ? (
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <Action
+          color={filter === "all" ? "#00D4FF" : "#8B8B9E"}
+          onClick={() => setFilter("all")}
+        >
+          All ({ordered.length})
+        </Action>
+        {STORY_TYPES.filter((t) => counts[t.value]).map((t) => (
+          <Action
+            key={t.value}
+            color={filter === t.value ? "#00D4FF" : "#8B8B9E"}
+            onClick={() => setFilter(t.value)}
+          >
+            {t.label} ({counts[t.value]})
+          </Action>
+        ))}
+      </div>
+
+      {visible.length === 0 ? (
         <Empty>No stories yet. Add one to start building your STAR bank.</Empty>
       ) : (
-        stories.map((s) => (
+        visible.map((s) => (
           <StoryCard key={s.id} story={s} experiences={experiences} onChanged={refresh} />
         ))
       )}
