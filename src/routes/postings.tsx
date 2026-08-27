@@ -42,6 +42,13 @@ type AiRationale = {
   summary?: string;
 };
 
+type PostingRequirements = {
+  must_have?: unknown;
+  nice_to_have?: unknown;
+  likely_fails?: unknown;
+  extracted_at?: unknown;
+};
+
 type Posting = {
   id: string;
   company_id: string | null;
@@ -66,7 +73,10 @@ type Posting = {
   title_signal: string | null;
   posted_at: string | null;
   deadline_at: string | null;
+  requirements?: PostingRequirements | null;
+  link_status?: string | null;
 };
+
 
 type CompanyLite = {
   id: string;
