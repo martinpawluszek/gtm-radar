@@ -163,6 +163,93 @@ function scoreColor(score: number | null | undefined): string {
   return "#EF4444";
 }
 
+// ---------- Requirements extraction ----------
+const REQ_HEADINGS = [
+  "requirements",
+  "qualifications",
+  "what you'll bring",
+  "what you will bring",
+  "what we're looking for",
+  "what we are looking for",
+  "your profile",
+  "about you",
+  "you have",
+  "must have",
+  "minimum qualifications",
+  "basic qualifications",
+  "preferred qualifications",
+  "skills and experience",
+  "dein profil",
+  "was du mitbringst",
+  "qualifikationen",
+  "anforderungen",
+];
+
+function safeStrings(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((x) => (typeof x === "string" ? x.trim() : ""))
+    .filter((x) => x.length > 0);
+}
+
+function normalizeHeadingLine(line: string): string {
+  return line
+    .trim()
+    .replace(/^[#*\-–—•\u2022\s]+/, "")
+    .replace(/[:*#\-–—\s]+$/, "")
+    .toLowerCase();
+}
+
+function isReqHeadingLine(line: string): boolean {
+  const t = normalizeHeadingLine(line);
+  if (!t || t.length > 70) return false;
+  return REQ_HEADINGS.some((h) => t === h || t.startsWith(h) || t.includes(h));
+}
+
+function looksLikeHeading(line: string): boolean {
+  const t = line.trim();
+  if (!t || t.length > 80) return false;
+  if (/^[-–—*•\u2022\d]/.test(t)) return false;
+  if (/[.!?,;]$/.test(t)) return false;
+  const words = t.split(/\s+/);
+  if (words.length > 10) return false;
+  const letters = t.replace(/[^\p{L}]/gu, "");
+  if (!letters) return false;
+  const allCaps = t === t.toUpperCase();
+  const capWords = words.filter((w) => /^[\p{Lu}]/u.test(w)).length;
+  const titleCase = capWords >= Math.ceil(words.length * 0.6);
+  return allCaps || titleCase || t.endsWith(":");
+}
+
+/** Slice the requirements-ish section out of a raw JD, client-side, no AI. */
+function extractRequirementsText(jd: string | null | undefined): string | null {
+  if (!jd || typeof jd !== "string") return null;
+  const lines = jd.split(/\r?\n/);
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i] ?? "";
+    if (!raw.trim() || raw.trim().length > 80) continue;
+    if (isReqHeadingLine(raw)) {
+      start = i;
+      break;
+    }
+  }
+  if (start < 0) return null;
+  const out: string[] = [lines[start].trim()];
+  let chars = 0;
+  for (let i = start + 1; i < lines.length; i++) {
+    const raw = lines[i] ?? "";
+    if (chars >= 2000) break;
+    if (raw.trim() && looksLikeHeading(raw) && !isReqHeadingLine(raw)) break;
+    out.push(raw);
+    chars += raw.length + 1;
+  }
+  const body = out.slice(1).join("\n").trim();
+  if (body.length < 20) return null;
+  return out.join("\n").trim().slice(0, 2400);
+}
+
+
 const STATUS_META: Record<PostingStatus, { label: string; color: string }> = {
   new: { label: "New", color: "#00D4FF" },
   reviewed: { label: "Reviewed", color: "#00D4FF" },
