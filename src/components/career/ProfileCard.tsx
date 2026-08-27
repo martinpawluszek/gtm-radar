@@ -1,8 +1,32 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { cvKey, cvList, cvUpdate, safeStr, type CvProfile } from "@/lib/career";
-import { Action, LabeledField, MONO, Panel, PrimaryButton, TextInput } from "./ui";
+import {
+  cvKey,
+  cvList,
+  cvUpdate,
+  safeMetrics,
+  safeStr,
+  type CvProfile,
+  type MetricEntry,
+} from "@/lib/career";
+import {
+  Action,
+  LabeledField,
+  MONO,
+  Panel,
+  PrimaryButton,
+  SectionLabel,
+  SelectInput,
+  TextAreaInput,
+  TextInput,
+} from "./ui";
+
+const SENSITIVITY_OPTIONS = [
+  { value: "cv_ok", label: "cv_ok" },
+  { value: "cv_only", label: "cv_only" },
+  { value: "excluded", label: "excluded" },
+];
 
 export function ProfileCard() {
   const qc = useQueryClient();
@@ -14,10 +38,14 @@ export function ProfileCard() {
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<CvProfile | null>(profile);
+  const [metrics, setMetrics] = useState<MetricEntry[]>(safeMetrics(profile?.metrics_quickref));
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!editing) setDraft(profile);
+    if (!editing) {
+      setDraft(profile);
+      setMetrics(safeMetrics(profile?.metrics_quickref));
+    }
   }, [profile, editing]);
 
   if (!profile) return null;
@@ -32,6 +60,8 @@ export function ProfileCard() {
         email: draft.email,
         phone: draft.phone,
         linkedin_url: draft.linkedin_url,
+        citizenship_line: draft.citizenship_line,
+        metrics_quickref: metrics.filter((m) => m.text.trim() !== ""),
       });
       setEditing(false);
       qc.invalidateQueries({ queryKey: cvKey("cv_profile") });
