@@ -2553,22 +2553,12 @@ function DetailPanelInner({
           >
             Apply
           </Button>
-          {posting.jd_url && (
-            <a
-              href={posting.jd_url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1"
-              style={{ color: "#00D4FF", fontSize: 12, marginLeft: 4 }}
-            >
-              Open posting <ExternalLink size={11} />
-            </a>
-          )}
         </div>
         <div className="flex items-center gap-3">
           <span style={{ color: "#4A4A5A", fontSize: 10, fontFamily: MONO }}>
-            S save · D dismiss · A apply · →/J next · ←/K prev · Esc close
+            S save · D dismiss · A apply · O open · →/J next · ←/K prev · Esc close
           </span>
+
           <button
             onClick={onPrev}
             disabled={!hasPrev}
