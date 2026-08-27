@@ -1876,17 +1876,28 @@ function RowActions({
 }
 
 // ---------- Detail Panel ----------
+type QueueNav = {
+  onNext: () => void;
+  onPrev: () => void;
+  hasPrev: boolean;
+  position: number;
+  queueTotal: number;
+  loadingNext: boolean;
+  atEnd: boolean;
+};
+
 function DetailPanel({
   postingId,
   companyMap,
   onClose,
   onChanged,
+  ...nav
 }: {
   postingId: string;
   companyMap: Map<string, CompanyLite>;
   onClose: () => void;
   onChanged: () => void;
-}) {
+} & QueueNav) {
   const { data: posting, isLoading } = useQuery({
     queryKey: ["posting", postingId],
     queryFn: () => fetchPostingById(postingId),
@@ -1894,8 +1905,8 @@ function DetailPanel({
   if (isLoading || !posting) {
     return (
       <div
-        className="flex items-center justify-center"
-        style={{ height: "100vh", color: "#8B8B9E" }}
+        className="flex flex-1 items-center justify-center"
+        style={{ color: "#8B8B9E" }}
       >
         {isLoading ? "Loading posting…" : "Posting not found."}
       </div>
@@ -1908,6 +1919,7 @@ function DetailPanel({
       company={company}
       onClose={onClose}
       onChanged={onChanged}
+      {...nav}
     />
   );
 }
@@ -1917,12 +1929,20 @@ function DetailPanelInner({
   company,
   onClose,
   onChanged,
+  onNext,
+  onPrev,
+  hasPrev,
+  position,
+  queueTotal,
+  loadingNext,
+  atEnd,
 }: {
   posting: Posting;
   company: CompanyLite | null;
   onClose: () => void;
   onChanged: () => void;
-}) {
+} & QueueNav) {
+
   const detailNavigate = useNavigate();
   const [jdOpen, setJdOpen] = useState(false);
   const [overridesOpen, setOverridesOpen] = useState(false);
