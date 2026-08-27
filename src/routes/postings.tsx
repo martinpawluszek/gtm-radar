@@ -2291,6 +2291,16 @@ function DetailPanelInner({
         )}
       </Section>
 
+      {/* Requirements */}
+      <RequirementsSection
+        mustHave={mustHave}
+        niceToHave={niceToHave}
+        likelyFails={likelyFails}
+        extracted={extractedReqs}
+        jdFull={posting.jd_full}
+      />
+
+
       {/* Feedback */}
       <Section title="Your Feedback">
         <div className="flex flex-col gap-3">
