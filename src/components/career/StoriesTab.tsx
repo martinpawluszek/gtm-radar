@@ -334,6 +334,34 @@ function StoryCard({
               onChange={(v) => setDraft({ ...draft, experience_id: v || null })}
             />
           </LabeledField>
+          <LabeledField label="Story type">
+            <SelectInput
+              value={safeStr(draft.story_type) || "other"}
+              options={STORY_TYPES}
+              onChange={(v) => setDraft({ ...draft, story_type: v })}
+            />
+          </LabeledField>
+          <LabeledField label="Metrics">
+            <TextInput
+              value={safeStr(draft.metrics)}
+              placeholder="e.g. +42% pipeline, $3M ARR"
+              onChange={(v) => setDraft({ ...draft, metrics: v })}
+            />
+          </LabeledField>
+          <LabeledField label="Raw notes (unstructured capture, shape into STAR later)">
+            <TextAreaInput
+              value={safeStr(draft.raw_notes)}
+              rows={3}
+              onChange={(v) => setDraft({ ...draft, raw_notes: v })}
+            />
+          </LabeledField>
+          <LabeledField label="Sensitivity">
+            <SelectInput
+              value={safeStr(draft.sensitivity) || "cv_ok"}
+              options={SENSITIVITY_OPTIONS}
+              onChange={(v) => setDraft({ ...draft, sensitivity: v })}
+            />
+          </LabeledField>
           <div className="flex justify-end gap-2">
             <Action onClick={() => setEditing(false)}>Cancel</Action>
             <PrimaryButton onClick={save} disabled={saving}>
