@@ -2093,6 +2093,10 @@ function DetailPanelInner({
     onNext();
   }
 
+  function openPosting() {
+    if (posting.jd_url) window.open(posting.jd_url, "_blank", "noopener,noreferrer");
+  }
+
   // Keyboard shortcuts — ignored while typing in a field.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -2104,12 +2108,15 @@ function DetailPanelInner({
       if (k === "s") { e.preventDefault(); void act("save"); }
       else if (k === "d") { e.preventDefault(); void act("dismiss"); }
       else if (k === "a") { e.preventDefault(); void act("apply"); }
+      else if (k === "o") { e.preventDefault(); openPosting(); }
       else if (k === "arrowright" || k === "j") { e.preventDefault(); onNext(); }
       else if (k === "arrowleft" || k === "k") { e.preventDefault(); onPrev(); }
+      else if (k === "escape") { e.preventDefault(); onClose(); }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   });
+
 
   const reqData = posting.requirements ?? null;
   const mustHave = safeStrings(reqData?.must_have);
@@ -2167,13 +2174,25 @@ function DetailPanelInner({
           </div>
         </div>
         <div className="flex flex-col items-end gap-2 shrink-0">
+          {posting.jd_url && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={openPosting}
+              className="inline-flex items-center gap-1.5"
+              style={{ border: "1px solid #1E1E2E", color: "#00D4FF", background: "transparent" }}
+            >
+              Open posting <ExternalLink size={14} />
+            </Button>
+          )}
           <span
             className="tabular-nums"
-            style={{ color: "#8B8B9E", fontSize: 11, fontFamily: MONO, marginRight: 20 }}
+            style={{ color: "#8B8B9E", fontSize: 11, fontFamily: MONO, marginRight: 2 }}
           >
             {position} of {queueTotal.toLocaleString()}
           </span>
         </div>
+
       </div>
 
       {/* Scrolling body */}
@@ -2534,22 +2553,12 @@ function DetailPanelInner({
           >
             Apply
           </Button>
-          {posting.jd_url && (
-            <a
-              href={posting.jd_url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1"
-              style={{ color: "#00D4FF", fontSize: 12, marginLeft: 4 }}
-            >
-              Open posting <ExternalLink size={11} />
-            </a>
-          )}
         </div>
         <div className="flex items-center gap-3">
           <span style={{ color: "#4A4A5A", fontSize: 10, fontFamily: MONO }}>
-            S save · D dismiss · A apply · →/J next · ←/K prev · Esc close
+            S save · D dismiss · A apply · O open · →/J next · ←/K prev · Esc close
           </span>
+
           <button
             onClick={onPrev}
             disabled={!hasPrev}
