@@ -2424,7 +2424,7 @@ function DetailPanelInner({
         </div>
       </Section>
 
-      {/* Actions */}
+      {/* Extra actions */}
       <Section title="Actions">
         <div className="flex items-center gap-2 flex-wrap">
           <Button
@@ -2439,33 +2439,6 @@ function DetailPanelInner({
             }}
           >
             Tailor CV
-          </Button>
-          <Button
-            variant="outline"
-            disabled={actionMut.isPending || posting.status === "dismissed"}
-            onClick={() => actionMut.mutate("dismiss")}
-            style={{
-              border: "1px solid rgba(239,68,68,0.3)",
-              color: "#EF4444",
-              background: "transparent",
-            }}
-          >
-            Dismiss
-          </Button>
-          <Button
-            variant="outline"
-            disabled={actionMut.isPending || posting.status === "saved"}
-            onClick={() => actionMut.mutate("save")}
-            style={{ border: "1px solid #1E1E2E", color: "#8B8B9E", background: "transparent" }}
-          >
-            Save for Later
-          </Button>
-          <Button
-            disabled={actionMut.isPending || posting.status === "applied"}
-            onClick={() => actionMut.mutate("apply")}
-            style={{ background: "#00D4FF", color: "#0A0A0F" }}
-          >
-            Apply
           </Button>
         </div>
       </Section>
@@ -2503,9 +2476,236 @@ function DetailPanelInner({
           </div>
         )}
       </Section>
+      </div>
+
+      {/* Sticky footer action bar */}
+      <div
+        className="flex items-center justify-between gap-3 px-5 py-3 shrink-0 flex-wrap"
+        style={{ borderTop: "1px solid #1E1E2E", background: "#0D0D14" }}
+      >
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            disabled={acting || posting.status === "saved"}
+            onClick={() => void act("save")}
+            style={{ border: "1px solid #1E1E2E", color: "#8B8B9E", background: "transparent" }}
+          >
+            Save for later
+          </Button>
+          <Button
+            variant="outline"
+            disabled={acting || posting.status === "dismissed"}
+            onClick={() => void act("dismiss")}
+            style={{
+              border: "1px solid rgba(239,68,68,0.3)",
+              color: "#EF4444",
+              background: "transparent",
+            }}
+          >
+            Dismiss
+          </Button>
+          <Button
+            disabled={acting || posting.status === "applied"}
+            onClick={() => void act("apply")}
+            style={{ background: "#00D4FF", color: "#0A0A0F" }}
+          >
+            Apply
+          </Button>
+          {posting.jd_url && (
+            <a
+              href={posting.jd_url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1"
+              style={{ color: "#00D4FF", fontSize: 12, marginLeft: 4 }}
+            >
+              Open posting <ExternalLink size={11} />
+            </a>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <span style={{ color: "#4A4A5A", fontSize: 10, fontFamily: MONO }}>
+            S save · D dismiss · A apply · →/J next · ←/K prev · Esc close
+          </span>
+          <button
+            onClick={onPrev}
+            disabled={!hasPrev}
+            aria-label="Previous posting"
+            style={{
+              color: hasPrev ? "#8B8B9E" : "#3A3A4A",
+              padding: 4,
+              cursor: hasPrev ? "pointer" : "not-allowed",
+            }}
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <Button
+            variant="outline"
+            onClick={onNext}
+            disabled={loadingNext || atEnd}
+            style={{ border: "1px solid #1E1E2E", color: "#8B8B9E", background: "transparent" }}
+          >
+            {loadingNext ? "Loading…" : "Skip"} <ChevronRight size={14} />
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
+
+function MiniBadge({ label, color }: { label: string; color: string }) {
+  return (
+    <span
+      className="uppercase"
+      style={{
+        color,
+        border: `1px solid ${color}55`,
+        background: `${color}14`,
+        borderRadius: 4,
+        padding: "1px 6px",
+        fontSize: 9,
+        fontFamily: MONO,
+        letterSpacing: "0.06em",
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function RequirementsSection({
+  mustHave,
+  niceToHave,
+  likelyFails,
+  extracted,
+  jdFull,
+}: {
+  mustHave: string[];
+  niceToHave: string[];
+  likelyFails: string[];
+  extracted: string | null;
+  jdFull: string | null;
+}) {
+  const [niceOpen, setNiceOpen] = useState(false);
+  const [fullOpen, setFullOpen] = useState(false);
+  const structured = mustHave.length + niceToHave.length + likelyFails.length > 0;
+
+  if (!structured && !extracted && !jdFull) return null;
+
+  return (
+    <Section title="Requirements">
+      {structured ? (
+        <div className="flex flex-col gap-3">
+          {likelyFails.length > 0 && (
+            <div
+              className="px-3 py-2"
+              style={{
+                background: "rgba(245,158,11,0.08)",
+                border: "1px solid rgba(245,158,11,0.35)",
+                borderRadius: 6,
+              }}
+            >
+              <div
+                className="flex items-center gap-1.5 uppercase mb-1"
+                style={{ color: "#F59E0B", fontSize: 10, fontFamily: MONO, letterSpacing: "0.08em" }}
+              >
+                <AlertTriangle size={12} /> Likely knockouts
+              </div>
+              <ul className="list-disc pl-4" style={{ color: "#F0F0FF", fontSize: 12 }}>
+                {likelyFails.map((r, i) => (
+                  <li key={i}>{r}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {mustHave.length > 0 && (
+            <div>
+              <div
+                className="uppercase mb-1"
+                style={{ color: "#8B8B9E", fontSize: 10, fontFamily: MONO, letterSpacing: "0.08em" }}
+              >
+                Must have
+              </div>
+              <ul className="list-disc pl-4" style={{ color: "#F0F0FF", fontSize: 12.5, lineHeight: 1.6 }}>
+                {mustHave.map((r, i) => (
+                  <li key={i}>{r}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {niceToHave.length > 0 && (
+            <div>
+              <button
+                onClick={() => setNiceOpen((v) => !v)}
+                className="text-left uppercase"
+                style={{ color: "#00D4FF", fontSize: 11, fontFamily: MONO, letterSpacing: "0.06em" }}
+              >
+                Nice to have ({niceToHave.length}) {niceOpen ? "↑" : "↓"}
+              </button>
+              {niceOpen && (
+                <ul
+                  className="list-disc pl-4 mt-1"
+                  style={{ color: "#8B8B9E", fontSize: 12.5, lineHeight: 1.6 }}
+                >
+                  {niceToHave.map((r, i) => (
+                    <li key={i}>{r}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      ) : extracted ? (
+        <div
+          className="px-3 py-2 whitespace-pre-wrap"
+          style={{
+            background: "#0D0D14",
+            border: "1px solid #1E1E2E",
+            borderRadius: 6,
+            color: "#F0F0FF",
+            fontSize: 12.5,
+            lineHeight: 1.6,
+            maxHeight: 320,
+            overflowY: "auto",
+          }}
+        >
+          {extracted}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <div style={{ color: "#8B8B9E", fontSize: 12 }}>
+            No requirements section detected in this posting.
+          </div>
+          <button
+            onClick={() => setFullOpen((v) => !v)}
+            className="text-left uppercase"
+            style={{ color: "#00D4FF", fontSize: 11, fontFamily: MONO, letterSpacing: "0.06em" }}
+          >
+            Full job description {fullOpen ? "↑" : "↓"}
+          </button>
+          {fullOpen && (
+            <div
+              className="px-3 py-2 whitespace-pre-wrap"
+              style={{
+                background: "#0D0D14",
+                border: "1px solid #1E1E2E",
+                borderRadius: 6,
+                color: "#F0F0FF",
+                fontSize: 12,
+                lineHeight: 1.5,
+                maxHeight: 320,
+                overflowY: "auto",
+              }}
+            >
+              {jdFull}
+            </div>
+          )}
+        </div>
+      )}
+    </Section>
+  );
+}
+
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
