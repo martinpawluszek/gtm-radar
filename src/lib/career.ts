@@ -191,6 +191,18 @@ export function safeTags(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((t): t is string => typeof t === "string") : [];
 }
 
+export type MetricEntry = { text: string; sensitivity: string };
+
+export function safeMetrics(v: unknown): MetricEntry[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((m): m is Record<string, unknown> => !!m && typeof m === "object" && !Array.isArray(m))
+    .map((m) => ({
+      text: typeof m.text === "string" ? m.text : "",
+      sensitivity: typeof m.sensitivity === "string" ? m.sensitivity : "cv_ok",
+    }));
+}
+
 export function orderOf(v: { display_order: number | null } | undefined): number {
   return typeof v?.display_order === "number" ? v.display_order : 0;
 }
