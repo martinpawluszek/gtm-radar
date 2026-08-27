@@ -2028,79 +2028,134 @@ function DetailPanelInner({
     }
   }
 
-  const actionMut = useMutation({
-    mutationFn: async (action: "save" | "dismiss" | "apply") => {
+  const [acting, setActing] = useState(false);
+
+  async function act(action: "save" | "dismiss" | "apply") {
+    if (acting) return;
+    const prevStatus = posting.status;
+    setActing(true);
+    try {
       if (action === "apply") await applyPosting(posting);
       else await setPostingStatus(posting.id, action === "save" ? "saved" : "dismissed");
-    },
-    onError: (e: Error) => {
-      toast.error(e.message);
-    },
-    onSuccess: (_d, action) => {
-      toast.success(
-        action === "apply" ? "Moved to Applications" : action === "save" ? "Saved" : "Dismissed",
-      );
-      if (action === "apply") onClose();
-    },
-    onSettled: () => onChanged(),
+    } catch (e) {
+      toast.error((e as Error).message);
+      setActing(false);
+      return;
+    }
+    onChanged();
+    const label =
+      action === "apply" ? "Moved to Applications" : action === "save" ? "Saved for later" : "Dismissed";
+    toast.success(label, {
+      duration: 5000,
+      action: {
+        label: "Undo",
+        onClick: async () => {
+          try {
+            if (action === "apply") {
+              await gtmSupabase
+                .from("applications" as never)
+                .delete()
+                .eq("posting_id", posting.id);
+            }
+            await setPostingStatus(posting.id, prevStatus);
+            toast.success("Undone");
+            onChanged();
+          } catch (e) {
+            toast.error((e as Error).message);
+          }
+        },
+      },
+    });
+    setActing(false);
+    onNext();
+  }
+
+  // Keyboard shortcuts — ignored while typing in a field.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select" || t?.isContentEditable) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (k === "s") { e.preventDefault(); void act("save"); }
+      else if (k === "d") { e.preventDefault(); void act("dismiss"); }
+      else if (k === "a") { e.preventDefault(); void act("apply"); }
+      else if (k === "arrowright" || k === "j") { e.preventDefault(); onNext(); }
+      else if (k === "arrowleft" || k === "k") { e.preventDefault(); onPrev(); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   });
 
+  const reqData = posting.requirements ?? null;
+  const mustHave = safeStrings(reqData?.must_have);
+  const niceToHave = safeStrings(reqData?.nice_to_have);
+  const likelyFails = safeStrings(reqData?.likely_fails);
+  const hasStructuredReqs = mustHave.length + niceToHave.length + likelyFails.length > 0;
+  const extractedReqs = hasStructuredReqs ? null : extractRequirementsText(posting.jd_full);
+
   return (
-    <div className="flex flex-col overflow-y-auto" style={{ height: "100vh" }}>
-      {/* Header */}
+    <div className="flex flex-col min-h-0" style={{ height: "100%" }}>
+      {/* Sticky header */}
       <div
-        className="flex items-start justify-between px-5 pt-5 pb-4"
-        style={{ borderBottom: "1px solid #1E1E2E" }}
+        className="flex items-start justify-between gap-4 px-5 pt-5 pb-4 shrink-0"
+        style={{ borderBottom: "1px solid #1E1E2E", background: "#0A0A0F" }}
       >
         <div className="flex flex-col gap-1.5 min-w-0">
           <div style={{ color: "#F0F0FF", fontSize: 18, fontWeight: 600 }} className="truncate">
             {posting.title}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {company && <TierBadge tier={company.tier} />}
             <span style={{ color: "#8B8B9E", fontSize: 13 }} className="truncate">
               {company?.name ?? "Unknown company"}
             </span>
+            <span
+              className="tabular-nums font-bold"
+              style={{ color: scoreColor(posting.ai_composite_score), fontFamily: MONO, fontSize: 14 }}
+            >
+              {posting.ai_composite_score != null ? posting.ai_composite_score.toFixed(1) : "—"}
+              <span style={{ color: "#8B8B9E", fontWeight: 400 }}> / 25</span>
+            </span>
+            <StatusPill status={posting.status} />
           </div>
           <div style={{ color: "#8B8B9E", fontSize: 12, fontFamily: MONO }}>
             {posting.location ?? "—"}
           </div>
-          <div style={{ color: "#6B7280", fontSize: 11, fontFamily: MONO }}>
-            Posted {relativeTime(posting.posted_at ?? posting.scraped_at ?? posting.created_at)}
-            {" · "}
-            {shortAge(posting.posted_at ?? posting.scraped_at ?? posting.created_at)}
-            {posting.deadline_at && (
-              <>
-                {" · "}
-                <span style={{ color: deadlineIndicator(posting.deadline_at).color }}>
-                  {deadlineIndicator(posting.deadline_at).text}
-                </span>
-              </>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span style={{ color: "#6B7280", fontSize: 11, fontFamily: MONO }}>
+              Posted {relativeTime(posting.posted_at ?? posting.scraped_at ?? posting.created_at)}
+              {" · "}
+              {shortAge(posting.posted_at ?? posting.scraped_at ?? posting.created_at)}
+              {posting.deadline_at && (
+                <>
+                  {" · "}
+                  <span style={{ color: deadlineIndicator(posting.deadline_at).color }}>
+                    {deadlineIndicator(posting.deadline_at).text}
+                  </span>
+                </>
+              )}
+            </span>
+            {posting.posted_at == null && <MiniBadge label="Posted date unknown" color="#8B8B9E" />}
+            {posting.link_status === "dead" && (
+              <MiniBadge label="Link may be dead" color="#EF4444" />
             )}
           </div>
-          {posting.jd_url && (
-            <a
-              href={posting.jd_url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1"
-              style={{ color: "#00D4FF", fontSize: 12 }}
-            >
-              View original posting <ExternalLink size={11} />
-            </a>
-          )}
-          <div className="pt-1">
-            <StatusPill status={posting.status} />
-          </div>
         </div>
-        <button
-          onClick={onClose}
-          style={{ color: "#8B8B9E", padding: 4 }}
-          aria-label="Close"
-        >
-          <X size={16} />
-        </button>
+        <div className="flex flex-col items-end gap-2 shrink-0">
+          <span
+            className="tabular-nums"
+            style={{ color: "#8B8B9E", fontSize: 11, fontFamily: MONO, marginRight: 20 }}
+          >
+            {position} of {queueTotal.toLocaleString()}
+          </span>
+        </div>
       </div>
+
+      {/* Scrolling body */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+
 
       {/* Scoring */}
       <Section title="AI Scoring Breakdown">
