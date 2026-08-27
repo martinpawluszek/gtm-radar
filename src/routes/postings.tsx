@@ -1304,9 +1304,10 @@ function PostingsPage() {
         }}
       >
         <DialogContent
-          className="p-0 gap-0 flex flex-col"
-          showCloseButton={false}
+          className="p-0 gap-0"
           style={{
+            display: "flex",
+            flexDirection: "column",
             background: "#0A0A0F",
             border: "1px solid #1E1E2E",
             width: "min(940px, 96vw)",
