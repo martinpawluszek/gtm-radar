@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { AnswersTab } from "@/components/career/AnswersTab";
 import { BuiltTab } from "@/components/career/BuiltTab";
+import { GenerationsTab } from "@/components/career/GenerationsTab";
 import { CredentialsTab } from "@/components/career/CredentialsTab";
 import { CvStudioTab } from "@/components/career/CvStudioTab";
 import { ExperienceTab } from "@/components/career/ExperienceTab";
@@ -67,13 +69,23 @@ function CareerError({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
-type TabKey = "experience" | "built" | "stories" | "credentials" | "rules" | "cv-studio";
+type TabKey =
+  | "experience"
+  | "built"
+  | "stories"
+  | "answers"
+  | "credentials"
+  | "applications"
+  | "rules"
+  | "cv-studio";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "experience", label: "Experience" },
   { key: "built", label: "Built" },
   { key: "stories", label: "Stories" },
+  { key: "answers", label: "Answers" },
   { key: "credentials", label: "Credentials & Skills" },
+  { key: "applications", label: "Applications" },
   { key: "rules", label: "Rules" },
   { key: "cv-studio", label: "CV Studio" },
 ];
@@ -164,7 +176,9 @@ function CareerPage() {
       {tab === "experience" && <ExperienceTab />}
       {tab === "built" && <BuiltTab />}
       {tab === "stories" && <StoriesTab />}
+      {tab === "answers" && <AnswersTab />}
       {tab === "credentials" && <CredentialsTab />}
+      {tab === "applications" && <GenerationsTab />}
       {tab === "rules" && <RulesTab />}
       {tab === "cv-studio" && (
         <CvStudioTab

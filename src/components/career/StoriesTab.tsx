@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -7,6 +7,7 @@ import {
   cvKey,
   cvList,
   cvUpdate,
+  orderOf,
   safeStr,
   safeTags,
   type CvExperience,
@@ -25,6 +26,23 @@ import {
   TextInput,
 } from "./ui";
 
+export const STORY_TYPES: { value: string; label: string }[] = [
+  { value: "win", label: "Win" },
+  { value: "failure", label: "Failure" },
+  { value: "leadership", label: "Leadership" },
+  { value: "conflict", label: "Conflict" },
+  { value: "turnaround", label: "Turnaround" },
+  { value: "decision", label: "Decision" },
+  { value: "technical", label: "Technical" },
+  { value: "other", label: "Other" },
+];
+
+const SENSITIVITY_OPTIONS = [
+  { value: "cv_ok", label: "cv_ok" },
+  { value: "cv_only", label: "cv_only" },
+  { value: "excluded", label: "excluded" },
+];
+
 export function StoriesTab() {
   const qc = useQueryClient();
   const { data: stories = [], isLoading } = useQuery({
@@ -37,6 +55,31 @@ export function StoriesTab() {
   });
   const refresh = () => qc.invalidateQueries({ queryKey: cvKey("cv_stories") });
   const [adding, setAdding] = useState(false);
+  const [filter, setFilter] = useState<string>("all");
+
+  const ordered = useMemo(() => {
+    const rows = Array.isArray(stories) ? [...stories] : [];
+    return rows.sort((a, b) => {
+      const sig = Number(b.is_signature === true) - Number(a.is_signature === true);
+      if (sig !== 0) return sig;
+      const ord = orderOf(a) - orderOf(b);
+      if (ord !== 0) return ord;
+      return safeStr(a.created_at).localeCompare(safeStr(b.created_at));
+    });
+  }, [stories]);
+
+  const counts = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const s of ordered) {
+      const k = safeStr(s.story_type) || "other";
+      map[k] = (map[k] ?? 0) + 1;
+    }
+    return map;
+  }, [ordered]);
+
+  const visible = ordered.filter(
+    (s) => filter === "all" || (safeStr(s.story_type) || "other") === filter,
+  );
 
   async function addStory() {
     setAdding(true);
@@ -58,17 +101,35 @@ export function StoriesTab() {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <p className="text-sm max-w-2xl" style={{ color: "#8B8B9E" }}>
           STAR-format stories (situation, action, result, lesson) for cover letters and interview
-          prep. {stories.length} stor{stories.length === 1 ? "y" : "ies"}.
+          prep. {ordered.length} stor{ordered.length === 1 ? "y" : "ies"}.
         </p>
         <PrimaryButton onClick={addStory} disabled={adding}>
           + New story
         </PrimaryButton>
       </div>
 
-      {stories.length === 0 ? (
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <Action
+          color={filter === "all" ? "#00D4FF" : "#8B8B9E"}
+          onClick={() => setFilter("all")}
+        >
+          All ({ordered.length})
+        </Action>
+        {STORY_TYPES.filter((t) => counts[t.value]).map((t) => (
+          <Action
+            key={t.value}
+            color={filter === t.value ? "#00D4FF" : "#8B8B9E"}
+            onClick={() => setFilter(t.value)}
+          >
+            {t.label} ({counts[t.value]})
+          </Action>
+        ))}
+      </div>
+
+      {visible.length === 0 ? (
         <Empty>No stories yet. Add one to start building your STAR bank.</Empty>
       ) : (
-        stories.map((s) => (
+        visible.map((s) => (
           <StoryCard key={s.id} story={s} experiences={experiences} onChanged={refresh} />
         ))
       )}
@@ -110,6 +171,10 @@ function StoryCard({
         result: draft.result,
         lesson: draft.lesson,
         experience_id: draft.experience_id || null,
+        story_type: safeStr(draft.story_type) || "other",
+        metrics: draft.metrics,
+        raw_notes: draft.raw_notes,
+        sensitivity: safeStr(draft.sensitivity) || "cv_ok",
       });
       setEditing(false);
       onChanged();
@@ -137,8 +202,38 @@ function StoryCard({
     <Panel>
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
-          <div className="text-sm font-semibold" style={{ color: "#F0F0FF", fontFamily: MONO }}>
-            {safeStr(story.title) || "Untitled story"}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-semibold" style={{ color: "#F0F0FF", fontFamily: MONO }}>
+              {safeStr(story.title) || "Untitled story"}
+            </span>
+            {story.is_signature === true && (
+              <span
+                className="px-2 py-0.5 text-[11px]"
+                style={{
+                  color: "#F59E0B",
+                  background: "rgba(245,158,11,0.08)",
+                  border: "1px solid rgba(245,158,11,0.3)",
+                  borderRadius: 999,
+                  fontFamily: MONO,
+                }}
+              >
+                SIGNATURE
+              </span>
+            )}
+            {safeStr(story.story_type) && (
+              <span
+                className="px-2 py-0.5 text-[11px]"
+                style={{
+                  color: "#8B8B9E",
+                  border: "1px solid #1E1E2E",
+                  borderRadius: 999,
+                  fontFamily: MONO,
+                }}
+              >
+                {STORY_TYPES.find((t) => t.value === safeStr(story.story_type))?.label ??
+                  safeStr(story.story_type)}
+              </span>
+            )}
           </div>
           {linked && (
             <div className="text-[11px] mt-0.5" style={{ color: "#8B8B9E", fontFamily: MONO }}>
@@ -147,6 +242,13 @@ function StoryCard({
           )}
         </div>
         <div className="flex items-center gap-1.5">
+          <Action
+            color={story.is_signature === true ? "#F59E0B" : "#8B8B9E"}
+            title="Signature story — lead with this one"
+            onClick={() => patch({ is_signature: !(story.is_signature === true) })}
+          >
+            {story.is_signature === true ? "★" : "☆"}
+          </Action>
           <Action
             color="#00D4FF"
             onClick={() => {
@@ -230,6 +332,34 @@ function StoryCard({
                 })),
               ]}
               onChange={(v) => setDraft({ ...draft, experience_id: v || null })}
+            />
+          </LabeledField>
+          <LabeledField label="Story type">
+            <SelectInput
+              value={safeStr(draft.story_type) || "other"}
+              options={STORY_TYPES}
+              onChange={(v) => setDraft({ ...draft, story_type: v })}
+            />
+          </LabeledField>
+          <LabeledField label="Metrics">
+            <TextInput
+              value={safeStr(draft.metrics)}
+              placeholder="e.g. +42% pipeline, $3M ARR"
+              onChange={(v) => setDraft({ ...draft, metrics: v })}
+            />
+          </LabeledField>
+          <LabeledField label="Raw notes (unstructured capture, shape into STAR later)">
+            <TextAreaInput
+              value={safeStr(draft.raw_notes)}
+              rows={3}
+              onChange={(v) => setDraft({ ...draft, raw_notes: v })}
+            />
+          </LabeledField>
+          <LabeledField label="Sensitivity">
+            <SelectInput
+              value={safeStr(draft.sensitivity) || "cv_ok"}
+              options={SENSITIVITY_OPTIONS}
+              onChange={(v) => setDraft({ ...draft, sensitivity: v })}
             />
           </LabeledField>
           <div className="flex justify-end gap-2">
