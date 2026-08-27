@@ -2706,12 +2706,50 @@ function RequirementsSection({
                 overflowY: "auto",
               }}
             >
-              {jdFull}
+              {decodeHtmlEntities(jdFull ?? "")}
             </div>
           )}
         </div>
       )}
     </Section>
+  );
+}
+
+/** Renders a flat extracted requirements section as caption + bullet list. */
+function ExtractedRequirements({ text }: { text: string }) {
+  const { caption, items, paragraph } = useMemo(() => splitRequirementItems(text), [text]);
+  return (
+    <div
+      className="px-3 py-2"
+      style={{
+        background: "#0D0D14",
+        border: "1px solid #1E1E2E",
+        borderRadius: 6,
+        color: "#F0F0FF",
+        fontSize: 12.5,
+        lineHeight: 1.6,
+        maxHeight: 320,
+        overflowY: "auto",
+      }}
+    >
+      {caption && (
+        <div
+          className="uppercase mb-1.5"
+          style={{ color: "#8B8B9E", fontSize: 10, fontFamily: MONO, letterSpacing: "0.08em" }}
+        >
+          {caption}
+        </div>
+      )}
+      {items.length > 1 ? (
+        <ul className="list-disc pl-4 flex flex-col gap-1">
+          {items.map((it, i) => (
+            <li key={i}>{it}</li>
+          ))}
+        </ul>
+      ) : (
+        <div className="whitespace-pre-wrap">{paragraph ?? items[0] ?? text}</div>
+      )}
+    </div>
   );
 }
 
