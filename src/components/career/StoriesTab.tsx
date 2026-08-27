@@ -202,8 +202,38 @@ function StoryCard({
     <Panel>
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
-          <div className="text-sm font-semibold" style={{ color: "#F0F0FF", fontFamily: MONO }}>
-            {safeStr(story.title) || "Untitled story"}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-semibold" style={{ color: "#F0F0FF", fontFamily: MONO }}>
+              {safeStr(story.title) || "Untitled story"}
+            </span>
+            {story.is_signature === true && (
+              <span
+                className="px-2 py-0.5 text-[11px]"
+                style={{
+                  color: "#F59E0B",
+                  background: "rgba(245,158,11,0.08)",
+                  border: "1px solid rgba(245,158,11,0.3)",
+                  borderRadius: 999,
+                  fontFamily: MONO,
+                }}
+              >
+                SIGNATURE
+              </span>
+            )}
+            {safeStr(story.story_type) && (
+              <span
+                className="px-2 py-0.5 text-[11px]"
+                style={{
+                  color: "#8B8B9E",
+                  border: "1px solid #1E1E2E",
+                  borderRadius: 999,
+                  fontFamily: MONO,
+                }}
+              >
+                {STORY_TYPES.find((t) => t.value === safeStr(story.story_type))?.label ??
+                  safeStr(story.story_type)}
+              </span>
+            )}
           </div>
           {linked && (
             <div className="text-[11px] mt-0.5" style={{ color: "#8B8B9E", fontFamily: MONO }}>
@@ -212,6 +242,13 @@ function StoryCard({
           )}
         </div>
         <div className="flex items-center gap-1.5">
+          <Action
+            color={story.is_signature === true ? "#F59E0B" : "#8B8B9E"}
+            title="Signature story — lead with this one"
+            onClick={() => patch({ is_signature: !(story.is_signature === true) })}
+          >
+            {story.is_signature === true ? "★" : "☆"}
+          </Action>
           <Action
             color="#00D4FF"
             onClick={() => {
