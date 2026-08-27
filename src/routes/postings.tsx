@@ -2,13 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn as useSF } from "@tanstack/react-start";
-import { ChevronDown, ChevronLeft, ChevronRight, Plus, X, ExternalLink, Sparkles, AlertTriangle } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Plus, ExternalLink, Sparkles, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { gtmSupabase } from "@/lib/gtmSupabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TIER_META, type Tier } from "@/lib/companies";
 import { scoreJobPosting } from "@/lib/scorePosting.functions";
@@ -42,6 +41,13 @@ type AiRationale = {
   summary?: string;
 };
 
+type PostingRequirements = {
+  must_have?: unknown;
+  nice_to_have?: unknown;
+  likely_fails?: unknown;
+  extracted_at?: unknown;
+};
+
 type Posting = {
   id: string;
   company_id: string | null;
@@ -66,7 +72,10 @@ type Posting = {
   title_signal: string | null;
   posted_at: string | null;
   deadline_at: string | null;
+  requirements?: PostingRequirements | null;
+  link_status?: string | null;
 };
+
 
 type CompanyLite = {
   id: string;
@@ -152,6 +161,93 @@ function scoreColor(score: number | null | undefined): string {
   if (score >= 12) return "#F59E0B";
   return "#EF4444";
 }
+
+// ---------- Requirements extraction ----------
+const REQ_HEADINGS = [
+  "requirements",
+  "qualifications",
+  "what you'll bring",
+  "what you will bring",
+  "what we're looking for",
+  "what we are looking for",
+  "your profile",
+  "about you",
+  "you have",
+  "must have",
+  "minimum qualifications",
+  "basic qualifications",
+  "preferred qualifications",
+  "skills and experience",
+  "dein profil",
+  "was du mitbringst",
+  "qualifikationen",
+  "anforderungen",
+];
+
+function safeStrings(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((x) => (typeof x === "string" ? x.trim() : ""))
+    .filter((x) => x.length > 0);
+}
+
+function normalizeHeadingLine(line: string): string {
+  return line
+    .trim()
+    .replace(/^[#*\-–—•\u2022\s]+/, "")
+    .replace(/[:*#\-–—\s]+$/, "")
+    .toLowerCase();
+}
+
+function isReqHeadingLine(line: string): boolean {
+  const t = normalizeHeadingLine(line);
+  if (!t || t.length > 70) return false;
+  return REQ_HEADINGS.some((h) => t === h || t.startsWith(h) || t.includes(h));
+}
+
+function looksLikeHeading(line: string): boolean {
+  const t = line.trim();
+  if (!t || t.length > 80) return false;
+  if (/^[-–—*•\u2022\d]/.test(t)) return false;
+  if (/[.!?,;]$/.test(t)) return false;
+  const words = t.split(/\s+/);
+  if (words.length > 10) return false;
+  const letters = t.replace(/[^\p{L}]/gu, "");
+  if (!letters) return false;
+  const allCaps = t === t.toUpperCase();
+  const capWords = words.filter((w) => /^[\p{Lu}]/u.test(w)).length;
+  const titleCase = capWords >= Math.ceil(words.length * 0.6);
+  return allCaps || titleCase || t.endsWith(":");
+}
+
+/** Slice the requirements-ish section out of a raw JD, client-side, no AI. */
+function extractRequirementsText(jd: string | null | undefined): string | null {
+  if (!jd || typeof jd !== "string") return null;
+  const lines = jd.split(/\r?\n/);
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i] ?? "";
+    if (!raw.trim() || raw.trim().length > 80) continue;
+    if (isReqHeadingLine(raw)) {
+      start = i;
+      break;
+    }
+  }
+  if (start < 0) return null;
+  const out: string[] = [lines[start].trim()];
+  let chars = 0;
+  for (let i = start + 1; i < lines.length; i++) {
+    const raw = lines[i] ?? "";
+    if (chars >= 2000) break;
+    if (raw.trim() && looksLikeHeading(raw) && !isReqHeadingLine(raw)) break;
+    out.push(raw);
+    chars += raw.length + 1;
+  }
+  const body = out.slice(1).join("\n").trim();
+  if (body.length < 20) return null;
+  return out.join("\n").trim().slice(0, 2400);
+}
+
 
 const STATUS_META: Record<PostingStatus, { label: string; color: string }> = {
   new: { label: "New", color: "#00D4FF" },
@@ -727,7 +823,27 @@ function PostingsPage() {
   const [unscoredOnly, setUnscoredOnly] = useState(false);
   const [search, setSearch] = useState("");
   const [batchOpen, setBatchOpen] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Review queue: a FROZEN snapshot of ordered posting ids, walked one by one.
+  const [queue, setQueue] = useState<{ ids: string[]; index: number; page: number } | null>(null);
+  const [queueEnd, setQueueEnd] = useState(false);
+  const [loadingNext, setLoadingNext] = useState(false);
+  const selectedId = queue ? queue.ids[queue.index] ?? null : null;
+  const setSelectedId = (id: string | null) => {
+    if (!id) {
+      setQueue(null);
+      setQueueEnd(false);
+      return;
+    }
+    setQueueEnd(false);
+    setQueue((prev) => {
+      if (prev) {
+        const existing = prev.ids.indexOf(id);
+        if (existing >= 0) return { ...prev, index: existing };
+      }
+      return { ids: [id], index: 0, page: 1 };
+    });
+  };
+
   const [addOpen, setAddOpen] = useState(false);
 
   const [page, setPage] = useState(1);
@@ -835,6 +951,53 @@ function PostingsPage() {
     qc.invalidateQueries({ queryKey: ["postings-unscored-count"] });
     if (selectedId) qc.invalidateQueries({ queryKey: ["posting", selectedId] });
   };
+
+  // Open the review loop at a row: snapshot the ids currently in view.
+  const openQueueAt = (id: string) => {
+    const ids = rows.map((r) => r.id);
+    const idx = ids.indexOf(id);
+    setQueueEnd(false);
+    setQueue(idx >= 0 ? { ids, index: idx, page } : { ids: [id], index: 0, page });
+  };
+
+  const closeQueue = () => {
+    setQueue(null);
+    setQueueEnd(false);
+  };
+
+  // Advance within the frozen snapshot; fetch the next server-side page when it runs out.
+  const goNext = async () => {
+    const q = queue;
+    if (!q) return;
+    if (q.index + 1 < q.ids.length) {
+      setQueue({ ...q, index: q.index + 1 });
+      return;
+    }
+    setLoadingNext(true);
+    try {
+      const nextPage = q.page + 1;
+      const res = await fetchPostingsPage(listFilters, tierCompanyIds, nextPage, pageSize);
+      const seen = new Set(q.ids);
+      const fresh = res.rows.map((r) => r.id).filter((rid) => !seen.has(rid));
+      if (fresh.length === 0) {
+        setQueueEnd(true);
+        return;
+      }
+      setQueue({ ids: [...q.ids, ...fresh], index: q.index + 1, page: nextPage });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setLoadingNext(false);
+    }
+  };
+
+  const goPrev = () => {
+    setQueueEnd(false);
+    setQueue((q) => (q && q.index > 0 ? { ...q, index: q.index - 1 } : q));
+  };
+
+  const queueTotal = Math.max(total, queue?.ids.length ?? 0);
+
 
   const emptyMessage =
     unscoredOnly && statusFilter === "new"
@@ -1112,7 +1275,7 @@ function PostingsPage() {
           <PostingsTable
             rows={rows}
             companyMap={companyMap}
-            onRowClick={setSelectedId}
+            onRowClick={openQueueAt}
             onChanged={invalidateAll}
           />
           <PaginationBar
@@ -1132,29 +1295,56 @@ function PostingsPage() {
         </>
       )}
 
-      {/* Side panel */}
-      <Sheet open={!!selectedId} onOpenChange={(o) => !o && setSelectedId(null)}>
-        <SheetContent
-          side="right"
-          className="p-0"
+      {/* Review modal */}
+      <Dialog
+        open={!!selectedId || queueEnd}
+        onOpenChange={(o) => {
+          if (!o) closeQueue();
+        }}
+      >
+        <DialogContent
+          className="p-0 gap-0"
           style={{
+            display: "flex",
+            flexDirection: "column",
             background: "#0A0A0F",
-            border: "none",
-            borderLeft: "1px solid #1E1E2E",
-            width: "max(560px, 40vw)",
-            maxWidth: "100vw",
+            border: "1px solid #1E1E2E",
+            width: "min(940px, 96vw)",
+            maxWidth: "min(940px, 96vw)",
+            height: "85vh",
+            maxHeight: "85vh",
+            overflow: "hidden",
           }}
         >
-          {selectedId && (
+          <DialogHeader className="sr-only">
+            <DialogTitle>Posting review</DialogTitle>
+          </DialogHeader>
+          {queueEnd && !selectedId ? (
+            <div
+              className="flex flex-1 items-center justify-center"
+              style={{ color: "#8B8B9E", fontFamily: MONO, fontSize: 13 }}
+            >
+              You&apos;re at the end of the queue.
+            </div>
+          ) : selectedId ? (
             <DetailPanel
+              key={selectedId}
               postingId={selectedId}
               companyMap={companyMap}
-              onClose={() => setSelectedId(null)}
+              onClose={closeQueue}
               onChanged={invalidateAll}
+              onNext={goNext}
+              onPrev={goPrev}
+              hasPrev={(queue?.index ?? 0) > 0}
+              position={(queue?.index ?? 0) + 1}
+              queueTotal={queueTotal}
+              loadingNext={loadingNext}
+              atEnd={queueEnd}
             />
-          )}
-        </SheetContent>
-      </Sheet>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
 
       {/* Add modal */}
       <AddPostingModal
@@ -1685,17 +1875,28 @@ function RowActions({
 }
 
 // ---------- Detail Panel ----------
+type QueueNav = {
+  onNext: () => void;
+  onPrev: () => void;
+  hasPrev: boolean;
+  position: number;
+  queueTotal: number;
+  loadingNext: boolean;
+  atEnd: boolean;
+};
+
 function DetailPanel({
   postingId,
   companyMap,
   onClose,
   onChanged,
+  ...nav
 }: {
   postingId: string;
   companyMap: Map<string, CompanyLite>;
   onClose: () => void;
   onChanged: () => void;
-}) {
+} & QueueNav) {
   const { data: posting, isLoading } = useQuery({
     queryKey: ["posting", postingId],
     queryFn: () => fetchPostingById(postingId),
@@ -1703,8 +1904,8 @@ function DetailPanel({
   if (isLoading || !posting) {
     return (
       <div
-        className="flex items-center justify-center"
-        style={{ height: "100vh", color: "#8B8B9E" }}
+        className="flex flex-1 items-center justify-center"
+        style={{ color: "#8B8B9E" }}
       >
         {isLoading ? "Loading posting…" : "Posting not found."}
       </div>
@@ -1717,6 +1918,7 @@ function DetailPanel({
       company={company}
       onClose={onClose}
       onChanged={onChanged}
+      {...nav}
     />
   );
 }
@@ -1726,12 +1928,20 @@ function DetailPanelInner({
   company,
   onClose,
   onChanged,
+  onNext,
+  onPrev,
+  hasPrev,
+  position,
+  queueTotal,
+  loadingNext,
+  atEnd,
 }: {
   posting: Posting;
   company: CompanyLite | null;
   onClose: () => void;
   onChanged: () => void;
-}) {
+} & QueueNav) {
+
   const detailNavigate = useNavigate();
   const [jdOpen, setJdOpen] = useState(false);
   const [overridesOpen, setOverridesOpen] = useState(false);
@@ -1817,79 +2027,134 @@ function DetailPanelInner({
     }
   }
 
-  const actionMut = useMutation({
-    mutationFn: async (action: "save" | "dismiss" | "apply") => {
+  const [acting, setActing] = useState(false);
+
+  async function act(action: "save" | "dismiss" | "apply") {
+    if (acting) return;
+    const prevStatus = posting.status;
+    setActing(true);
+    try {
       if (action === "apply") await applyPosting(posting);
       else await setPostingStatus(posting.id, action === "save" ? "saved" : "dismissed");
-    },
-    onError: (e: Error) => {
-      toast.error(e.message);
-    },
-    onSuccess: (_d, action) => {
-      toast.success(
-        action === "apply" ? "Moved to Applications" : action === "save" ? "Saved" : "Dismissed",
-      );
-      if (action === "apply") onClose();
-    },
-    onSettled: () => onChanged(),
+    } catch (e) {
+      toast.error((e as Error).message);
+      setActing(false);
+      return;
+    }
+    onChanged();
+    const label =
+      action === "apply" ? "Moved to Applications" : action === "save" ? "Saved for later" : "Dismissed";
+    toast.success(label, {
+      duration: 5000,
+      action: {
+        label: "Undo",
+        onClick: async () => {
+          try {
+            if (action === "apply") {
+              await gtmSupabase
+                .from("applications" as never)
+                .delete()
+                .eq("posting_id", posting.id);
+            }
+            await setPostingStatus(posting.id, prevStatus);
+            toast.success("Undone");
+            onChanged();
+          } catch (e) {
+            toast.error((e as Error).message);
+          }
+        },
+      },
+    });
+    setActing(false);
+    onNext();
+  }
+
+  // Keyboard shortcuts — ignored while typing in a field.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select" || t?.isContentEditable) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (k === "s") { e.preventDefault(); void act("save"); }
+      else if (k === "d") { e.preventDefault(); void act("dismiss"); }
+      else if (k === "a") { e.preventDefault(); void act("apply"); }
+      else if (k === "arrowright" || k === "j") { e.preventDefault(); onNext(); }
+      else if (k === "arrowleft" || k === "k") { e.preventDefault(); onPrev(); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   });
 
+  const reqData = posting.requirements ?? null;
+  const mustHave = safeStrings(reqData?.must_have);
+  const niceToHave = safeStrings(reqData?.nice_to_have);
+  const likelyFails = safeStrings(reqData?.likely_fails);
+  const hasStructuredReqs = mustHave.length + niceToHave.length + likelyFails.length > 0;
+  const extractedReqs = hasStructuredReqs ? null : extractRequirementsText(posting.jd_full);
+
   return (
-    <div className="flex flex-col overflow-y-auto" style={{ height: "100vh" }}>
-      {/* Header */}
+    <div className="flex flex-col min-h-0" style={{ height: "100%" }}>
+      {/* Sticky header */}
       <div
-        className="flex items-start justify-between px-5 pt-5 pb-4"
-        style={{ borderBottom: "1px solid #1E1E2E" }}
+        className="flex items-start justify-between gap-4 px-5 pt-5 pb-4 shrink-0"
+        style={{ borderBottom: "1px solid #1E1E2E", background: "#0A0A0F" }}
       >
         <div className="flex flex-col gap-1.5 min-w-0">
           <div style={{ color: "#F0F0FF", fontSize: 18, fontWeight: 600 }} className="truncate">
             {posting.title}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {company && <TierBadge tier={company.tier} />}
             <span style={{ color: "#8B8B9E", fontSize: 13 }} className="truncate">
               {company?.name ?? "Unknown company"}
             </span>
+            <span
+              className="tabular-nums font-bold"
+              style={{ color: scoreColor(posting.ai_composite_score), fontFamily: MONO, fontSize: 14 }}
+            >
+              {posting.ai_composite_score != null ? posting.ai_composite_score.toFixed(1) : "—"}
+              <span style={{ color: "#8B8B9E", fontWeight: 400 }}> / 25</span>
+            </span>
+            <StatusPill status={posting.status} />
           </div>
           <div style={{ color: "#8B8B9E", fontSize: 12, fontFamily: MONO }}>
             {posting.location ?? "—"}
           </div>
-          <div style={{ color: "#6B7280", fontSize: 11, fontFamily: MONO }}>
-            Posted {relativeTime(posting.posted_at ?? posting.scraped_at ?? posting.created_at)}
-            {" · "}
-            {shortAge(posting.posted_at ?? posting.scraped_at ?? posting.created_at)}
-            {posting.deadline_at && (
-              <>
-                {" · "}
-                <span style={{ color: deadlineIndicator(posting.deadline_at).color }}>
-                  {deadlineIndicator(posting.deadline_at).text}
-                </span>
-              </>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span style={{ color: "#6B7280", fontSize: 11, fontFamily: MONO }}>
+              Posted {relativeTime(posting.posted_at ?? posting.scraped_at ?? posting.created_at)}
+              {" · "}
+              {shortAge(posting.posted_at ?? posting.scraped_at ?? posting.created_at)}
+              {posting.deadline_at && (
+                <>
+                  {" · "}
+                  <span style={{ color: deadlineIndicator(posting.deadline_at).color }}>
+                    {deadlineIndicator(posting.deadline_at).text}
+                  </span>
+                </>
+              )}
+            </span>
+            {posting.posted_at == null && <MiniBadge label="Posted date unknown" color="#8B8B9E" />}
+            {posting.link_status === "dead" && (
+              <MiniBadge label="Link may be dead" color="#EF4444" />
             )}
           </div>
-          {posting.jd_url && (
-            <a
-              href={posting.jd_url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1"
-              style={{ color: "#00D4FF", fontSize: 12 }}
-            >
-              View original posting <ExternalLink size={11} />
-            </a>
-          )}
-          <div className="pt-1">
-            <StatusPill status={posting.status} />
-          </div>
         </div>
-        <button
-          onClick={onClose}
-          style={{ color: "#8B8B9E", padding: 4 }}
-          aria-label="Close"
-        >
-          <X size={16} />
-        </button>
+        <div className="flex flex-col items-end gap-2 shrink-0">
+          <span
+            className="tabular-nums"
+            style={{ color: "#8B8B9E", fontSize: 11, fontFamily: MONO, marginRight: 20 }}
+          >
+            {position} of {queueTotal.toLocaleString()}
+          </span>
+        </div>
       </div>
+
+      {/* Scrolling body */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+
 
       {/* Scoring */}
       <Section title="AI Scoring Breakdown">
@@ -2025,6 +2290,16 @@ function DetailPanelInner({
         )}
       </Section>
 
+      {/* Requirements */}
+      <RequirementsSection
+        mustHave={mustHave}
+        niceToHave={niceToHave}
+        likelyFails={likelyFails}
+        extracted={extractedReqs}
+        jdFull={posting.jd_full}
+      />
+
+
       {/* Feedback */}
       <Section title="Your Feedback">
         <div className="flex flex-col gap-3">
@@ -2148,7 +2423,7 @@ function DetailPanelInner({
         </div>
       </Section>
 
-      {/* Actions */}
+      {/* Extra actions */}
       <Section title="Actions">
         <div className="flex items-center gap-2 flex-wrap">
           <Button
@@ -2163,33 +2438,6 @@ function DetailPanelInner({
             }}
           >
             Tailor CV
-          </Button>
-          <Button
-            variant="outline"
-            disabled={actionMut.isPending || posting.status === "dismissed"}
-            onClick={() => actionMut.mutate("dismiss")}
-            style={{
-              border: "1px solid rgba(239,68,68,0.3)",
-              color: "#EF4444",
-              background: "transparent",
-            }}
-          >
-            Dismiss
-          </Button>
-          <Button
-            variant="outline"
-            disabled={actionMut.isPending || posting.status === "saved"}
-            onClick={() => actionMut.mutate("save")}
-            style={{ border: "1px solid #1E1E2E", color: "#8B8B9E", background: "transparent" }}
-          >
-            Save for Later
-          </Button>
-          <Button
-            disabled={actionMut.isPending || posting.status === "applied"}
-            onClick={() => actionMut.mutate("apply")}
-            style={{ background: "#00D4FF", color: "#0A0A0F" }}
-          >
-            Apply
           </Button>
         </div>
       </Section>
@@ -2227,9 +2475,236 @@ function DetailPanelInner({
           </div>
         )}
       </Section>
+      </div>
+
+      {/* Sticky footer action bar */}
+      <div
+        className="flex items-center justify-between gap-3 px-5 py-3 shrink-0 flex-wrap"
+        style={{ borderTop: "1px solid #1E1E2E", background: "#0D0D14" }}
+      >
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            disabled={acting || posting.status === "saved"}
+            onClick={() => void act("save")}
+            style={{ border: "1px solid #1E1E2E", color: "#8B8B9E", background: "transparent" }}
+          >
+            Save for later
+          </Button>
+          <Button
+            variant="outline"
+            disabled={acting || posting.status === "dismissed"}
+            onClick={() => void act("dismiss")}
+            style={{
+              border: "1px solid rgba(239,68,68,0.3)",
+              color: "#EF4444",
+              background: "transparent",
+            }}
+          >
+            Dismiss
+          </Button>
+          <Button
+            disabled={acting || posting.status === "applied"}
+            onClick={() => void act("apply")}
+            style={{ background: "#00D4FF", color: "#0A0A0F" }}
+          >
+            Apply
+          </Button>
+          {posting.jd_url && (
+            <a
+              href={posting.jd_url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1"
+              style={{ color: "#00D4FF", fontSize: 12, marginLeft: 4 }}
+            >
+              Open posting <ExternalLink size={11} />
+            </a>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <span style={{ color: "#4A4A5A", fontSize: 10, fontFamily: MONO }}>
+            S save · D dismiss · A apply · →/J next · ←/K prev · Esc close
+          </span>
+          <button
+            onClick={onPrev}
+            disabled={!hasPrev}
+            aria-label="Previous posting"
+            style={{
+              color: hasPrev ? "#8B8B9E" : "#3A3A4A",
+              padding: 4,
+              cursor: hasPrev ? "pointer" : "not-allowed",
+            }}
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <Button
+            variant="outline"
+            onClick={onNext}
+            disabled={loadingNext || atEnd}
+            style={{ border: "1px solid #1E1E2E", color: "#8B8B9E", background: "transparent" }}
+          >
+            {loadingNext ? "Loading…" : "Skip"} <ChevronRight size={14} />
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
+
+function MiniBadge({ label, color }: { label: string; color: string }) {
+  return (
+    <span
+      className="uppercase"
+      style={{
+        color,
+        border: `1px solid ${color}55`,
+        background: `${color}14`,
+        borderRadius: 4,
+        padding: "1px 6px",
+        fontSize: 9,
+        fontFamily: MONO,
+        letterSpacing: "0.06em",
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function RequirementsSection({
+  mustHave,
+  niceToHave,
+  likelyFails,
+  extracted,
+  jdFull,
+}: {
+  mustHave: string[];
+  niceToHave: string[];
+  likelyFails: string[];
+  extracted: string | null;
+  jdFull: string | null;
+}) {
+  const [niceOpen, setNiceOpen] = useState(false);
+  const [fullOpen, setFullOpen] = useState(false);
+  const structured = mustHave.length + niceToHave.length + likelyFails.length > 0;
+
+  if (!structured && !extracted && !jdFull) return null;
+
+  return (
+    <Section title="Requirements">
+      {structured ? (
+        <div className="flex flex-col gap-3">
+          {likelyFails.length > 0 && (
+            <div
+              className="px-3 py-2"
+              style={{
+                background: "rgba(245,158,11,0.08)",
+                border: "1px solid rgba(245,158,11,0.35)",
+                borderRadius: 6,
+              }}
+            >
+              <div
+                className="flex items-center gap-1.5 uppercase mb-1"
+                style={{ color: "#F59E0B", fontSize: 10, fontFamily: MONO, letterSpacing: "0.08em" }}
+              >
+                <AlertTriangle size={12} /> Likely knockouts
+              </div>
+              <ul className="list-disc pl-4" style={{ color: "#F0F0FF", fontSize: 12 }}>
+                {likelyFails.map((r, i) => (
+                  <li key={i}>{r}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {mustHave.length > 0 && (
+            <div>
+              <div
+                className="uppercase mb-1"
+                style={{ color: "#8B8B9E", fontSize: 10, fontFamily: MONO, letterSpacing: "0.08em" }}
+              >
+                Must have
+              </div>
+              <ul className="list-disc pl-4" style={{ color: "#F0F0FF", fontSize: 12.5, lineHeight: 1.6 }}>
+                {mustHave.map((r, i) => (
+                  <li key={i}>{r}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {niceToHave.length > 0 && (
+            <div>
+              <button
+                onClick={() => setNiceOpen((v) => !v)}
+                className="text-left uppercase"
+                style={{ color: "#00D4FF", fontSize: 11, fontFamily: MONO, letterSpacing: "0.06em" }}
+              >
+                Nice to have ({niceToHave.length}) {niceOpen ? "↑" : "↓"}
+              </button>
+              {niceOpen && (
+                <ul
+                  className="list-disc pl-4 mt-1"
+                  style={{ color: "#8B8B9E", fontSize: 12.5, lineHeight: 1.6 }}
+                >
+                  {niceToHave.map((r, i) => (
+                    <li key={i}>{r}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      ) : extracted ? (
+        <div
+          className="px-3 py-2 whitespace-pre-wrap"
+          style={{
+            background: "#0D0D14",
+            border: "1px solid #1E1E2E",
+            borderRadius: 6,
+            color: "#F0F0FF",
+            fontSize: 12.5,
+            lineHeight: 1.6,
+            maxHeight: 320,
+            overflowY: "auto",
+          }}
+        >
+          {extracted}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <div style={{ color: "#8B8B9E", fontSize: 12 }}>
+            No requirements section detected in this posting.
+          </div>
+          <button
+            onClick={() => setFullOpen((v) => !v)}
+            className="text-left uppercase"
+            style={{ color: "#00D4FF", fontSize: 11, fontFamily: MONO, letterSpacing: "0.06em" }}
+          >
+            Full job description {fullOpen ? "↑" : "↓"}
+          </button>
+          {fullOpen && (
+            <div
+              className="px-3 py-2 whitespace-pre-wrap"
+              style={{
+                background: "#0D0D14",
+                border: "1px solid #1E1E2E",
+                borderRadius: 6,
+                color: "#F0F0FF",
+                fontSize: 12,
+                lineHeight: 1.5,
+                maxHeight: 320,
+                overflowY: "auto",
+              }}
+            >
+              {jdFull}
+            </div>
+          )}
+        </div>
+      )}
+    </Section>
+  );
+}
+
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
