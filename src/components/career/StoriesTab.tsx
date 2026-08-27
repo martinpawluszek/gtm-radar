@@ -171,6 +171,10 @@ function StoryCard({
         result: draft.result,
         lesson: draft.lesson,
         experience_id: draft.experience_id || null,
+        story_type: safeStr(draft.story_type) || "other",
+        metrics: draft.metrics,
+        raw_notes: draft.raw_notes,
+        sensitivity: safeStr(draft.sensitivity) || "cv_ok",
       });
       setEditing(false);
       onChanged();
