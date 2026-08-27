@@ -824,7 +824,27 @@ function PostingsPage() {
   const [unscoredOnly, setUnscoredOnly] = useState(false);
   const [search, setSearch] = useState("");
   const [batchOpen, setBatchOpen] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Review queue: a FROZEN snapshot of ordered posting ids, walked one by one.
+  const [queue, setQueue] = useState<{ ids: string[]; index: number; page: number } | null>(null);
+  const [queueEnd, setQueueEnd] = useState(false);
+  const [loadingNext, setLoadingNext] = useState(false);
+  const selectedId = queue ? queue.ids[queue.index] ?? null : null;
+  const setSelectedId = (id: string | null) => {
+    if (!id) {
+      setQueue(null);
+      setQueueEnd(false);
+      return;
+    }
+    setQueueEnd(false);
+    setQueue((prev) => {
+      if (prev) {
+        const existing = prev.ids.indexOf(id);
+        if (existing >= 0) return { ...prev, index: existing };
+      }
+      return { ids: [id], index: 0, page: 1 };
+    });
+  };
+
   const [addOpen, setAddOpen] = useState(false);
 
   const [page, setPage] = useState(1);
