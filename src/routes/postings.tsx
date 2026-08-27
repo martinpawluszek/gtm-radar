@@ -163,26 +163,43 @@ function scoreColor(score: number | null | undefined): string {
 }
 
 // ---------- Requirements extraction ----------
-const REQ_HEADINGS = [
-  "requirements",
-  "qualifications",
-  "what you'll bring",
-  "what you will bring",
-  "what we're looking for",
-  "what we are looking for",
-  "your profile",
-  "about you",
-  "you have",
-  "must have",
-  "minimum qualifications",
-  "basic qualifications",
-  "preferred qualifications",
-  "skills and experience",
-  "dein profil",
-  "was du mitbringst",
-  "qualifikationen",
-  "anforderungen",
-];
+// Scraped jd_full has NO newlines — it's one flat line of 500–9,000 chars, so
+// all detection here works on running text, anchored by punctuation/delimiters.
+
+/** Decode HTML entities the scraper left in the text (&#43; → +, etc.). */
+function decodeHtmlEntities(s: string): string {
+  const named: Record<string, string> = {
+    amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
+    rsquo: "\u2019", lsquo: "\u2018", ldquo: "\u201C", rdquo: "\u201D",
+    ndash: "\u2013", mdash: "\u2014",
+  };
+  return s.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (full, ent: string) => {
+    if (ent.startsWith("#")) {
+      const code =
+        ent[1]?.toLowerCase() === "x"
+          ? parseInt(ent.slice(2), 16)
+          : parseInt(ent.slice(1), 10);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : full;
+    }
+    return named[ent.toLowerCase()] ?? full;
+  });
+}
+
+// Case-sensitive: trailing punctuation separates a real heading
+// ("QUALIFICATIONS - 7+ years...") from the words in a sentence
+// ("...complex business requirements." must NOT match).
+const REQ_START_RE =
+  /(?:^|[\s.;:!?)\]"”])((?:BASIC|PREFERRED|MINIMUM|REQUIRED|ADDITIONAL|DESIRED|KEY|Basic|Preferred|Minimum|Required|Additional|Desired|Key)\s+)?(QUALIFICATIONS|Qualifications|REQUIREMENTS|Requirements|SKILLS|Skills|What we need to see|What you['’]ll bring|What you will bring|What we['’]re looking for|What we are looking for|What you['’]ll need|Ways to stand out|Your Profile|Your profile|Your Qualifications|Your Experience|Who you are|About you|What you need|What you bring|Must[- ]haves?|Experience Required|Experience required|Dein Profil|Was du mitbringst|Qualifikationen|Anforderungen)(\s?[:*•·]|\s-\s|\s–\s|\s—\s)/;
+
+// Fallback for postings with bullets but no heading (Amazon, many Greenhouse).
+const REQ_BULLET_RE = /[-•*]\s?\d+\+?\s?(?:&#43;)?\s?years/;
+
+// Non-requirement section headings end the slice. Requirements-style headings
+// deliberately absent — "BASIC ... PREFERRED QUALIFICATIONS ..." is one section.
+const REQ_END_RE = new RegExp(
+  "(?:^|[\\s.;:!?)\\]\"”])(?:About the team|A day in the life|About us|About the company|About the role|Benefits|What we offer|What we can offer|Why join|Why work|Compensation|Salary|Pay Range|Pay Transparency|Equal Opportunity|Equal Employment|EEO|Our commitment|Perks|Additional Information|How to apply|Application process|Life at|Diversity|Privacy|Note:)(\\s?[:*•·]|\\s-\\s|\\s–\\s|\\s—\\s)",
+  "g"
+);
 
 function safeStrings(v: unknown): string[] {
   if (!Array.isArray(v)) return [];
@@ -191,61 +208,68 @@ function safeStrings(v: unknown): string[] {
     .filter((x) => x.length > 0);
 }
 
-function normalizeHeadingLine(line: string): string {
-  return line
-    .trim()
-    .replace(/^[#*\-–—•\u2022\s]+/, "")
-    .replace(/[:*#\-–—\s]+$/, "")
-    .toLowerCase();
-}
-
-function isReqHeadingLine(line: string): boolean {
-  const t = normalizeHeadingLine(line);
-  if (!t || t.length > 70) return false;
-  return REQ_HEADINGS.some((h) => t === h || t.startsWith(h) || t.includes(h));
-}
-
-function looksLikeHeading(line: string): boolean {
-  const t = line.trim();
-  if (!t || t.length > 80) return false;
-  if (/^[-–—*•\u2022\d]/.test(t)) return false;
-  if (/[.!?,;]$/.test(t)) return false;
-  const words = t.split(/\s+/);
-  if (words.length > 10) return false;
-  const letters = t.replace(/[^\p{L}]/gu, "");
-  if (!letters) return false;
-  const allCaps = t === t.toUpperCase();
-  const capWords = words.filter((w) => /^[\p{Lu}]/u.test(w)).length;
-  const titleCase = capWords >= Math.ceil(words.length * 0.6);
-  return allCaps || titleCase || t.endsWith(":");
-}
-
-/** Slice the requirements-ish section out of a raw JD, client-side, no AI. */
+/** Slice the requirements-ish section out of a flat JD, client-side, no AI. */
 function extractRequirementsText(jd: string | null | undefined): string | null {
   if (!jd || typeof jd !== "string") return null;
-  const lines = jd.split(/\r?\n/);
+
   let start = -1;
-  for (let i = 0; i < lines.length; i++) {
-    const raw = lines[i] ?? "";
-    if (!raw.trim() || raw.trim().length > 80) continue;
-    if (isReqHeadingLine(raw)) {
-      start = i;
-      break;
-    }
+  const hm = REQ_START_RE.exec(jd);
+  if (hm) {
+    // Start of the slice = beginning of the matched heading (skip the
+    // leading delimiter char that anchored the match).
+    start = hm.index + (hm[0].length - hm[0].replace(/^[\s.;:!?)\]"”]/, "").length);
+  } else {
+    const bm = REQ_BULLET_RE.exec(jd);
+    if (bm) start = bm.index;
   }
   if (start < 0) return null;
-  const out: string[] = [lines[start].trim()];
-  let chars = 0;
-  for (let i = start + 1; i < lines.length; i++) {
-    const raw = lines[i] ?? "";
-    if (chars >= 2000) break;
-    if (raw.trim() && looksLikeHeading(raw) && !isReqHeadingLine(raw)) break;
-    out.push(raw);
-    chars += raw.length + 1;
+
+  const rest = jd.slice(start, start + 2200);
+  let end = rest.length;
+  REQ_END_RE.lastIndex = 0;
+  let em: RegExpExecArray | null;
+  while ((em = REQ_END_RE.exec(rest)) !== null) {
+    if (em.index > 10) {
+      end = em.index;
+      break;
+    }
+    if (em.index === REQ_END_RE.lastIndex) REQ_END_RE.lastIndex++;
   }
-  const body = out.slice(1).join("\n").trim();
-  if (body.length < 20) return null;
-  return out.join("\n").trim().slice(0, 2400);
+  const section = rest.slice(0, end).trim();
+
+  // Guard: under ~20 chars of actual body → fall through to full description.
+  const split = splitRequirementItems(section);
+  const body = split.items.length > 0 ? split.items.join(" ") : split.paragraph ?? "";
+  if (body.trim().length < 20) return null;
+  return section;
+}
+
+/**
+ * Split a flat extracted section into a caption + list items on inline bullet
+ * markers (" - ", " • ", " * ", " · "). Decodes HTML entities. Fragments under
+ * ~3 chars are dropped; a single-fragment section comes back as a paragraph.
+ */
+function splitRequirementItems(section: string): {
+  caption: string;
+  items: string[];
+  paragraph?: string;
+} {
+  const decoded = decodeHtmlEntities(section).replace(/\s+/g, " ").trim();
+  const parts = decoded
+    .split(/\s[-•*·]\s/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+
+  if (parts.length <= 1) return { caption: "", items: [], paragraph: decoded };
+
+  const lead = parts[0].replace(/^[-•*·\s]+/, "");
+  const leadIsCaption =
+    lead.length > 0 && lead.length <= 60 && !/^\d/.test(lead);
+  const caption = leadIsCaption ? lead : "";
+  const rawItems = leadIsCaption ? parts.slice(1) : [lead, ...parts.slice(1)];
+  const items = rawItems.filter((p) => p.length >= 3);
+  if (items.length === 0) return { caption: "", items: [], paragraph: decoded };
+  return { caption, items };
 }
 
 
