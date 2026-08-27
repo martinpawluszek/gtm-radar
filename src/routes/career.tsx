@@ -67,13 +67,23 @@ function CareerError({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
-type TabKey = "experience" | "built" | "stories" | "credentials" | "rules" | "cv-studio";
+type TabKey =
+  | "experience"
+  | "built"
+  | "stories"
+  | "answers"
+  | "credentials"
+  | "applications"
+  | "rules"
+  | "cv-studio";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "experience", label: "Experience" },
   { key: "built", label: "Built" },
   { key: "stories", label: "Stories" },
+  { key: "answers", label: "Answers" },
   { key: "credentials", label: "Credentials & Skills" },
+  { key: "applications", label: "Applications" },
   { key: "rules", label: "Rules" },
   { key: "cv-studio", label: "CV Studio" },
 ];
