@@ -2679,21 +2679,7 @@ function RequirementsSection({
           )}
         </div>
       ) : extracted ? (
-        <div
-          className="px-3 py-2 whitespace-pre-wrap"
-          style={{
-            background: "#0D0D14",
-            border: "1px solid #1E1E2E",
-            borderRadius: 6,
-            color: "#F0F0FF",
-            fontSize: 12.5,
-            lineHeight: 1.6,
-            maxHeight: 320,
-            overflowY: "auto",
-          }}
-        >
-          {extracted}
-        </div>
+        <ExtractedRequirements text={extracted} />
       ) : (
         <div className="flex flex-col gap-2">
           <div style={{ color: "#8B8B9E", fontSize: 12 }}>
