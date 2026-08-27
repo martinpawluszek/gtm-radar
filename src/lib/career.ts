@@ -8,6 +8,8 @@ export type CvProfile = {
   email: string | null;
   phone: string | null;
   linkedin_url: string | null;
+  citizenship_line: string | null;
+  metrics_quickref: unknown;
   languages: unknown;
 };
 
@@ -77,6 +79,45 @@ export type CvStory = {
   lesson: string | null;
   tags: string[] | null;
   experience_id: string | null;
+  story_type: string | null;
+  is_signature: boolean | null;
+  sensitivity: string | null;
+  metrics: string | null;
+  raw_notes: string | null;
+  display_order: number | null;
+  created_at?: string | null;
+};
+
+export type CvAnswer = {
+  id: string;
+  question: string | null;
+  question_kind: string | null;
+  answer: string | null;
+  variant_label: string | null;
+  word_limit: number | null;
+  tags: string[] | null;
+  is_master: boolean | null;
+  company_name: string | null;
+  generation_id: string | null;
+  times_used: number | null;
+  last_used_at: string | null;
+  display_order: number | null;
+};
+
+export type CvGeneration = {
+  id: string;
+  doc_type: string | null;
+  company_name: string | null;
+  arrangement: string | null;
+  status: string | null;
+  outcome: string | null;
+  applied_at: string | null;
+  outcome_at: string | null;
+  outcome_notes: string | null;
+  referral_source: string | null;
+  file_basename: string | null;
+  keyword_coverage: unknown;
+  created_at: string | null;
 };
 
 export type CvRule = {
@@ -96,7 +137,9 @@ export type CvTable =
   | "cv_credentials"
   | "cv_competencies"
   | "cv_stories"
-  | "cv_rules";
+  | "cv_rules"
+  | "cv_answers"
+  | "cv_generations";
 
 export const cvKey = (table: CvTable) => [`cv:${table}`] as const;
 
