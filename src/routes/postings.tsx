@@ -2093,6 +2093,10 @@ function DetailPanelInner({
     onNext();
   }
 
+  function openPosting() {
+    if (posting.jd_url) window.open(posting.jd_url, "_blank", "noopener,noreferrer");
+  }
+
   // Keyboard shortcuts — ignored while typing in a field.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -2104,12 +2108,15 @@ function DetailPanelInner({
       if (k === "s") { e.preventDefault(); void act("save"); }
       else if (k === "d") { e.preventDefault(); void act("dismiss"); }
       else if (k === "a") { e.preventDefault(); void act("apply"); }
+      else if (k === "o") { e.preventDefault(); openPosting(); }
       else if (k === "arrowright" || k === "j") { e.preventDefault(); onNext(); }
       else if (k === "arrowleft" || k === "k") { e.preventDefault(); onPrev(); }
+      else if (k === "escape") { e.preventDefault(); onClose(); }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   });
+
 
   const reqData = posting.requirements ?? null;
   const mustHave = safeStrings(reqData?.must_have);
