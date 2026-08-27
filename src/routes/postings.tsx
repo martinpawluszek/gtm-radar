@@ -1276,7 +1276,7 @@ function PostingsPage() {
           <PostingsTable
             rows={rows}
             companyMap={companyMap}
-            onRowClick={setSelectedId}
+            onRowClick={openQueueAt}
             onChanged={invalidateAll}
           />
           <PaginationBar
@@ -1296,29 +1296,55 @@ function PostingsPage() {
         </>
       )}
 
-      {/* Side panel */}
-      <Sheet open={!!selectedId} onOpenChange={(o) => !o && setSelectedId(null)}>
-        <SheetContent
-          side="right"
-          className="p-0"
+      {/* Review modal */}
+      <Dialog
+        open={!!selectedId || queueEnd}
+        onOpenChange={(o) => {
+          if (!o) closeQueue();
+        }}
+      >
+        <DialogContent
+          className="p-0 gap-0 flex flex-col"
+          showCloseButton={false}
           style={{
             background: "#0A0A0F",
-            border: "none",
-            borderLeft: "1px solid #1E1E2E",
-            width: "max(560px, 40vw)",
-            maxWidth: "100vw",
+            border: "1px solid #1E1E2E",
+            width: "min(940px, 96vw)",
+            maxWidth: "min(940px, 96vw)",
+            height: "85vh",
+            maxHeight: "85vh",
+            overflow: "hidden",
           }}
         >
-          {selectedId && (
+          <DialogHeader className="sr-only">
+            <DialogTitle>Posting review</DialogTitle>
+          </DialogHeader>
+          {queueEnd && !selectedId ? (
+            <div
+              className="flex flex-1 items-center justify-center"
+              style={{ color: "#8B8B9E", fontFamily: MONO, fontSize: 13 }}
+            >
+              You&apos;re at the end of the queue.
+            </div>
+          ) : selectedId ? (
             <DetailPanel
+              key={selectedId}
               postingId={selectedId}
               companyMap={companyMap}
-              onClose={() => setSelectedId(null)}
+              onClose={closeQueue}
               onChanged={invalidateAll}
+              onNext={goNext}
+              onPrev={goPrev}
+              hasPrev={(queue?.index ?? 0) > 0}
+              position={(queue?.index ?? 0) + 1}
+              queueTotal={queueTotal}
+              loadingNext={loadingNext}
+              atEnd={queueEnd}
             />
-          )}
-        </SheetContent>
-      </Sheet>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
 
       {/* Add modal */}
       <AddPostingModal
