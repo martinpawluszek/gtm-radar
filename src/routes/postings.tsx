@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn as useSF } from "@tanstack/react-start";
 import { ChevronDown, ChevronLeft, ChevronRight, Plus, ExternalLink, Sparkles, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { gtmSupabase } from "@/lib/gtmSupabase";
+import { gtmSupabase, type LocationNorm, type PostingLocationFacet } from "@/lib/gtmSupabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -74,6 +74,7 @@ type Posting = {
   deadline_at: string | null;
   requirements?: PostingRequirements | null;
   link_status?: string | null;
+  location_norm?: LocationNorm | null;
 };
 
 
