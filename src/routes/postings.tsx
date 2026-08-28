@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn as useSF } from "@tanstack/react-start";
 import { ChevronDown, ChevronLeft, ChevronRight, Plus, ExternalLink, Sparkles, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { gtmSupabase } from "@/lib/gtmSupabase";
+import { gtmSupabase, type LocationNorm, type PostingLocationFacet } from "@/lib/gtmSupabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -74,6 +74,7 @@ type Posting = {
   deadline_at: string | null;
   requirements?: PostingRequirements | null;
   link_status?: string | null;
+  location_norm?: LocationNorm | null;
 };
 
 
@@ -287,6 +288,8 @@ type ListFilters = {
   status: PostingStatus;
   tier: TierFilter;
   companyId: CompanyFilter;
+  country: string;
+  city: string;
   unscoredOnly: boolean;
   search: string;
 };
@@ -315,6 +318,14 @@ async function fetchPostingsPage(
   }
   if (filters.companyId !== "all") {
     q = q.eq("company_id", filters.companyId);
+  }
+  // jsonb containment on location_norm so the GIN index is used; never filter
+  // on the raw `location` text.
+  if (filters.country !== "all") {
+    q = q.contains("location_norm", { countries: [filters.country] });
+  }
+  if (filters.city !== "all") {
+    q = q.contains("location_norm", { cities: [filters.city] });
   }
   const term = filters.search.trim();
   if (term) {
@@ -402,6 +413,15 @@ async function fetchCompanies(): Promise<CompanyLite[]> {
   console.log("[postings] fetchCompanies response", res);
   if (res.error) throw res.error;
   return (res.data ?? []) as unknown as CompanyLite[];
+}
+
+async function fetchLocationFacets(status: PostingStatus): Promise<PostingLocationFacet[]> {
+  const { data, error } = await gtmSupabase.rpc(
+    "posting_location_facets" as never,
+    { p_status: status } as never,
+  );
+  if (error) throw error;
+  return (data ?? []) as unknown as PostingLocationFacet[];
 }
 
 async function fetchDistinctLocations(): Promise<string[]> {
@@ -844,6 +864,10 @@ function PostingsPage() {
   const [tierOpen, setTierOpen] = useState(false);
   const [companyFilter, setCompanyFilter] = useState<CompanyFilter>("all");
   const [companyOpen, setCompanyOpen] = useState(false);
+  const [countryFilter, setCountryFilter] = useState<string>("all");
+  const [countryOpen, setCountryOpen] = useState(false);
+  const [cityFilter, setCityFilter] = useState<string>("all");
+  const [cityOpen, setCityOpen] = useState(false);
   const [unscoredOnly, setUnscoredOnly] = useState(false);
   const [search, setSearch] = useState("");
   const [batchOpen, setBatchOpen] = useState(false);
@@ -876,7 +900,29 @@ function PostingsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, tierFilter, companyFilter, unscoredOnly, search, pageSize]);
+  }, [statusFilter, tierFilter, companyFilter, countryFilter, cityFilter, unscoredOnly, search, pageSize]);
+
+  // Location facet counts follow the tab being viewed.
+  const { data: locationFacets = [] } = useQuery({
+    queryKey: ["posting-location-facets", statusFilter],
+    queryFn: () => fetchLocationFacets(statusFilter),
+    staleTime: 60_000,
+  });
+
+  const countryFacets = useMemo(
+    () =>
+      locationFacets
+        .filter((f) => f.kind === "country" && f.country)
+        .sort((a, b) => b.n - a.n),
+    [locationFacets],
+  );
+
+  const cityFacets = useMemo(() => {
+    const cities = locationFacets.filter((f) => f.kind === "city" && f.city);
+    const scoped =
+      countryFilter === "all" ? cities : cities.filter((f) => f.country === countryFilter);
+    return [...scoped].sort((a, b) => b.n - a.n);
+  }, [locationFacets, countryFilter]);
 
   const tierCompanyIds = useMemo(() => {
     if (tierFilter === "all") return null;
@@ -893,6 +939,8 @@ function PostingsPage() {
     status: statusFilter,
     tier: tierFilter,
     companyId: companyFilter,
+    country: countryFilter,
+    city: cityFilter,
     unscoredOnly,
     search,
   };
@@ -900,7 +948,7 @@ function PostingsPage() {
   const { data: pageData, isLoading, isFetching } = useQuery({
     queryKey: [
       "postings",
-      { statusFilter, tierFilter, companyFilter, unscoredOnly, search, page, pageSize },
+      { statusFilter, tierFilter, companyFilter, countryFilter, cityFilter, unscoredOnly, search, page, pageSize },
     ],
     queryFn: () => fetchPostingsPage(listFilters, tierCompanyIds, page, pageSize),
     placeholderData: (prev) => prev,
@@ -1099,6 +1147,8 @@ function PostingsPage() {
               onClick={() => {
                 setStatusFilter(s);
                 setCompanyFilter("all");
+                setCountryFilter("all");
+                setCityFilter("all");
                 if (s !== "new") setUnscoredOnly(false);
               }}
               label={STATUS_META[s].label}
@@ -1221,6 +1271,144 @@ function PostingsPage() {
                   }}
                 >
                   {c.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="relative">
+          <button
+            onClick={() => setCountryOpen((v) => !v)}
+            className="flex items-center gap-2 px-3"
+            style={{
+              height: 28,
+              background: "#0A0A0F",
+              border: "1px solid #1E1E2E",
+              borderRadius: 4,
+              color: "#F0F0FF",
+              fontSize: 12,
+              fontFamily: MONO,
+            }}
+          >
+            {countryFilter === "all" ? "All Countries" : countryFilter}
+            <ChevronDown size={12} />
+          </button>
+          {countryOpen && (
+            <div
+              className="absolute left-0 mt-1 z-10 p-1"
+              style={{
+                background: "#111118",
+                border: "1px solid #1E1E2E",
+                borderRadius: 6,
+                minWidth: 220,
+                maxHeight: 300,
+                overflowY: "auto",
+              }}
+            >
+              <button
+                onClick={() => {
+                  setCountryFilter("all");
+                  setCityFilter("all");
+                  setCountryOpen(false);
+                }}
+                className="w-full text-left px-2 py-1.5"
+                style={{
+                  color: "#F0F0FF",
+                  fontSize: 12,
+                  fontFamily: MONO,
+                  borderRadius: 3,
+                  background: countryFilter === "all" ? "rgba(0,212,255,0.1)" : "transparent",
+                }}
+              >
+                All Countries
+              </button>
+              {countryFacets.map((f) => (
+                <button
+                  key={f.country}
+                  onClick={() => {
+                    setCountryFilter(f.country);
+                    setCityFilter("all");
+                    setCountryOpen(false);
+                  }}
+                  className="w-full text-left px-2 py-1.5 flex items-center justify-between gap-2"
+                  style={{
+                    color: "#F0F0FF",
+                    fontSize: 12,
+                    fontFamily: MONO,
+                    borderRadius: 3,
+                    background: countryFilter === f.country ? "rgba(0,212,255,0.1)" : "transparent",
+                  }}
+                >
+                  <span>{f.country}</span>
+                  <span style={{ color: "#8B8B9E", fontSize: 11 }}>{f.n}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="relative">
+          <button
+            onClick={() => setCityOpen((v) => !v)}
+            className="flex items-center gap-2 px-3"
+            style={{
+              height: 28,
+              background: "#0A0A0F",
+              border: "1px solid #1E1E2E",
+              borderRadius: 4,
+              color: "#F0F0FF",
+              fontSize: 12,
+              fontFamily: MONO,
+            }}
+          >
+            {cityFilter === "all" ? "All Cities" : cityFilter}
+            <ChevronDown size={12} />
+          </button>
+          {cityOpen && (
+            <div
+              className="absolute left-0 mt-1 z-10 p-1"
+              style={{
+                background: "#111118",
+                border: "1px solid #1E1E2E",
+                borderRadius: 6,
+                minWidth: 220,
+                maxHeight: 300,
+                overflowY: "auto",
+              }}
+            >
+              <button
+                onClick={() => {
+                  setCityFilter("all");
+                  setCityOpen(false);
+                }}
+                className="w-full text-left px-2 py-1.5"
+                style={{
+                  color: "#F0F0FF",
+                  fontSize: 12,
+                  fontFamily: MONO,
+                  borderRadius: 3,
+                  background: cityFilter === "all" ? "rgba(0,212,255,0.1)" : "transparent",
+                }}
+              >
+                All Cities
+              </button>
+              {cityFacets.map((f) => (
+                <button
+                  key={`${f.country}::${f.city}`}
+                  onClick={() => {
+                    setCityFilter(f.city!);
+                    setCityOpen(false);
+                  }}
+                  className="w-full text-left px-2 py-1.5 flex items-center justify-between gap-2"
+                  style={{
+                    color: "#F0F0FF",
+                    fontSize: 12,
+                    fontFamily: MONO,
+                    borderRadius: 3,
+                    background: cityFilter === f.city ? "rgba(0,212,255,0.1)" : "transparent",
+                  }}
+                >
+                  <span>{f.city}</span>
+                  <span style={{ color: "#8B8B9E", fontSize: 11 }}>{f.n}</span>
                 </button>
               ))}
             </div>
