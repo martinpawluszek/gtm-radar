@@ -415,6 +415,15 @@ async function fetchCompanies(): Promise<CompanyLite[]> {
   return (res.data ?? []) as unknown as CompanyLite[];
 }
 
+async function fetchLocationFacets(status: PostingStatus): Promise<PostingLocationFacet[]> {
+  const { data, error } = await gtmSupabase.rpc(
+    "posting_location_facets" as never,
+    { p_status: status } as never,
+  );
+  if (error) throw error;
+  return (data ?? []) as unknown as PostingLocationFacet[];
+}
+
 async function fetchDistinctLocations(): Promise<string[]> {
   const { data, error } = await gtmSupabase
     .from("job_postings" as never)
