@@ -10,6 +10,7 @@ import {
   cvUpdate,
   formatPeriod,
   nextOrder,
+  orderOf,
   safeStr,
   safeTags,
   swapOrder,
@@ -41,8 +42,17 @@ const SENSITIVITY_OPTIONS = [
 function sensitivityColor(s: string): string {
   if (s === "excluded") return "#F87171";
   if (s === "cv_only") return "#F59E0B";
-  return "#10B981";
+  return "#6E9E88";
 }
+
+type CompanyGroup = {
+  key: string;
+  company: string;
+  blurb: string;
+  roles: CvExperience[];
+  bulletCount: number;
+  minOrder: number;
+};
 
 export function ExperienceTab() {
   const qc = useQueryClient();
@@ -59,18 +69,48 @@ export function ExperienceTab() {
   const refreshExp = () => qc.invalidateQueries({ queryKey: cvKey("cv_experiences") });
   const refreshBullets = () => qc.invalidateQueries({ queryKey: cvKey("cv_bullets") });
 
-  const ordered = useMemo(() => [...experiences].sort(byOrder), [experiences]);
-  const crossCutting = useMemo(
-    () => bullets.filter((b) => !b.experience_id).sort(byOrder),
-    [bullets],
+  const ordered = useMemo(
+    () => (Array.isArray(experiences) ? [...experiences] : []).sort(byOrder),
+    [experiences],
   );
+  const allBullets = useMemo(() => (Array.isArray(bullets) ? bullets : []), [bullets]);
+  const crossCutting = useMemo(
+    () => allBullets.filter((b) => !b.experience_id).sort(byOrder),
+    [allBullets],
+  );
+
+  const groups = useMemo<CompanyGroup[]>(() => {
+    const map = new Map<string, CompanyGroup>();
+    ordered.forEach((exp, i) => {
+      const company = safeStr(exp.company) || "Unknown employer";
+      const key = company.toLowerCase();
+      const existing = map.get(key);
+      const count = allBullets.filter((b) => b.experience_id === exp.id).length;
+      if (existing) {
+        existing.roles.push(exp);
+        existing.bulletCount += count;
+        existing.minOrder = Math.min(existing.minOrder, orderOf(exp) || i);
+        if (!existing.blurb) existing.blurb = safeStr(exp.company_blurb);
+      } else {
+        map.set(key, {
+          key,
+          company,
+          blurb: safeStr(exp.company_blurb),
+          roles: [exp],
+          bulletCount: count,
+          minOrder: orderOf(exp) || i,
+        });
+      }
+    });
+    return [...map.values()].sort((a, b) => a.minOrder - b.minOrder);
+  }, [ordered, allBullets]);
 
   const addExperience = useMutation({
     mutationFn: () =>
       cvInsert<CvExperience>("cv_experiences", {
         company: "New employer",
         role_title: "Role title",
-        display_order: nextOrder(experiences),
+        display_order: nextOrder(ordered),
       }),
     onSuccess: () => {
       refreshExp();
@@ -80,7 +120,8 @@ export function ExperienceTab() {
   });
 
   const move = useMutation({
-    mutationFn: async ({ index, dir }: { index: number; dir: -1 | 1 }) => {
+    mutationFn: async ({ id, dir }: { id: string; dir: -1 | 1 }) => {
+      const index = ordered.findIndex((e) => e.id === id);
       const a = ordered[index];
       const b = ordered[index + dir];
       if (!a || !b) return;
@@ -96,85 +137,107 @@ export function ExperienceTab() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-sm" style={{ color: "#8B8B9E" }}>
-          {ordered.length} role{ordered.length === 1 ? "" : "s"} · {bullets.length} bullet
-          {bullets.length === 1 ? "" : "s"}
+          {groups.length} employer{groups.length === 1 ? "" : "s"} · {ordered.length} role
+          {ordered.length === 1 ? "" : "s"} · {allBullets.length} bullet
+          {allBullets.length === 1 ? "" : "s"}
         </p>
         <PrimaryButton onClick={() => addExperience.mutate()} disabled={addExperience.isPending}>
           + New experience
         </PrimaryButton>
       </div>
 
-      <CrossCuttingGroup
-        bullets={crossCutting}
-        allBullets={bullets}
-        onChanged={refreshBullets}
-      />
-
-      {ordered.length === 0 ? (
+      {groups.length === 0 ? (
         <Empty>No experience rows yet.</Empty>
       ) : (
-        ordered.map((exp, i) => (
-          <ExperienceCard
-            key={exp.id}
-            exp={exp}
-            index={i}
-            total={ordered.length}
-            bullets={bullets.filter((b) => b.experience_id === exp.id).sort(byOrder)}
-            allBullets={bullets}
-            onMove={(dir) => move.mutate({ index: i, dir })}
+        groups.map((g) => (
+          <CompanyBlock
+            key={g.key}
+            group={g}
+            allBullets={allBullets}
+            canMove={(id, dir) => {
+              const i = ordered.findIndex((e) => e.id === id);
+              return i >= 0 && !!ordered[i + dir];
+            }}
+            onMove={(id, dir) => move.mutate({ id, dir })}
             onChanged={refreshExp}
             onBulletsChanged={refreshBullets}
           />
         ))
       )}
+
+      <CrossCuttingGroup
+        bullets={crossCutting}
+        allBullets={allBullets}
+        onChanged={refreshBullets}
+      />
     </div>
   );
 }
 
-function CrossCuttingGroup({
-  bullets,
+function CompanyBlock({
+  group,
   allBullets,
+  canMove,
+  onMove,
   onChanged,
+  onBulletsChanged,
 }: {
-  bullets: CvBullet[];
+  group: CompanyGroup;
   allBullets: CvBullet[];
+  canMove: (id: string, dir: -1 | 1) => boolean;
+  onMove: (id: string, dir: -1 | 1) => void;
   onChanged: () => void;
+  onBulletsChanged: () => void;
 }) {
   return (
-    <Panel style={{ borderColor: "rgba(0,212,255,0.2)" }}>
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div>
-          <div className="text-sm font-semibold" style={{ color: "#00D4FF", fontFamily: MONO }}>
-            Cross-cutting
-          </div>
-          <p className="text-[12px] mt-0.5" style={{ color: "#8B8B9E" }}>
-            Bullets not tied to a single employer.
-          </p>
+    <Panel>
+      <div className="min-w-0">
+        <div className="text-base font-semibold" style={{ color: "#F0F0FF", fontFamily: MONO }}>
+          {group.company}
         </div>
-        <AddBulletButton experienceId={null} siblings={allBullets} onChanged={onChanged} />
+        {group.blurb && (
+          <p className="text-[12px] mt-1 max-w-3xl" style={{ color: "#8B8B9E" }}>
+            {group.blurb}
+          </p>
+        )}
+        <div className="text-[11px] mt-1" style={{ color: "#8B8B9E", fontFamily: MONO }}>
+          {group.roles.length} role{group.roles.length === 1 ? "" : "s"} · {group.bulletCount} bullet
+          {group.bulletCount === 1 ? "" : "s"}
+        </div>
       </div>
 
-      <BulletList bullets={bullets} allBullets={allBullets} onChanged={onChanged} />
+      <div className="flex flex-col gap-3 mt-3">
+        {group.roles.map((exp) => (
+          <RoleRow
+            key={exp.id}
+            exp={exp}
+            bullets={allBullets.filter((b) => b.experience_id === exp.id).sort(byOrder)}
+            allBullets={allBullets}
+            canMove={canMove}
+            onMove={onMove}
+            onChanged={onChanged}
+            onBulletsChanged={onBulletsChanged}
+          />
+        ))}
+      </div>
     </Panel>
   );
 }
 
-function ExperienceCard({
+function RoleRow({
   exp,
-  index,
-  total,
   bullets,
   allBullets,
+  canMove,
   onMove,
   onChanged,
   onBulletsChanged,
 }: {
   exp: CvExperience;
-  index: number;
-  total: number;
   bullets: CvBullet[];
   allBullets: CvBullet[];
-  onMove: (dir: -1 | 1) => void;
+  canMove: (id: string, dir: -1 | 1) => boolean;
+  onMove: (id: string, dir: -1 | 1) => void;
   onChanged: () => void;
   onBulletsChanged: () => void;
 }) {
@@ -182,6 +245,7 @@ function ExperienceCard({
   const [draft, setDraft] = useState<CvExperience>(exp);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   function startEdit() {
     setDraft(exp);
@@ -223,33 +287,36 @@ function ExperienceCard({
   }
 
   return (
-    <Panel>
+    <div
+      className="p-3"
+      style={{ background: "#0D0D14", border: "1px solid #1E1E2E", borderRadius: 4 }}
+    >
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
-          <div className="text-sm font-semibold" style={{ color: "#F0F0FF", fontFamily: MONO }}>
+          <div className="text-sm font-medium" style={{ color: "#F0F0FF", fontFamily: MONO }}>
             {safeStr(exp.role_title) || "Untitled role"}
-            <span style={{ color: "#8B8B9E" }}> · {safeStr(exp.company) || "—"}</span>
           </div>
           <div className="text-[12px] mt-0.5" style={{ color: "#8B8B9E", fontFamily: MONO }}>
-            {formatPeriod(exp)}
+            {formatPeriod(exp) || "—"}
             {exp.location ? ` · ${safeStr(exp.location)}` : ""}
           </div>
-          {safeStr(exp.company_blurb) && (
-            <p className="text-[12px] mt-1.5" style={{ color: "#C0C0D0" }}>
-              {safeStr(exp.company_blurb)}
-            </p>
+          {(exp.is_current || exp.always_include) && (
+            <div className="flex gap-1.5 mt-1.5 flex-wrap">
+              {exp.is_current && <Chip color="#10B981">Current</Chip>}
+              {exp.always_include && <Chip color="#00D4FF">Always include</Chip>}
+            </div>
           )}
-          <div className="flex gap-1.5 mt-2 flex-wrap">
-            {exp.is_current && <Chip color="#10B981">Current</Chip>}
-            {exp.always_include && <Chip color="#00D4FF">Always include</Chip>}
-          </div>
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">
-          <Action onClick={() => onMove(-1)} disabled={index === 0} title="Move up">
+          <Action onClick={() => onMove(exp.id, -1)} disabled={!canMove(exp.id, -1)} title="Move up">
             ↑
           </Action>
-          <Action onClick={() => onMove(1)} disabled={index === total - 1} title="Move down">
+          <Action
+            onClick={() => onMove(exp.id, 1)}
+            disabled={!canMove(exp.id, 1)}
+            title="Move down"
+          >
             ↓
           </Action>
           <Action onClick={() => (editing ? setEditing(false) : startEdit())} color="#00D4FF">
@@ -264,7 +331,7 @@ function ExperienceCard({
       {confirmDelete && (
         <div className="flex items-center gap-2 mt-3 flex-wrap">
           <span className="text-[12px]" style={{ color: "#F59E0B" }}>
-            Delete this experience and unlink its bullets?
+            Delete this role and unlink its bullets?
           </span>
           <Action onClick={() => setConfirmDelete(false)}>Cancel</Action>
           <Action onClick={remove} color="#F87171">
@@ -337,16 +404,68 @@ function ExperienceCard({
         </div>
       )}
 
-      <div className="mt-4 pt-3" style={{ borderTop: "1px solid #1E1E2E" }}>
+      <div className="mt-3 pt-2" style={{ borderTop: "1px solid #1E1E2E" }}>
         <div className="flex items-center justify-between gap-2">
-          <SectionLabel>Bullets ({bullets.length})</SectionLabel>
-          <AddBulletButton
-            experienceId={exp.id}
-            siblings={allBullets}
-            onChanged={onBulletsChanged}
-          />
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="text-[12px] flex items-center gap-1.5"
+            style={{ color: "#8B8B9E", fontFamily: MONO, background: "transparent" }}
+          >
+            <span style={{ display: "inline-block", width: 10 }}>{expanded ? "▾" : "▸"}</span>
+            {bullets.length} bullet{bullets.length === 1 ? "" : "s"}
+          </button>
+          {expanded && (
+            <AddBulletButton
+              experienceId={exp.id}
+              siblings={allBullets}
+              onChanged={onBulletsChanged}
+            />
+          )}
         </div>
-        <BulletList bullets={bullets} allBullets={allBullets} onChanged={onBulletsChanged} />
+        {expanded && (
+          <BulletList bullets={bullets} onChanged={onBulletsChanged} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CrossCuttingGroup({
+  bullets,
+  allBullets,
+  onChanged,
+}: {
+  bullets: CvBullet[];
+  allBullets: CvBullet[];
+  onChanged: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <Panel style={{ borderColor: "rgba(0,212,255,0.2)" }}>
+      <div className="flex items-start justify-between gap-2 flex-wrap">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold" style={{ color: "#00D4FF", fontFamily: MONO }}>
+            Cross-cutting
+          </div>
+          <p className="text-[12px] mt-0.5" style={{ color: "#8B8B9E" }}>
+            Not tied to one employer — pulled in when a JD calls for it.
+          </p>
+        </div>
+        {expanded && (
+          <AddBulletButton experienceId={null} siblings={allBullets} onChanged={onChanged} />
+        )}
+      </div>
+
+      <div className="mt-2">
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="text-[12px] flex items-center gap-1.5"
+          style={{ color: "#8B8B9E", fontFamily: MONO, background: "transparent" }}
+        >
+          <span style={{ display: "inline-block", width: 10 }}>{expanded ? "▾" : "▸"}</span>
+          {bullets.length} bullet{bullets.length === 1 ? "" : "s"}
+        </button>
+        {expanded && <BulletList bullets={bullets} onChanged={onChanged} />}
       </div>
     </Panel>
   );
@@ -375,9 +494,7 @@ function AddBulletButton({
             tags: [],
             is_core: false,
             sensitivity: "cv_ok",
-            display_order: nextOrder(
-              siblings.filter((b) => b.experience_id === experienceId),
-            ),
+            display_order: nextOrder(siblings.filter((b) => b.experience_id === experienceId)),
           });
           onChanged();
         } catch (e) {
@@ -392,16 +509,8 @@ function AddBulletButton({
   );
 }
 
-function BulletList({
-  bullets,
-  allBullets,
-  onChanged,
-}: {
-  bullets: CvBullet[];
-  allBullets: CvBullet[];
-  onChanged: () => void;
-}) {
-  if (bullets.length === 0) {
+function BulletList({ bullets, onChanged }: { bullets: CvBullet[]; onChanged: () => void }) {
+  if (!bullets || bullets.length === 0) {
     return (
       <p className="text-[12px] mt-2" style={{ color: "#8B8B9E" }}>
         No bullets yet.
@@ -409,7 +518,7 @@ function BulletList({
     );
   }
   return (
-    <div className="flex flex-col gap-2 mt-2">
+    <div className="flex flex-col gap-1.5 mt-2">
       {bullets.map((b, i) => (
         <BulletRow
           key={b.id}
@@ -417,7 +526,6 @@ function BulletList({
           index={i}
           total={bullets.length}
           siblings={bullets}
-          allBullets={allBullets}
           onChanged={onChanged}
         />
       ))}
@@ -436,11 +544,11 @@ function BulletRow({
   index: number;
   total: number;
   siblings: CvBullet[];
-  allBullets: CvBullet[];
   onChanged: () => void;
 }) {
+  const [editing, setEditing] = useState(false);
   const [text, setText] = useState(safeStr(bullet.text));
-  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
   const tags = safeTags(bullet.tags);
   const sensitivity = safeStr(bullet.sensitivity) || "cv_ok";
 
@@ -464,47 +572,55 @@ function BulletRow({
     }
   }
 
+  if (!editing) {
+    return (
+      <div className="flex items-start gap-2 py-1">
+        <span style={{ color: "#3A3A4E", fontFamily: MONO }} className="text-[13px] leading-5">
+          •
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] leading-5" style={{ color: "#C0C0D0" }}>
+            {safeStr(bullet.text) || "(empty bullet)"}
+          </div>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            {bullet.is_core && (
+              <span className="text-[10px]" style={{ color: "#8B8B9E", fontFamily: MONO }}>
+                core
+              </span>
+            )}
+            <Chip color={sensitivityColor(sensitivity)}>{sensitivity}</Chip>
+            {tags.length > 0 && (
+              <span className="text-[10px]" style={{ color: "#8B8B9E", fontFamily: MONO }}>
+                {tags.join(" · ")}
+              </span>
+            )}
+          </div>
+        </div>
+        <Action
+          color="#8B8B9E"
+          onClick={() => {
+            setText(safeStr(bullet.text));
+            setEditing(true);
+          }}
+        >
+          Edit
+        </Action>
+      </div>
+    );
+  }
+
   return (
     <div
       className="flex flex-col gap-2 p-2.5"
-      style={{ background: "#0D0D14", border: "1px solid #1E1E2E", borderRadius: 4 }}
+      style={{ background: "#111118", border: "1px solid #1E1E2E", borderRadius: 4 }}
     >
-      <textarea
-        value={text}
-        rows={2}
-        placeholder="Bullet text"
-        onChange={(e) => {
-          setText(e.target.value);
-          setDirty(true);
-        }}
-        onBlur={() => {
-          if (!dirty) return;
-          setDirty(false);
-          patch({ text });
-        }}
-        className="bg-transparent outline-none text-sm w-full"
-        style={{ color: "#F0F0FF", border: "none", resize: "vertical" }}
-      />
+      <SectionLabel>Bullet</SectionLabel>
+      <TextAreaInput value={text} rows={3} placeholder="Bullet text" onChange={setText} />
 
       <TagEditor tags={tags} onChange={(next) => patch({ tags: next })} />
 
       <div className="flex items-center gap-1.5 flex-wrap">
-        <Toggle
-          checked={!!bullet.is_core}
-          onChange={(v) => patch({ is_core: v })}
-          label="Core"
-        />
-        <span
-          className="px-2 py-0.5 text-[11px]"
-          style={{
-            color: sensitivityColor(sensitivity),
-            border: `1px solid ${sensitivityColor(sensitivity)}44`,
-            borderRadius: 999,
-            fontFamily: MONO,
-          }}
-        >
-          {sensitivity}
-        </span>
+        <Toggle checked={!!bullet.is_core} onChange={(v) => patch({ is_core: v })} label="Core" />
         <SelectInput
           value={sensitivity}
           options={SENSITIVITY_OPTIONS}
@@ -531,6 +647,21 @@ function BulletRow({
             Delete
           </Action>
         </div>
+      </div>
+
+      <div className="flex justify-end gap-2">
+        <Action onClick={() => setEditing(false)}>Cancel</Action>
+        <PrimaryButton
+          disabled={saving}
+          onClick={async () => {
+            setSaving(true);
+            await patch({ text });
+            setSaving(false);
+            setEditing(false);
+          }}
+        >
+          {saving ? "Saving…" : "Save bullet"}
+        </PrimaryButton>
       </div>
     </div>
   );
