@@ -1147,6 +1147,8 @@ function PostingsPage() {
               onClick={() => {
                 setStatusFilter(s);
                 setCompanyFilter("all");
+                setCountryFilter("all");
+                setCityFilter("all");
                 if (s !== "new") setUnscoredOnly(false);
               }}
               label={STATUS_META[s].label}
@@ -1269,6 +1271,144 @@ function PostingsPage() {
                   }}
                 >
                   {c.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="relative">
+          <button
+            onClick={() => setCountryOpen((v) => !v)}
+            className="flex items-center gap-2 px-3"
+            style={{
+              height: 28,
+              background: "#0A0A0F",
+              border: "1px solid #1E1E2E",
+              borderRadius: 4,
+              color: "#F0F0FF",
+              fontSize: 12,
+              fontFamily: MONO,
+            }}
+          >
+            {countryFilter === "all" ? "All Countries" : countryFilter}
+            <ChevronDown size={12} />
+          </button>
+          {countryOpen && (
+            <div
+              className="absolute left-0 mt-1 z-10 p-1"
+              style={{
+                background: "#111118",
+                border: "1px solid #1E1E2E",
+                borderRadius: 6,
+                minWidth: 220,
+                maxHeight: 300,
+                overflowY: "auto",
+              }}
+            >
+              <button
+                onClick={() => {
+                  setCountryFilter("all");
+                  setCityFilter("all");
+                  setCountryOpen(false);
+                }}
+                className="w-full text-left px-2 py-1.5"
+                style={{
+                  color: "#F0F0FF",
+                  fontSize: 12,
+                  fontFamily: MONO,
+                  borderRadius: 3,
+                  background: countryFilter === "all" ? "rgba(0,212,255,0.1)" : "transparent",
+                }}
+              >
+                All Countries
+              </button>
+              {countryFacets.map((f) => (
+                <button
+                  key={f.country}
+                  onClick={() => {
+                    setCountryFilter(f.country);
+                    setCityFilter("all");
+                    setCountryOpen(false);
+                  }}
+                  className="w-full text-left px-2 py-1.5 flex items-center justify-between gap-2"
+                  style={{
+                    color: "#F0F0FF",
+                    fontSize: 12,
+                    fontFamily: MONO,
+                    borderRadius: 3,
+                    background: countryFilter === f.country ? "rgba(0,212,255,0.1)" : "transparent",
+                  }}
+                >
+                  <span>{f.country}</span>
+                  <span style={{ color: "#8B8B9E", fontSize: 11 }}>{f.n}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="relative">
+          <button
+            onClick={() => setCityOpen((v) => !v)}
+            className="flex items-center gap-2 px-3"
+            style={{
+              height: 28,
+              background: "#0A0A0F",
+              border: "1px solid #1E1E2E",
+              borderRadius: 4,
+              color: "#F0F0FF",
+              fontSize: 12,
+              fontFamily: MONO,
+            }}
+          >
+            {cityFilter === "all" ? "All Cities" : cityFilter}
+            <ChevronDown size={12} />
+          </button>
+          {cityOpen && (
+            <div
+              className="absolute left-0 mt-1 z-10 p-1"
+              style={{
+                background: "#111118",
+                border: "1px solid #1E1E2E",
+                borderRadius: 6,
+                minWidth: 220,
+                maxHeight: 300,
+                overflowY: "auto",
+              }}
+            >
+              <button
+                onClick={() => {
+                  setCityFilter("all");
+                  setCityOpen(false);
+                }}
+                className="w-full text-left px-2 py-1.5"
+                style={{
+                  color: "#F0F0FF",
+                  fontSize: 12,
+                  fontFamily: MONO,
+                  borderRadius: 3,
+                  background: cityFilter === "all" ? "rgba(0,212,255,0.1)" : "transparent",
+                }}
+              >
+                All Cities
+              </button>
+              {cityFacets.map((f) => (
+                <button
+                  key={`${f.country}::${f.city}`}
+                  onClick={() => {
+                    setCityFilter(f.city!);
+                    setCityOpen(false);
+                  }}
+                  className="w-full text-left px-2 py-1.5 flex items-center justify-between gap-2"
+                  style={{
+                    color: "#F0F0FF",
+                    fontSize: 12,
+                    fontFamily: MONO,
+                    borderRadius: 3,
+                    background: cityFilter === f.city ? "rgba(0,212,255,0.1)" : "transparent",
+                  }}
+                >
+                  <span>{f.city}</span>
+                  <span style={{ color: "#8B8B9E", fontSize: 11 }}>{f.n}</span>
                 </button>
               ))}
             </div>
