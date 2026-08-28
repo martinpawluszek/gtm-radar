@@ -288,6 +288,8 @@ type ListFilters = {
   status: PostingStatus;
   tier: TierFilter;
   companyId: CompanyFilter;
+  country: string;
+  city: string;
   unscoredOnly: boolean;
   search: string;
 };
@@ -316,6 +318,14 @@ async function fetchPostingsPage(
   }
   if (filters.companyId !== "all") {
     q = q.eq("company_id", filters.companyId);
+  }
+  // jsonb containment on location_norm so the GIN index is used; never filter
+  // on the raw `location` text.
+  if (filters.country !== "all") {
+    q = q.contains("location_norm", { countries: [filters.country] });
+  }
+  if (filters.city !== "all") {
+    q = q.contains("location_norm", { cities: [filters.city] });
   }
   const term = filters.search.trim();
   if (term) {
