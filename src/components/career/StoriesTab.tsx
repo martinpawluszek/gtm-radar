@@ -37,6 +37,17 @@ export const STORY_TYPES: { value: string; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 
+const FILTER_LABELS: Record<string, string> = {
+  win: "Wins",
+  failure: "Failures",
+  leadership: "Leadership",
+  conflict: "Conflict",
+  turnaround: "Turnarounds",
+  decision: "Decisions",
+  technical: "Technical",
+  other: "Other",
+};
+
 const SENSITIVITY_OPTIONS = [
   { value: "cv_ok", label: "cv_ok" },
   { value: "cv_only", label: "cv_only" },
@@ -121,7 +132,7 @@ export function StoriesTab() {
             color={filter === t.value ? "#00D4FF" : "#8B8B9E"}
             onClick={() => setFilter(t.value)}
           >
-            {t.label} ({counts[t.value]})
+            {FILTER_LABELS[t.value] ?? t.label} ({counts[t.value]})
           </Action>
         ))}
       </div>

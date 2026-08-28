@@ -193,6 +193,20 @@ export function safeTags(v: unknown): string[] {
 
 export type MetricEntry = { text: string; sensitivity: string };
 
+export type LanguageEntry = { language: string; level: string };
+
+export function safeLanguages(v: unknown): LanguageEntry[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((m): m is Record<string, unknown> => !!m && typeof m === "object" && !Array.isArray(m))
+    .map((m) => ({
+      language: typeof m.language === "string" ? m.language : "",
+      level: typeof m.level === "string" ? m.level : "",
+    }));
+}
+
+
+
 export function safeMetrics(v: unknown): MetricEntry[] {
   if (!Array.isArray(v)) return [];
   return v

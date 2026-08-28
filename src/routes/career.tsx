@@ -7,7 +7,7 @@ import { GenerationsTab } from "@/components/career/GenerationsTab";
 import { CredentialsTab } from "@/components/career/CredentialsTab";
 import { CvStudioTab } from "@/components/career/CvStudioTab";
 import { ExperienceTab } from "@/components/career/ExperienceTab";
-import { ProfileCard } from "@/components/career/ProfileCard";
+import { InformationTab } from "@/components/career/InformationTab";
 import { RulesTab } from "@/components/career/RulesTab";
 import { StoriesTab } from "@/components/career/StoriesTab";
 import { MONO } from "@/components/career/ui";
@@ -70,21 +70,23 @@ function CareerError({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 type TabKey =
+  | "information"
   | "experience"
-  | "built"
   | "stories"
   | "answers"
+  | "built"
   | "credentials"
   | "applications"
   | "rules"
   | "cv-studio";
 
 const TABS: { key: TabKey; label: string }[] = [
+  { key: "information", label: "Information" },
   { key: "experience", label: "Experience" },
-  { key: "built", label: "Built" },
   { key: "stories", label: "Stories" },
   { key: "answers", label: "Answers" },
-  { key: "credentials", label: "Credentials & Skills" },
+  { key: "built", label: "Built" },
+  { key: "credentials", label: "Credentials" },
   { key: "applications", label: "Applications" },
   { key: "rules", label: "Rules" },
   { key: "cv-studio", label: "CV Studio" },
@@ -142,8 +144,6 @@ function CareerPage() {
         </p>
       </div>
 
-      <ProfileCard />
-
       <div
         className="flex items-center gap-2 px-3 flex-wrap"
         style={{
@@ -173,6 +173,7 @@ function CareerPage() {
         ))}
       </div>
 
+      {tab === "information" && <InformationTab />}
       {tab === "experience" && <ExperienceTab />}
       {tab === "built" && <BuiltTab />}
       {tab === "stories" && <StoriesTab />}
