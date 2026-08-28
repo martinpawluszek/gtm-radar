@@ -939,6 +939,8 @@ function PostingsPage() {
     status: statusFilter,
     tier: tierFilter,
     companyId: companyFilter,
+    country: countryFilter,
+    city: cityFilter,
     unscoredOnly,
     search,
   };
@@ -946,7 +948,7 @@ function PostingsPage() {
   const { data: pageData, isLoading, isFetching } = useQuery({
     queryKey: [
       "postings",
-      { statusFilter, tierFilter, companyFilter, unscoredOnly, search, page, pageSize },
+      { statusFilter, tierFilter, companyFilter, countryFilter, cityFilter, unscoredOnly, search, page, pageSize },
     ],
     queryFn: () => fetchPostingsPage(listFilters, tierCompanyIds, page, pageSize),
     placeholderData: (prev) => prev,
