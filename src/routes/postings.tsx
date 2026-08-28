@@ -864,6 +864,10 @@ function PostingsPage() {
   const [tierOpen, setTierOpen] = useState(false);
   const [companyFilter, setCompanyFilter] = useState<CompanyFilter>("all");
   const [companyOpen, setCompanyOpen] = useState(false);
+  const [countryFilter, setCountryFilter] = useState<string>("all");
+  const [countryOpen, setCountryOpen] = useState(false);
+  const [cityFilter, setCityFilter] = useState<string>("all");
+  const [cityOpen, setCityOpen] = useState(false);
   const [unscoredOnly, setUnscoredOnly] = useState(false);
   const [search, setSearch] = useState("");
   const [batchOpen, setBatchOpen] = useState(false);
@@ -896,7 +900,29 @@ function PostingsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, tierFilter, companyFilter, unscoredOnly, search, pageSize]);
+  }, [statusFilter, tierFilter, companyFilter, countryFilter, cityFilter, unscoredOnly, search, pageSize]);
+
+  // Location facet counts follow the tab being viewed.
+  const { data: locationFacets = [] } = useQuery({
+    queryKey: ["posting-location-facets", statusFilter],
+    queryFn: () => fetchLocationFacets(statusFilter),
+    staleTime: 60_000,
+  });
+
+  const countryFacets = useMemo(
+    () =>
+      locationFacets
+        .filter((f) => f.kind === "country" && f.country)
+        .sort((a, b) => b.n - a.n),
+    [locationFacets],
+  );
+
+  const cityFacets = useMemo(() => {
+    const cities = locationFacets.filter((f) => f.kind === "city" && f.city);
+    const scoped =
+      countryFilter === "all" ? cities : cities.filter((f) => f.country === countryFilter);
+    return [...scoped].sort((a, b) => b.n - a.n);
+  }, [locationFacets, countryFilter]);
 
   const tierCompanyIds = useMemo(() => {
     if (tierFilter === "all") return null;
