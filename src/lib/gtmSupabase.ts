@@ -13,6 +13,21 @@ export const gtmSupabaseInfo = {
   projectRef: new URL(GTM_SUPABASE_URL).hostname.split(".")[0],
 };
 
+/** job_postings.location_norm — trigger-maintained jsonb, read-only from the app. */
+export type LocationNorm = {
+  countries?: string[];
+  cities?: string[];
+  pairs?: Array<{ country?: string; city?: string }>;
+};
+
+/** Row shape of the posting_location_facets RPC. */
+export type PostingLocationFacet = {
+  kind: "country" | "city";
+  country: string;
+  city: string | null;
+  n: number;
+};
+
 export const gtmSupabase = createClient<Database>(
   GTM_SUPABASE_URL,
   GTM_SUPABASE_PUBLISHABLE_KEY,
