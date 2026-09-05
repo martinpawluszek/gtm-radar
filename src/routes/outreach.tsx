@@ -554,6 +554,35 @@ function OutreachPage() {
         <Stat label="Calls Scheduled" value={stats.calls} color={PRIMARY} />
       </div>
 
+      {/* This Week quota */}
+      {weeklyStatus && (
+        <div
+          className="flex items-center gap-8 px-5 py-3"
+          style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 6 }}
+        >
+          <QuotaStat
+            label="Cold invites"
+            actual={weeklyStatus.cold_invites_sent}
+            goal={weeklyStatus.weekly_invites_cold_goal}
+          />
+          <QuotaStat
+            label="Warm invites"
+            actual={weeklyStatus.warm_invites_sent}
+            goal={weeklyStatus.weekly_invites_warm_goal}
+          />
+          <QuotaStat
+            label="Engagement"
+            actual={weeklyStatus.engagement_count}
+            goal={weeklyStatus.weekly_engagement_goal}
+          />
+          <QuotaStat
+            label="Messages sent"
+            actual={weeklyStatus.messages_sent}
+            goal={weeklyStatus.weekly_messages_goal}
+          />
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b" style={{ borderColor: BORDER }}>
         {TABS.map((t) => {
