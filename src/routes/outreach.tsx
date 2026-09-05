@@ -102,6 +102,19 @@ type Activity = {
 
 type CompanyLite = { id: string; name: string; tier: Tier };
 
+type OutreachWeeklyStatus = {
+  weekly_invites_cold_goal: number;
+  weekly_invites_warm_goal: number;
+  weekly_engagement_goal: number;
+  weekly_messages_goal: number;
+  cold_invites_sent: number;
+  warm_invites_sent: number;
+  engagement_count: number;
+  messages_sent: number;
+  goal_id: string;
+  user_id: string;
+};
+
 // ---------- Constants ----------
 const A_PIPELINE: ActiveStatus[] = [
   "invite_sent",
@@ -257,6 +270,18 @@ async function fetchCompaniesLite(): Promise<CompanyLite[]> {
   return (data ?? []) as unknown as CompanyLite[];
 }
 
+async function fetchWeeklyStatus(): Promise<OutreachWeeklyStatus | null> {
+  const { data, error } = await gtmSupabase
+    .from("outreach_weekly_status" as never)
+    .select(
+      "weekly_invites_cold_goal, weekly_invites_warm_goal, weekly_engagement_goal, weekly_messages_goal, cold_invites_sent, warm_invites_sent, engagement_count, messages_sent, goal_id, user_id",
+    )
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return (data ?? null) as unknown as OutreachWeeklyStatus | null;
+}
+
 // ---------- Page ----------
 function OutreachPage() {
   const qc = useQueryClient();
@@ -311,6 +336,10 @@ function OutreachPage() {
   const { data: companies = [] } = useQuery({
     queryKey: ["companies-lite"],
     queryFn: fetchCompaniesLite,
+  });
+  const { data: weeklyStatus } = useQuery({
+    queryKey: ["outreach-weekly-status"],
+    queryFn: fetchWeeklyStatus,
   });
 
   const companyMap = useMemo(() => {
@@ -524,6 +553,35 @@ function OutreachPage() {
         <Stat label="Response Rate" value={`${stats.responseRate}%`} color={SUCCESS} />
         <Stat label="Calls Scheduled" value={stats.calls} color={PRIMARY} />
       </div>
+
+      {/* This Week quota */}
+      {weeklyStatus && (
+        <div
+          className="flex items-center gap-8 px-5 py-3"
+          style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 6 }}
+        >
+          <QuotaStat
+            label="Cold invites"
+            actual={weeklyStatus.cold_invites_sent}
+            goal={weeklyStatus.weekly_invites_cold_goal}
+          />
+          <QuotaStat
+            label="Warm invites"
+            actual={weeklyStatus.warm_invites_sent}
+            goal={weeklyStatus.weekly_invites_warm_goal}
+          />
+          <QuotaStat
+            label="Engagement"
+            actual={weeklyStatus.engagement_count}
+            goal={weeklyStatus.weekly_engagement_goal}
+          />
+          <QuotaStat
+            label="Messages sent"
+            actual={weeklyStatus.messages_sent}
+            goal={weeklyStatus.weekly_messages_goal}
+          />
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b" style={{ borderColor: BORDER }}>
@@ -933,6 +991,23 @@ function Stat({
       </span>
       <span className="text-lg font-semibold" style={{ color, fontFamily: MONO }}>
         {value}
+      </span>
+    </div>
+  );
+}
+
+function QuotaStat({ label, actual, goal }: { label: string; actual: number; goal: number }) {
+  const reached = actual >= goal;
+  const day = new Date().getDay(); // 0 = Sun, 4 = Thu
+  const pastMidweek = day >= 4;
+  const color = reached ? SUCCESS : pastMidweek ? WARNING : TEXT;
+  return (
+    <div className="flex flex-col">
+      <span className="text-[11px] uppercase tracking-wider" style={{ color: MUTED }}>
+        {label}
+      </span>
+      <span className="text-lg font-semibold" style={{ color, fontFamily: MONO }}>
+        {actual} <span style={{ color: MUTED, fontSize: 13, fontWeight: 400 }}>/ {goal}</span>
       </span>
     </div>
   );
