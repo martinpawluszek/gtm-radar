@@ -270,6 +270,18 @@ async function fetchCompaniesLite(): Promise<CompanyLite[]> {
   return (data ?? []) as unknown as CompanyLite[];
 }
 
+async function fetchWeeklyStatus(): Promise<OutreachWeeklyStatus | null> {
+  const { data, error } = await gtmSupabase
+    .from("outreach_weekly_status" as never)
+    .select(
+      "weekly_invites_cold_goal, weekly_invites_warm_goal, weekly_engagement_goal, weekly_messages_goal, cold_invites_sent, warm_invites_sent, engagement_count, messages_sent, goal_id, user_id",
+    )
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return (data ?? null) as unknown as OutreachWeeklyStatus | null;
+}
+
 // ---------- Page ----------
 function OutreachPage() {
   const qc = useQueryClient();
