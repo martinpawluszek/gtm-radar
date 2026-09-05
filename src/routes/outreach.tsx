@@ -2212,6 +2212,7 @@ function SuggestedRow({
             >
               {recGroup === "a_cold" ? "COLD" : "WARM"}
             </span>
+            {target.contact_role && <ContactRoleBadge role={target.contact_role} />}
             <span
               className="text-[10px] px-1.5 py-0.5 rounded"
               style={{ background: "rgba(255,255,255,0.05)", color: MUTED, fontFamily: MONO }}
