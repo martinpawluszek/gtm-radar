@@ -733,6 +733,7 @@ function OutreachPage() {
                     <th className="px-4 py-2 font-medium">Company</th>
                     <th className="px-4 py-2 font-medium">Role</th>
                     <th className="px-4 py-2 font-medium">Status</th>
+                    <th className="px-4 py-2 font-medium">Contact role</th>
                     <th className="px-4 py-2 font-medium">Last activity</th>
                     <th className="px-4 py-2 font-medium">Tags</th>
                     <th className="px-4 py-2 font-medium text-right">Actions</th>
