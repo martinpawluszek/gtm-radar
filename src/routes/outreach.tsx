@@ -67,12 +67,15 @@ type ActivityType =
   | "response_received"
   | "call_scheduled";
 
+type ContactRole = "peer" | "hiring_manager" | "recruiter" | "other";
+
 type Target = {
   id: string;
   name: string;
   linkedin_url: string | null;
   current_company_id: string | null;
   role: string | null;
+  contact_role: ContactRole | null;
   group_name: Group;
   status: AnyStatus;
   source: string | null;
