@@ -1,4 +1,12 @@
 ---
+
+<p align="left">
+  <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT License">
+  <img src="https://img.shields.io/badge/React-TypeScript-61DAFB?style=flat-square&logo=react&logoColor=white" alt="React + TypeScript">
+  <img src="https://img.shields.io/badge/Supabase-Postgres-3ECF8E?style=flat-square&logo=supabase&logoColor=white" alt="Supabase">
+  <img src="https://img.shields.io/badge/n8n-automation-EA4B71?style=flat-square&logo=n8n&logoColor=white" alt="n8n">
+  <img src="https://img.shields.io/badge/Claude-API-D97757?style=flat-square&logo=anthropic&logoColor=white" alt="Claude API">
+</p>
 # GTM Radar
 
 **An AI-powered system for scoring B2B opportunities, tracking pipeline, and managing strategic outreach — built by directing AI tools, not hand-writing code.**
