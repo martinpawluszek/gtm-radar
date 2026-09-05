@@ -1263,6 +1263,27 @@ function TargetPanel({
       target.group_name === "a_cold"
         ? "cold outreach, no prior interaction"
         : "warm, Martin has been engaging with their content — reference this naturally";
+
+    const role = target.contact_role;
+    let roleGuidance: string;
+    if (role === "peer") {
+      roleGuidance =
+        "This is a peer connection. The goal is a genuine peer-to-peer conversation — ask about their honest experience at the company or in the role, or their take on something relevant to the industry. Do not mention that Martin is applying anywhere.";
+    } else if (role === "hiring_manager") {
+      const roleHint = target.notes?.match(/for\s+([^,]+?)\s+(?:application|at)\s+/)?.[1]?.trim();
+      roleGuidance = roleHint
+        ? `This is a hiring manager. It is appropriate to mention naturally that Martin has applied for the ${roleHint} role there — not desperate, just making sure it is on their radar or asking one sharp question about it.`
+        : "This is a hiring manager. It is appropriate to mention naturally that Martin has applied for a role there — not desperate, just making sure it is on their radar or asking one sharp question about the role.";
+    } else if (role === "recruiter") {
+      const roleHint = target.notes?.match(/for\s+([^,]+?)\s+(?:application|at)\s+/)?.[1]?.trim();
+      roleGuidance = roleHint
+        ? `This is a recruiter. It is normal to flag that Martin has applied for the ${roleHint} role. Keep it brief and practical — a one-line flag of the application or a quick process question, not a long pitch or a 15-minute call ask.`
+        : "This is a recruiter. It is normal to flag that Martin has applied for a role there. Keep it brief and practical — a one-line flag of the application or a quick process question, not a long pitch or a 15-minute call ask.";
+    } else {
+      roleGuidance =
+        "This is general outreach, not tied to a specific application. Use the default peer-to-peer framing: a low-pressure ask for a 15-minute conversation.";
+    }
+
     return `You are writing a LinkedIn message for Martin Pawluszek. 
 
 Before you write anything, read this: the messages you have been writing are too long, too structured, and sound like cover letters. They list credentials. They follow a formula. Real outreach does not do this. A good outreach message sounds like something a confident person typed in 90 seconds because they had one specific reason to reach out.
@@ -1287,6 +1308,9 @@ WHAT MARTIN WANTS:
 
 MARTIN'S BACKGROUND (do not recite this — use it only to pick one relevant detail):
 Cofounder and CRO. Built a B2B SaaS platform from zero to $2M ARR in five years, selling to CTOs across LatAm and the US. Before that: Deputy Director of Sales at EMnify (Berlin IoT SaaS), BD at predict.io (ML company, Berlin). Builds AI tools internally. Multilingual. Now looking at senior GTM and enterprise sales roles at AI and tech companies. Berlin-based.
+
+ROLE-SPECIFIC ANGLE:
+${roleGuidance}
 
 TARGET PERSON:
 Name: ${target.name}
