@@ -996,6 +996,23 @@ function Stat({
   );
 }
 
+function QuotaStat({ label, actual, goal }: { label: string; actual: number; goal: number }) {
+  const reached = actual >= goal;
+  const day = new Date().getDay(); // 0 = Sun, 4 = Thu
+  const pastMidweek = day >= 4;
+  const color = reached ? SUCCESS : pastMidweek ? WARNING : TEXT;
+  return (
+    <div className="flex flex-col">
+      <span className="text-[11px] uppercase tracking-wider" style={{ color: MUTED }}>
+        {label}
+      </span>
+      <span className="text-lg font-semibold" style={{ color, fontFamily: MONO }}>
+        {actual} <span style={{ color: MUTED, fontSize: 13, fontWeight: 400 }}>/ {goal}</span>
+      </span>
+    </div>
+  );
+}
+
 function TierBadge({ tier }: { tier: Tier }) {
   const meta = TIER_META[tier];
   return (
