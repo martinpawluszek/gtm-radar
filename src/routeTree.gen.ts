@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as RoleModelsRouteImport } from './routes/role-models'
 import { Route as RoleCriteriaRouteImport } from './routes/role-criteria'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as PostingsRouteImport } from './routes/postings'
@@ -25,6 +26,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RoleModelsRoute = RoleModelsRouteImport.update({
+  id: '/role-models',
+  path: '/role-models',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RoleCriteriaRoute = RoleCriteriaRouteImport.update({
@@ -95,6 +101,7 @@ export interface FileRoutesByFullPath {
   '/postings': typeof PostingsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/role-criteria': typeof RoleCriteriaRoute
+  '/role-models': typeof RoleModelsRoute
   '/settings': typeof SettingsRoute
 }
 export interface FileRoutesByTo {
@@ -109,6 +116,7 @@ export interface FileRoutesByTo {
   '/postings': typeof PostingsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/role-criteria': typeof RoleCriteriaRoute
+  '/role-models': typeof RoleModelsRoute
   '/settings': typeof SettingsRoute
 }
 export interface FileRoutesById {
@@ -124,6 +132,7 @@ export interface FileRoutesById {
   '/postings': typeof PostingsRoute
   '/reset-password': typeof ResetPasswordRoute
   '/role-criteria': typeof RoleCriteriaRoute
+  '/role-models': typeof RoleModelsRoute
   '/settings': typeof SettingsRoute
 }
 export interface FileRouteTypes {
@@ -140,6 +149,7 @@ export interface FileRouteTypes {
     | '/postings'
     | '/reset-password'
     | '/role-criteria'
+    | '/role-models'
     | '/settings'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -154,6 +164,7 @@ export interface FileRouteTypes {
     | '/postings'
     | '/reset-password'
     | '/role-criteria'
+    | '/role-models'
     | '/settings'
   id:
     | '__root__'
@@ -168,6 +179,7 @@ export interface FileRouteTypes {
     | '/postings'
     | '/reset-password'
     | '/role-criteria'
+    | '/role-models'
     | '/settings'
   fileRoutesById: FileRoutesById
 }
@@ -183,6 +195,7 @@ export interface RootRouteChildren {
   PostingsRoute: typeof PostingsRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   RoleCriteriaRoute: typeof RoleCriteriaRoute
+  RoleModelsRoute: typeof RoleModelsRoute
   SettingsRoute: typeof SettingsRoute
 }
 
@@ -193,6 +206,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/role-models': {
+      id: '/role-models'
+      path: '/role-models'
+      fullPath: '/role-models'
+      preLoaderRoute: typeof RoleModelsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/role-criteria': {
@@ -287,6 +307,7 @@ const rootRouteChildren: RootRouteChildren = {
   PostingsRoute: PostingsRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   RoleCriteriaRoute: RoleCriteriaRoute,
+  RoleModelsRoute: RoleModelsRoute,
   SettingsRoute: SettingsRoute,
 }
 export const routeTree = rootRouteImport
