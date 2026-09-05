@@ -7,6 +7,7 @@
   <img src="https://img.shields.io/badge/n8n-automation-EA4B71?style=flat-square&logo=n8n&logoColor=white" alt="n8n">
   <img src="https://img.shields.io/badge/Claude-API-D97757?style=flat-square&logo=anthropic&logoColor=white" alt="Claude API">
 </p>
+
 # GTM Radar
 
 **An AI-powered system for scoring B2B opportunities, tracking pipeline, and managing strategic outreach — built by directing AI tools, not hand-writing code.**
