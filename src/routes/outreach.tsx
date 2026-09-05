@@ -102,6 +102,19 @@ type Activity = {
 
 type CompanyLite = { id: string; name: string; tier: Tier };
 
+type OutreachWeeklyStatus = {
+  weekly_invites_cold_goal: number;
+  weekly_invites_warm_goal: number;
+  weekly_engagement_goal: number;
+  weekly_messages_goal: number;
+  cold_invites_sent: number;
+  warm_invites_sent: number;
+  engagement_count: number;
+  messages_sent: number;
+  goal_id: string;
+  user_id: string;
+};
+
 // ---------- Constants ----------
 const A_PIPELINE: ActiveStatus[] = [
   "invite_sent",
