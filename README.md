@@ -12,6 +12,12 @@
 
 🔗 **Live app:** [gtm-radar.lovable.app](https://gtm-radar.lovable.app) *(auth-gated — [message me](https://www.linkedin.com/in/martin-pawluszek/) for a walkthrough or demo access)*
 
+## Screenshot
+
+![GTM Radar dashboard](docs/screenshots/dashboard.png)
+
+*Dashboard view — opportunity scoring queue, LinkedIn presence tracker, and pipeline stats.*
+
 ---
 
 ## The idea
