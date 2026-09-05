@@ -1044,6 +1044,33 @@ function StatusPill({ status }: { status: AnyStatus }) {
   );
 }
 
+const CONTACT_ROLE_LABEL: Record<ContactRole, string> = {
+  peer: "PEER",
+  hiring_manager: "HIRING MGR",
+  recruiter: "RECRUITER",
+  other: "OTHER",
+};
+
+const CONTACT_ROLE_COLOR: Record<ContactRole, string> = {
+  peer: PRIMARY,
+  hiring_manager: VIOLET,
+  recruiter: SUCCESS,
+  other: MUTED,
+};
+
+function ContactRoleBadge({ role }: { role: ContactRole | null }) {
+  if (!role) return null;
+  const color = CONTACT_ROLE_COLOR[role];
+  return (
+    <span
+      className="text-[10px] font-semibold px-2 py-0.5 rounded"
+      style={{ background: `${color}1F`, color, fontFamily: MONO }}
+    >
+      {CONTACT_ROLE_LABEL[role]}
+    </span>
+  );
+}
+
 // ---------- A/B table ----------
 function ABTable({ targets, activity }: { targets: Target[]; activity: Activity[] }) {
   const calc = (group: Group) => {
