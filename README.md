@@ -1,5 +1,3 @@
----
-
 <p align="left">
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT License">
   <img src="https://img.shields.io/badge/React-TypeScript-61DAFB?style=flat-square&logo=react&logoColor=white" alt="React + TypeScript">
