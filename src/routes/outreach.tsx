@@ -1404,6 +1404,7 @@ OUTPUT: Only the message. No "Here's a draft", no word count, no dashes, no subj
               >
                 {target.group_name === "a_cold" ? "A: COLD" : "B: WARM"}
               </span>
+              {target.contact_role && <ContactRoleBadge role={target.contact_role} />}
             </div>
           </>
         ) : (
