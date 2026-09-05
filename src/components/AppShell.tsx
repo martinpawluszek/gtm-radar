@@ -31,6 +31,7 @@ const NAV: NavItem[] = [
   { to: "/outreach", label: "Outreach", icon: Users },
   { to: "/linkedin-presence", label: "LinkedIn Presence", icon: Linkedin },
   { to: "/career", label: "Career", icon: BriefcaseBusiness },
+  { to: "/role-models", label: "Role Models", icon: Users },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
