@@ -67,12 +67,15 @@ type ActivityType =
   | "response_received"
   | "call_scheduled";
 
+type ContactRole = "peer" | "hiring_manager" | "recruiter" | "other";
+
 type Target = {
   id: string;
   name: string;
   linkedin_url: string | null;
   current_company_id: string | null;
   role: string | null;
+  contact_role: ContactRole | null;
   group_name: Group;
   status: AnyStatus;
   source: string | null;
@@ -730,6 +733,7 @@ function OutreachPage() {
                     <th className="px-4 py-2 font-medium">Company</th>
                     <th className="px-4 py-2 font-medium">Role</th>
                     <th className="px-4 py-2 font-medium">Status</th>
+                    <th className="px-4 py-2 font-medium">Contact role</th>
                     <th className="px-4 py-2 font-medium">Last activity</th>
                     <th className="px-4 py-2 font-medium">Tags</th>
                     <th className="px-4 py-2 font-medium text-right">Actions</th>
@@ -807,6 +811,9 @@ function OutreachPage() {
                               </span>
                             )}
                           </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          {t.contact_role ? <ContactRoleBadge role={t.contact_role} /> : "—"}
                         </td>
                         <td
                           className="px-4 py-3"
@@ -1037,6 +1044,33 @@ function StatusPill({ status }: { status: AnyStatus }) {
       style={{ background: `${c}1F`, color: c, fontFamily: MONO }}
     >
       {STATUS_LABEL[status].toUpperCase()}
+    </span>
+  );
+}
+
+const CONTACT_ROLE_LABEL: Record<ContactRole, string> = {
+  peer: "PEER",
+  hiring_manager: "HIRING MGR",
+  recruiter: "RECRUITER",
+  other: "OTHER",
+};
+
+const CONTACT_ROLE_COLOR: Record<ContactRole, string> = {
+  peer: PRIMARY,
+  hiring_manager: VIOLET,
+  recruiter: SUCCESS,
+  other: MUTED,
+};
+
+function ContactRoleBadge({ role }: { role: ContactRole | null }) {
+  if (!role) return null;
+  const color = CONTACT_ROLE_COLOR[role];
+  return (
+    <span
+      className="text-[10px] font-semibold px-2 py-0.5 rounded"
+      style={{ background: `${color}1F`, color, fontFamily: MONO }}
+    >
+      {CONTACT_ROLE_LABEL[role]}
     </span>
   );
 }
@@ -1370,6 +1404,7 @@ OUTPUT: Only the message. No "Here's a draft", no word count, no dashes, no subj
               >
                 {target.group_name === "a_cold" ? "A: COLD" : "B: WARM"}
               </span>
+              {target.contact_role && <ContactRoleBadge role={target.contact_role} />}
             </div>
           </>
         ) : (
@@ -2177,6 +2212,7 @@ function SuggestedRow({
             >
               {recGroup === "a_cold" ? "COLD" : "WARM"}
             </span>
+            {target.contact_role && <ContactRoleBadge role={target.contact_role} />}
             <span
               className="text-[10px] px-1.5 py-0.5 rounded"
               style={{ background: "rgba(255,255,255,0.05)", color: MUTED, fontFamily: MONO }}
