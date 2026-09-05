@@ -812,6 +812,9 @@ function OutreachPage() {
                             )}
                           </div>
                         </td>
+                        <td className="px-4 py-3">
+                          {t.contact_role ? <ContactRoleBadge role={t.contact_role} /> : "—"}
+                        </td>
                         <td
                           className="px-4 py-3"
                           style={{ color: dayColor, fontFamily: MONO, fontSize: 12 }}
