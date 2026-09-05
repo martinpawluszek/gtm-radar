@@ -337,6 +337,10 @@ function OutreachPage() {
     queryKey: ["companies-lite"],
     queryFn: fetchCompaniesLite,
   });
+  const { data: weeklyStatus } = useQuery({
+    queryKey: ["outreach-weekly-status"],
+    queryFn: fetchWeeklyStatus,
+  });
 
   const companyMap = useMemo(() => {
     const m = new Map<string, CompanyLite>();
