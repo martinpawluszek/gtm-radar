@@ -180,7 +180,7 @@ const DAYS = [
   { v: 7, l: "Sunday" },
 ];
 
-type TabKey = "ideas" | "replies" | "posted" | "archived" | "progress" | "settings" | "style";
+type TabKey = "ideas" | "replies" | "posted" | "archived" | "progress" | "settings" | "style" | "profile";
 
 const TABS: { key: TabKey; label: string; showCount: boolean }[] = [
   { key: "ideas", label: "Ideas", showCount: true },
@@ -190,6 +190,7 @@ const TABS: { key: TabKey; label: string; showCount: boolean }[] = [
   { key: "progress", label: "Progress", showCount: false },
   { key: "settings", label: "Settings", showCount: false },
   { key: "style", label: "Style Guide", showCount: false },
+  { key: "profile", label: "Profile", showCount: false },
 ];
 
 type WeeklyProgress = {
