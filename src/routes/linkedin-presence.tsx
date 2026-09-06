@@ -988,6 +988,111 @@ Small closing thought.`}
   );
 }
 
+function ProfileTab() {
+  const headline = `GTM & Enterprise Sales Leader → AI-Native Operator | Cofounder & CRO — scaled B2B sales from zero to LatAm/US/EU | Building & selling with Clay, n8n, Lovable, Claude | EN/ES/FR/PT`;
+
+  const about = `I build and sell go-to-market motions from zero.
+
+Cofounder & CRO at Moabits. Built the GTM from scratch: enterprise and technical sales to CTOs, VPs of Engineering, and product teams; built the outbound motion; hired and led the commercial team; took the company from Berlin into LatAm, the US, and Europe.
+
+The other half of what I do: build the tools that make GTM work faster. Internal AI systems on Lovable, Supabase, n8n, and Claude — lead scoring, enrichment, outreach sequencing. Going deep on GTM engineering (Clay, n8n) because the sales org that builds its own tools moves differently than the one that waits for someone else to.
+
+English and Spanish native. Strong French and Portuguese.
+
+Always happy to talk shop on enterprise sales, GTM systems, or what AI actually changes — and doesn't — in a commercial org.`;
+
+  const skillsPinned = ["Enterprise Sales", "Go-to-Market (GTM) Strategy", "Account Executive"];
+  const skillsRest = [
+    "SaaS Sales", "B2B Sales", "Sales Leadership", "Partnerships", "Business Development",
+    "Revenue Operations", "International Expansion", "Outbound Sales", "Sales Enablement",
+    "Salesforce", "HubSpot", "Startup GTM", "Founder-Led Sales", "Commercial Strategy",
+    "Pipeline Management", "AI/Automation (n8n, Clay)",
+  ];
+
+  return (
+    <div
+      className="flex flex-col gap-5"
+      style={{
+        background: "#111118",
+        border: "1px solid #1E1E2E",
+        borderRadius: 6,
+        padding: 24,
+        color: "#C0C0D0",
+        maxWidth: 760,
+        lineHeight: 1.6,
+      }}
+    >
+      <p className="text-sm" style={{ color: "#8B8B9E" }}>
+        Copy this straight into your real LinkedIn profile. Public-safe positioning — no revenue/ARR
+        figures, no naming this app or that it's a job-search tool. Use LinkedIn's own "Open to Work"
+        toggle (set to recruiters only) to signal the search itself privately.
+      </p>
+
+      <ProfileField label="Headline" text={headline} />
+      <ProfileField label="About" text={about} />
+
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-[12px] uppercase" style={{ color: "#00D4FF", fontFamily: MONO }}>
+            Skills to add
+          </div>
+          <button
+            onClick={() => copyText([...skillsPinned, ...skillsRest].join(" · "), "Skills copied.")}
+            className="px-2.5 py-1 text-[11px] font-medium"
+            style={{ color: "#00D4FF", background: "transparent", border: "1px solid #1E1E2E", borderRadius: 4, fontFamily: MONO }}
+          >
+            Copy all
+          </button>
+        </div>
+        <p className="text-[11px] mb-2" style={{ color: "#6B6B80" }}>
+          Pin the first 3 — they match your two highest-weighted target titles.
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {skillsPinned.map((s) => (
+            <span key={s} className="text-[11px] px-2 py-1 rounded" style={{ background: "rgba(0,212,255,0.12)", color: "#00D4FF", fontFamily: MONO }}>
+              📌 {s}
+            </span>
+          ))}
+          {skillsRest.map((s) => (
+            <span key={s} className="text-[11px] px-2 py-1 rounded" style={{ background: "rgba(255,255,255,0.05)", color: "#F0F0FF", fontFamily: MONO }}>
+              {s}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <Section title="Recommendations">
+        <p className="text-sm" style={{ color: "#F0F0FF" }}>
+          Ask 2-3 people directly — a Moabits board member, a customer you closed personally, someone
+          who reported to you. A short LinkedIn message works better than the platform's generic
+          "request a recommendation" button; write a specific ask (what you'd like them to speak to)
+          rather than leaving it open-ended.
+        </p>
+      </Section>
+    </div>
+  );
+}
+
+function ProfileField({ label, text }: { label: string; text: string }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-[12px] uppercase" style={{ color: "#00D4FF", fontFamily: MONO }}>
+          {label}
+        </div>
+        <button
+          onClick={() => copyText(text, `${label} copied.`)}
+          className="px-2.5 py-1 text-[11px] font-medium"
+          style={{ color: "#00D4FF", background: "transparent", border: "1px solid #1E1E2E", borderRadius: 4, fontFamily: MONO }}
+        >
+          Copy
+        </button>
+      </div>
+      <pre className="whitespace-pre-wrap text-sm font-sans" style={{ color: "#F0F0FF" }}>{text}</pre>
+    </div>
+  );
+}
+
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
