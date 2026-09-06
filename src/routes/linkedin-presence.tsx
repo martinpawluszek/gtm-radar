@@ -411,6 +411,7 @@ function LinkedInPresencePage() {
       {tab === "progress" && <ProgressTab />}
       {tab === "settings" && <SettingsTab />}
       {tab === "style" && <StyleGuideTab />}
+      {tab === "profile" && <ProfileTab />}
     </div>
   );
 }
