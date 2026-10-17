@@ -13,6 +13,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Company, CompanyInsert, SCORE_DIMS, SCORE_RUBRIC, TIER_META, TIER_ORDER, Tier, AtsType,
   sourcingBadge, SourcingBadge,
@@ -66,6 +67,7 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initial?: Company | null;
+  industries?: string[];
   onSave: (data: CompanyInsert) => Promise<void> | void;
   onDelete?: (id: string) => Promise<void> | void;
 };
@@ -84,9 +86,11 @@ const emptyForm: CompanyInsert = {
   tags: [],
   excluded_reason: "",
   is_active: true,
+  industry: null,
+  is_target: false,
 };
 
-export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: Props) {
+export function CompanyModal({ open, onOpenChange, initial, industries, onSave, onDelete }: Props) {
   const { session } = useGtmAuth();
   const [form, setForm] = useState<CompanyInsert>(emptyForm);
   const [tagInput, setTagInput] = useState("");
@@ -168,7 +172,11 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
     const isNew = !initial;
     setSaving(true);
     try {
-      await onSave(form);
+      await onSave({
+        ...form,
+        industry: (form.industry ?? "").trim() || null,
+        is_target: form.is_target === true,
+      });
       onOpenChange(false);
       if (isNew) void runBackgroundTest();
     } finally { setSaving(false); }
@@ -260,6 +268,20 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
             </Select>
           </div>
           <div>
+            <Label>Industry</Label>
+            <Input
+              list="industry-options"
+              value={form.industry ?? ""}
+              onChange={(e) => set("industry", e.target.value)}
+              placeholder="e.g. Cybersecurity"
+            />
+            <datalist id="industry-options">
+              {(industries ?? []).map((i) => (
+                <option key={i} value={i} />
+              ))}
+            </datalist>
+          </div>
+          <div className="col-span-2">
             <Label>Tags</Label>
             <div className="flex gap-2">
               <Input value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={onTagKey} placeholder="Type & Enter" />
@@ -291,6 +313,19 @@ export function CompanyModal({ open, onOpenChange, initial, onSave, onDelete }: 
 
           {/* Active + Source */}
           <div className="col-span-2 space-y-3 mt-2 pt-3" style={{ borderTop: "1px solid #1E1E2E" }}>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-[13px]">Priority target</Label>
+                <p className="text-[11px]" style={{ color: "#8B8B9E" }}>
+                  Star this company to find it quickly with the Targets only filter.
+                </p>
+              </div>
+              <Checkbox
+                checked={form.is_target === true}
+                onCheckedChange={(v) => set("is_target", v === true)}
+                aria-label="Priority target"
+              />
+            </div>
             <div className="flex items-center justify-between">
               <div>
                 <Label className="text-[13px]">Active — receiving job postings</Label>
