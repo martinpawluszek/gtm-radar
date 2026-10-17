@@ -1,4 +1,4 @@
-import { Pencil, ExternalLink, Briefcase, Radar } from "lucide-react";
+import { Pencil, ExternalLink, Briefcase, Radar, Star } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
@@ -66,6 +66,35 @@ export function CompanyRow({ company, onEdit }: { company: Company; onEdit: (c: 
     },
     onSuccess: (_d, next) => {
       toast.success(next ? "Resumed" : "Paused");
+      qc.invalidateQueries({ queryKey: ["companies"] });
+    },
+  });
+
+  const toggleTarget = useMutation({
+    mutationFn: async (next: boolean) => {
+      const { error } = await gtmSupabase
+        .from("companies")
+        .update({ is_target: next } as never)
+        .eq("id", company.id);
+      if (error) throw error;
+    },
+    onMutate: async (next) => {
+      await qc.cancelQueries({ queryKey: ["companies"] });
+      const prev = qc.getQueryData<{ data: Company[] } & Record<string, unknown>>(["companies"]);
+      if (prev?.data) {
+        qc.setQueryData(["companies"], {
+          ...prev,
+          data: prev.data.map((c) => (c.id === company.id ? { ...c, is_target: next } : c)),
+        });
+      }
+      return { prev };
+    },
+    onError: (e: Error, _next, ctx) => {
+      if (ctx?.prev) qc.setQueryData(["companies"], ctx.prev);
+      toast.error(`Could not update: ${e.message}`);
+    },
+    onSuccess: (_d, next) => {
+      toast.success(next ? "Marked as target" : "Removed from targets");
       qc.invalidateQueries({ queryKey: ["companies"] });
     },
   });
@@ -153,6 +182,20 @@ export function CompanyRow({ company, onEdit }: { company: Company; onEdit: (c: 
         opacity: isActive ? 1 : 0.5,
       }}
     >
+      {/* Priority target star */}
+      <div style={{ width: 24 }} className="flex justify-center">
+        <button
+          type="button"
+          onClick={() => toggleTarget.mutate(!(company.is_target === true))}
+          aria-label={company.is_target ? "Remove from priority targets" : "Mark as priority target"}
+          title="Priority target"
+          className="flex items-center justify-center"
+          style={{ color: company.is_target ? "#F59E0B" : "#8B8B9E" }}
+        >
+          <Star size={13} fill={company.is_target ? "#F59E0B" : "none"} />
+        </button>
+      </div>
+
       {/* Active toggle */}
       <div style={{ width: 36 }} className="flex justify-center">
         <Switch

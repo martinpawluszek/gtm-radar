@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Plus, Search, X } from "lucide-react";
+import { ChevronDown, Plus, Search, Star, X } from "lucide-react";
 import { toast } from "sonner";
 import { gtmSupabase, gtmSupabaseInfo } from "@/lib/gtmSupabase";
 import { useGtmAuth } from "@/lib/gtmAuth";
@@ -120,6 +120,8 @@ function CompaniesPage() {
   const [tierFilter, setTierFilter] = useState<"all" | Tier>("all");
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [sort, setSort] = useState<SortKey>("total");
+  const [industryFilter, setIndustryFilter] = useState<string>("all");
+  const [targetsOnly, setTargetsOnly] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Company | null>(null);
@@ -197,6 +199,10 @@ function CompaniesPage() {
     const q = search.trim().toLowerCase();
     return list.filter((c) => {
       if (tierFilter !== "all" && c.tier !== tierFilter) return false;
+      if (targetsOnly && c.is_target !== true) return false;
+      const ind = (c.industry ?? "").trim();
+      if (industryFilter === "unassigned" && ind) return false;
+      if (industryFilter !== "all" && industryFilter !== "unassigned" && ind !== industryFilter) return false;
       if (activeTags.length > 0) {
         const tags = c.tags ?? [];
         if (!activeTags.every((t) => tags.includes(t))) return false;
@@ -207,7 +213,7 @@ function CompaniesPage() {
         (c.notes ?? "").toLowerCase().includes(q)
       );
     });
-  }, [companies, search, tierFilter, activeTags]);
+  }, [companies, search, tierFilter, activeTags, industryFilter, targetsOnly]);
 
   const sorted = useMemo(() => {
     const list = [...filtered];
@@ -247,6 +253,18 @@ function CompaniesPage() {
     for (const c of companies) for (const t of c.tags ?? []) if (t) set.add(t);
     return Array.from(set).sort();
   }, [companies]);
+  const allIndustries = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of companies) {
+      const ind = (c.industry ?? "").trim();
+      if (ind) set.add(ind);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [companies]);
+  const targetCount = useMemo(
+    () => companies.filter((c) => c.is_target === true).length,
+    [companies]
+  );
   const openAdd = () => { setEditing(null); setModalOpen(true); };
   const openEdit = (c: Company) => { setEditing(c); setModalOpen(true); };
   const toggleTag = (t: string) =>
@@ -301,6 +319,42 @@ function CompaniesPage() {
             );
           })}
         </div>
+        <div className="flex-shrink-0">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm"
+                style={{
+                  background: "#111118",
+                  border: "1px solid #1E1E2E",
+                  color: industryFilter !== "all" ? "#00D4FF" : "#F0F0FF",
+                }}>
+                Industry{industryFilter !== "all" ? `: ${industryFilter === "unassigned" ? "Unassigned" : industryFilter}` : ""} <ChevronDown size={12} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setIndustryFilter("all")}>All industries</DropdownMenuItem>
+              {allIndustries.map((i) => (
+                <DropdownMenuItem key={i} onClick={() => setIndustryFilter(i)}>{i}</DropdownMenuItem>
+              ))}
+              <DropdownMenuItem onClick={() => setIndustryFilter("unassigned")}>Unassigned</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <button
+          onClick={() => setTargetsOnly((v) => !v)}
+          className="px-2 py-1 text-xs font-medium transition-colors flex items-center gap-1.5 flex-shrink-0"
+          title="Show only priority target companies"
+          style={{
+            borderRadius: 3,
+            fontFamily: "var(--font-mono)",
+            background: targetsOnly ? "#F59E0B" : "transparent",
+            color: targetsOnly ? "#0A0A0F" : "#8B8B9E",
+            border: `1px solid ${targetsOnly ? "#F59E0B" : "#1E1E2E"}`,
+          }}
+        >
+          <Star size={12} fill={targetsOnly ? "#0A0A0F" : "none"} />
+          Targets only ({targetCount})
+        </button>
         <div className="flex-shrink-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -393,7 +447,7 @@ function CompaniesPage() {
           title="No companies match your search"
           subtitle="Try adjusting your filters."
           actionLabel="Clear filters"
-          onAction={() => { setSearch(""); setTierFilter("all"); }}
+          onAction={() => { setSearch(""); setTierFilter("all"); setIndustryFilter("all"); setTargetsOnly(false); }}
         />
       ) : (
         <div className="space-y-0">
@@ -490,6 +544,7 @@ function CompaniesPage() {
 
 
       <CompanyModal
+        industries={allIndustries}
         open={modalOpen}
         onOpenChange={setModalOpen}
         initial={editing}
