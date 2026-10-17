@@ -22,6 +22,8 @@ export type SourcingStatus = "not_configured" | "discovering" | "ready" | "unrea
 
 export type Company = BaseCompany & {
   is_active?: boolean | null;
+  industry?: string | null;
+  is_target?: boolean | null;
   ats_type?: AtsType;
   ats_slug?: string | null;
   sourcing_status?: SourcingStatus | null;
@@ -31,6 +33,8 @@ export type Company = BaseCompany & {
 
 export type CompanyInsert = BaseInsert & {
   is_active?: boolean | null;
+  industry?: string | null;
+  is_target?: boolean | null;
   ats_type?: AtsType;
   ats_slug?: string | null;
   sourcing_status?: SourcingStatus | null;
