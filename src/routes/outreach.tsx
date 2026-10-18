@@ -67,7 +67,7 @@ type ActivityType =
   | "response_received"
   | "call_scheduled";
 
-type ContactRole = "peer" | "hiring_manager" | "recruiter" | "other";
+type ContactRole = "peer" | "hiring_manager" | "recruiter" | "coordinator" | "executive" | "insider" | "other";
 
 type Target = {
   id: string;
@@ -1052,6 +1052,9 @@ const CONTACT_ROLE_LABEL: Record<ContactRole, string> = {
   peer: "PEER",
   hiring_manager: "HIRING MGR",
   recruiter: "RECRUITER",
+  coordinator: "COORDINATOR",
+  executive: "EXECUTIVE",
+  insider: "INSIDER",
   other: "OTHER",
 };
 
@@ -1059,6 +1062,9 @@ const CONTACT_ROLE_COLOR: Record<ContactRole, string> = {
   peer: PRIMARY,
   hiring_manager: VIOLET,
   recruiter: SUCCESS,
+  coordinator: WARNING,
+  executive: VIOLET,
+  insider: PRIMARY,
   other: MUTED,
 };
 
@@ -1265,23 +1271,33 @@ function TargetPanel({
         : "warm, Martin has been engaging with their content — reference this naturally";
 
     const role = target.contact_role;
+    const roleHint = target.notes?.match(/for\s+([^,]+?)\s+(?:application|at)\s+/)?.[1]?.trim();
+    const applicationRole = roleHint ? `the ${roleHint} role` : "the role mentioned in the notes (do not invent a title)";
+    const hasResponse = activity.some((a) => a.activity_type === "response_received");
+    const lastReply = activity
+      .filter((a) => a.activity_type === "response_received")
+      .sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime())[0];
+    const firstName = target.name.trim().split(/\s+/)[0];
+    const messageFormat = target.status === "invite_accepted"
+      ? `Write a follow-up starting exactly with "Hi ${firstName}, thanks for connecting." Keep the rest plain.`
+      : "Write a connection request note under 300 characters. This character limit takes precedence over the word target; do not pad.";
     let roleGuidance: string;
     if (role === "peer") {
       roleGuidance =
-        "This is a peer connection. The goal is a genuine peer-to-peer conversation — ask about their honest experience at the company or in the role, or their take on something relevant to the industry. Do not mention that Martin is applying anywhere.";
+        `This is a peer in the same role. If the notes mention an application, it is fine to say Martin just applied for ${applicationRole}. Ask ONE specific, plain question about their own work, for example which kinds of customers they sell to by size or industry. No call request.`;
     } else if (role === "hiring_manager") {
-      const roleHint = target.notes?.match(/for\s+([^,]+?)\s+(?:application|at)\s+/)?.[1]?.trim();
-      roleGuidance = roleHint
-        ? `This is a hiring manager. It is appropriate to mention naturally that Martin has applied for the ${roleHint} role there — not desperate, just making sure it is on their radar or asking one sharp question about it.`
-        : "This is a hiring manager. It is appropriate to mention naturally that Martin has applied for a role there — not desperate, just making sure it is on their radar or asking one sharp question about the role.";
+      roleGuidance = `This is a hiring manager. Say Martin applied for ${applicationRole}. Ask ONE question about the role or team that the job description does not already answer, for example whether it also covers other customer types or markets. No call request in the first message.`;
     } else if (role === "recruiter") {
-      const roleHint = target.notes?.match(/for\s+([^,]+?)\s+(?:application|at)\s+/)?.[1]?.trim();
-      roleGuidance = roleHint
-        ? `This is a recruiter. It is normal to flag that Martin has applied for the ${roleHint} role. Keep it brief and practical — a one-line flag of the application or a quick process question, not a long pitch or a 15-minute call ask.`
-        : "This is a recruiter. It is normal to flag that Martin has applied for a role there. Keep it brief and practical — a one-line flag of the application or a quick process question, not a long pitch or a 15-minute call ask.";
+      roleGuidance = `This is a recruiter. Say Martin applied for ${applicationRole}. Ask who is handling the role or ONE practical process question. One line of context at most. No call request.`;
+    } else if (role === "coordinator") {
+      roleGuidance = `This is a scheduling/process coordinator. Be very short. Say Martin applied for ${applicationRole} and ask only who the recruiter or contact for the role is. No pitch.`;
+    } else if (role === "executive") {
+      roleGuidance = "This is an executive (VP or above). Be very short and tie the message to something specific in their notes or recent post. One question, no ask beyond that question.";
+    } else if (role === "insider") {
+      roleGuidance = "This is an employee outside the hiring chain. Ask ONE plain question about what the day-to-day work or team is like. Never ask for a referral in a first message.";
     } else {
       roleGuidance =
-        "This is general outreach, not tied to a specific application. Use the default peer-to-peer framing: a low-pressure ask for a 15-minute conversation.";
+        "This is general outreach. Ask ONE specific question. No call request.";
     }
 
     return `You are writing a LinkedIn message for Martin Pawluszek. 
@@ -1291,7 +1307,6 @@ Before you write anything, read this: the messages you have been writing are too
 WHAT MARTIN DOES NOT WANT:
 - Any version of: "My background: [list of things]"
 - Any version of: "I cofounded / I grew / I built [resume summary]"
-- Opening with "I"
 - The phrase "what's next"
 - The phrase "actively looking"
 - The phrase "caught my attention"
@@ -1299,18 +1314,34 @@ WHAT MARTIN DOES NOT WANT:
 - Listing multiple credentials in sequence
 - A structured message with a hook, then background, then ask
 - Anything that sounds like it was drafted carefully
+- Questions that sound AI-written or generic, such as "what drives your decisions" or "what are your priorities"
+- Questions the person's LinkedIn profile or the job description already answers
+- Asking for a referral or a call in a first message
+- Claims about the company that are not in the notes
 
 WHAT MARTIN WANTS:
 - One specific hook based on something real in the notes. If notes mention a post they made, use that. If notes mention a hiring signal, reference it briefly. If notes are sparse, skip the hook and be direct about who he is in one sentence.
 - Maximum one sentence of Martin's background. Pick the single most relevant thing to this specific person. Not two things. One.
-- A low-pressure ask for 15 minutes. That is the only goal of this message.
+- The goal of the FIRST message is to start a conversation with ONE specific question the person can answer in one or two lines. Only suggest a call if the activity list already contains a response_received entry from this person and the conversation is going well. If their last reply is a short closing remark, do not draft a push; say no message is needed.
 - Tone: like a peer reaching out to another peer. Not a candidate messaging a gatekeeper. Not a vendor pitching. A person.
+- Never state ARR, customer counts, contract sizes, funding, EBITDA or retention figures in a message. No exact numbers from Martin's background in outreach.
 
 MARTIN'S BACKGROUND (do not recite this — use it only to pick one relevant detail):
-Cofounder and CRO. Built a B2B SaaS platform from zero to $2M ARR in five years, selling to CTOs across LatAm and the US. Before that: Deputy Director of Sales at EMnify (Berlin IoT SaaS), BD at predict.io (ML company, Berlin). Builds AI tools internally. Multilingual. Now looking at senior GTM and enterprise sales roles at AI and tech companies. Berlin-based.
+Cofounder and CRO of Moabits, a B2B IoT connectivity company in Berlin. Sold to telecom operators and enterprises for 7+ years, in telco, utilities and payments (POS), all regulated buyers. Built the sales team from scratch and launched the Colombian operation. Daily builder of AI tools. Native Spanish and English. Berlin-based. Targets: telco-to-tech moves (satellite/connectivity) and cybersecurity sales leadership.
+
+EXAMPLES OF MESSAGES MARTIN SENT THAT GOT A REPLY (use them for tone and structure only, never copy):
+- To a peer at a security company: "Hi Jorg, thanks for connecting. I just applied for the Regional Director role covering Germany. My background is mainly telco and IoT, so I'm curious what kind of companies you go after in the Netherlands, in terms of size and industry."
+- Follow-up to the same person after their answer: "Thanks Jorg, that's really helpful. It matches my background: I've sold into telco, utilities and payments (POS), all regulated, risk-averse buyers, so that environment is familiar. Security is the new part for me, but selling technical products to engineering teams is what I did in IoT. Is financial services the biggest one for you?"
 
 ROLE-SPECIFIC ANGLE:
 ${roleGuidance}
+
+MESSAGE FORMAT:
+${messageFormat}
+Contact tag: ${role ?? "other"}
+Has a response_received entry from this person: ${hasResponse ? "Yes — assess whether the conversation is going well before suggesting a call; never override a tag's no-call instruction." : "No — do not suggest a call."}
+Latest response_received content: ${lastReply?.content || "None recorded — do not assume a positive response."}
+If that latest reply is a short closing remark, output only "No message is needed." This takes precedence over the message format and length rules.
 
 TARGET PERSON:
 Name: ${target.name}
